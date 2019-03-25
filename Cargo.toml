@@ -1,0 +1,7 @@
+[package]
+name = "name-this-later"
+version = "0.1.0"
+authors = ["Codadillo <leoconr@nuevaschool.org>"]
+edition = "2018"
+
+[dependencies]
