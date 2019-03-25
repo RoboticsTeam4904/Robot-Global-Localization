@@ -1,5 +1,6 @@
 extern crate rand;
 
+use std::fmt;
 use rand::prelude::*;
 
 struct BinaryEnvironment {
@@ -29,6 +30,15 @@ impl BinaryEnvironment {
             self.size - 1
         };
         self.robot_position as isize - previous_position
+    }
+}
+
+impl fmt::Display for BinaryEnvironment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let a = self.map.iter().map(|&bit| if bit { "◽◽◽" } else { "◾◾◾" }).collect::<String>();
+        let mut b = " ".repeat((self.size - 1) * 3);
+        b.insert(self.robot_position * 3 + 1, '🤖');
+        write!(f, "{}\n{}", a, b)
     }
 }
 
