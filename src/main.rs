@@ -3,21 +3,21 @@ extern crate rand;
 use rand::prelude::*;
 use rand::seq::SliceRandom;
 use std::fmt;
-use std::io;
-use std::io::prelude::*;
 
 /// Clamps the `num` to the range `[upper, lower)`
-fn clamp<T>(num: T, lower: T, upper: T) -> T
+fn clamp<T>(num: T, lower: T, upper: Option<T>) -> T
 where
-    T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + From<i8> + Ord,
+    T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + From<i8> + PartialOrd,
 {
     if num < lower {
-        lower
-    } else if num >= upper {
-        upper - 1i8.into()
-    } else {
-        num
+        return lower;
     }
+    if let Some(u) = upper {
+        if num >= u {
+            return u - 1i8.into();
+        }
+    }
+    num
 }
 
 /// A one dimensional environment that is filled simply with either a true or false in every space
@@ -46,7 +46,7 @@ impl BinaryEnvironment {
         let new_position = clamp(
             self.robot_position as isize + dist,
             0isize,
-            self.size as isize,
+            Some(self.size as isize),
         );
         self.robot_position = new_position as usize;
         new_position - previous_position
@@ -121,31 +121,40 @@ impl Sensor<isize, isize> for MovementSensor {
 
 struct BinarySensor {
     error_chance: f64,
-    triggered: bool,
+    triggers: Vec<Option<bool>>,
 }
 
 impl BinarySensor {
-    fn new(error_chance: f64) -> Self {
+    fn new(breadth: usize, error_chance: f64) -> Self {
         Self {
             error_chance,
-            triggered: false,
+            triggers: vec![None; 1 + 2 * breadth],
         }
     }
 }
 
-impl Sensor<&BinaryEnvironment, bool> for BinarySensor {
+impl Sensor<&BinaryEnvironment, Vec<Option<bool>>> for BinarySensor {
     fn update(&mut self, input: &BinaryEnvironment) -> &Self {
-        let triggered = input.map[input.robot_position];
-        self.triggered = if rand::thread_rng().gen_bool(self.error_chance) {
-            !triggered
-        } else {
-            triggered
-        };
+        self.triggers.clear();
+        let breadth = self.triggers.capacity() as isize / 2;
+        for i in -breadth..=breadth {
+            let position = input.robot_position as isize + i;
+            if position < 0 || position >= input.size as isize {
+                self.triggers.push(None);
+                continue;
+            }
+            self.triggers
+                .push(Some(if rand::thread_rng().gen_bool(self.error_chance) {
+                    !input.map[position as usize]
+                } else {
+                    input.map[position as usize]
+                }));
+        }
         self
     }
 
-    fn sense(&self) -> bool {
-        self.triggered
+    fn sense(&self) -> Vec<Option<bool>> {
+        self.triggers.clone()
     }
 }
 
@@ -186,14 +195,31 @@ impl NaiveBinaryMCL {
     fn motion_position_update(&mut self, sensor_data: isize) {
         let map = &self.map;
         self.particles.iter_mut().for_each(|p| {
-            p.0 = clamp(p.0 as isize + sensor_data, 0isize, map.len() as isize) as usize
+            p.0 = clamp(p.0 as isize + sensor_data, 0isize, Some(map.len() as isize)) as usize
         });
     }
 
-    fn sensor_weight_update(&mut self, sensor_data: bool) {
+    fn sensor_weight_update(&mut self, sensor_data: Vec<Option<bool>>) {
         let map = &self.map;
         self.particles.iter_mut().for_each(|p| {
-            p.1 = if map[p.0] == sensor_data { 1. } else { 0.1 };
+            p.1 = {
+                let mut total_count = 0.;
+                let mut total_correct = 0.;
+                let breadth = sensor_data.len() as isize / 2;
+                for i in 0..sensor_data.len() {
+                    if let Some(data) = sensor_data[i] {
+                        total_count += 1.;
+                        let position = (p.0 + i) as isize - breadth;
+                        if position < 0 || position as usize >= map.len() {
+                            continue;
+                        }
+                        if map[position as usize] == data {
+                            total_correct += 1.;
+                        }
+                    }
+                }
+                clamp(total_correct / total_count, 0.01, None)
+            };
         });
     }
 
@@ -218,39 +244,20 @@ impl NaiveBinaryMCL {
 
 fn main() {
     let mut robot = {
-        let env = BinaryEnvironment::new(1000, 0.5);
+        let env = BinaryEnvironment::new(3000, 0.5);
         let map = env.map.clone();
         BinarySensingRobot {
             environment: env,
-            binary_sensor: BinarySensor::new(0.01),
-            movement_sensor: MovementSensor::new(3, 0.2),
+            binary_sensor: BinarySensor::new(3, 0.005),
+            movement_sensor: MovementSensor::new(3, 0.05),
             ai: NaiveBinaryMCL::new(map, 1000),
         }
     };
-    // println!("{}", robot.environment);
-    // let stdin = io::stdin();
-    // for line in stdin.lock().lines() {
-    //     let command = line.unwrap();
-    //     if let Ok(dist) = command.to_string().parse::<isize>() {
-    //         robot.make_move(dist);
-    //     }
-    //     robot
-    //         .ai
-    //         .motion_position_update(robot.movement_sensor.sense());
-    //     robot.ai.sensor_weight_update(robot.binary_sensor.sense());
-    //     robot.ai.resample();
-    //     let pose = robot.ai.get_average_position();
-
-    //     println!("{}", robot.environment);
-    //     let mut pose_rep = " ".repeat(pose);
-    //     pose_rep.insert(pose, '🤖');
-    //     println!("{}", pose_rep);
-    // }
     let mut rng = thread_rng();
     let mut step_count = 0;
     loop {
         step_count += 1;
-        robot.make_move(rng.gen_range(-30, 30));
+        robot.make_move(rng.gen_range(-(robot.environment.size as isize) / 10, robot.environment.size as isize / 10));
         robot
             .ai
             .motion_position_update(robot.movement_sensor.sense());
@@ -259,7 +266,10 @@ fn main() {
         let pose = robot.ai.get_average_position();
         let true_pose = robot.environment.robot_position;
         let diff = pose as isize - true_pose as isize;
-        println!("{} - Percieved: {}, Real: {}, Disconnect: {}", step_count, pose, true_pose, diff);
+        println!(
+            "{} - Percieved: {}, Real: {}, Disconnect: {}",
+            step_count, pose, true_pose, diff
+        );
         // println!("{}", robot.environment);
         // let mut pose_rep = " ".repeat(pose);
         // pose_rep.insert(pose, '🤖');
