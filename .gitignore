@@ -1,2 +1,9 @@
+# general
+.DS_STORE
+
+# rust
 /target
 **/*.rs.bk
+
+# editors
+.vscode
