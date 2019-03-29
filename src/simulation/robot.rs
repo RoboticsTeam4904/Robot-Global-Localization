@@ -15,8 +15,8 @@ pub struct BinarySensingRobot {
 
 impl BinarySensingRobot {
     pub fn make_move(&mut self, dist: isize) {
-        self.movement_sensor
-            .update(self.environment.move_robot(dist));
+        self.environment.move_robot(dist);
+        self.movement_sensor.update(&self.environment);
         self.binary_sensor.update(&self.environment);
     }
 }

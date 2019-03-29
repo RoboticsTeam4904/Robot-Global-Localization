@@ -9,11 +9,11 @@ use super::environment::BinaryEnvironment;
 ///
 /// `T` is what is being sensed (true info from environment) &
 /// `U` is the output of the sensor (percieved info from the environment)
-pub trait Sensor<T, U> {
+pub trait Sensor<U, T> {
     /// Update the sensor
-    fn update(&mut self, input: T) -> &Self;
+    fn update(&mut self, env: U);
     /// Gets the value that the sensor is currently sensing
-    fn sense(&self) -> U;
+    fn sense(&self) -> T;
 }
 
 pub struct MovementSensor {
@@ -32,16 +32,15 @@ impl MovementSensor {
     }
 }
 
-impl Sensor<isize, isize> for MovementSensor {
-    fn update(&mut self, input: isize) -> &Self {
+impl Sensor<&BinaryEnvironment, isize> for MovementSensor {
+    fn update(&mut self, input: &BinaryEnvironment) {
         let mut rng = thread_rng();
-        self.latest_movement = input
+        self.latest_movement = input.robot_velocity as isize
             + if rng.gen_bool(self.error_chance) {
                 rng.gen_range(0, self.error_margin + 1) as isize * rng.gen_range(-1, 1)
             } else {
                 0
             };
-        self
     }
 
     fn sense(&self) -> isize {
@@ -66,7 +65,7 @@ impl BinarySensor {
 }
 
 impl Sensor<&BinaryEnvironment, BitVec> for BinarySensor {
-    fn update(&mut self, input: &BinaryEnvironment) -> &Self {
+    fn update(&mut self, input: &BinaryEnvironment) {
         self.triggers.clear();
         let mut rng = thread_rng();
         for i in -self.breadth..=self.breadth {
@@ -81,7 +80,6 @@ impl Sensor<&BinaryEnvironment, BitVec> for BinarySensor {
                 triggered
             });
         }
-        self
     }
 
     fn sense(&self) -> BitVec {

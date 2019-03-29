@@ -11,6 +11,7 @@ pub struct BinaryEnvironment {
     pub map: BitVec,
     pub size: usize,
     pub robot_position: usize,
+    pub robot_velocity: usize,
 }
 
 impl BinaryEnvironment {
@@ -24,10 +25,11 @@ impl BinaryEnvironment {
             map,
             size,
             robot_position: thread_rng().gen_range(0, size),
+            robot_velocity: 0,
         }
     }
 
-    pub fn move_robot(&mut self, dist: isize) -> isize {
+    pub fn move_robot(&mut self, dist: isize) {
         let previous_position = self.robot_position as isize;
         let new_position = clamp(
             self.robot_position as isize + dist,
@@ -35,7 +37,7 @@ impl BinaryEnvironment {
             Some(self.size as isize),
         );
         self.robot_position = new_position as usize;
-        new_position - previous_position
+        self.robot_velocity = (new_position - previous_position) as usize;
     }
 }
 
