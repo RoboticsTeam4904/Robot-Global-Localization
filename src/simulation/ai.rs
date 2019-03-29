@@ -2,6 +2,7 @@ extern crate rand;
 extern crate bitvec;
 
 use rand::prelude::*;
+use rand::distributions::{Distribution, WeightedIndex};
 use bitvec::BitVec;
 use crate::utility::clamp;
 
@@ -73,8 +74,9 @@ impl MCL<isize, BitVec> for BinaryMCL {
         let particles = self.particles.as_slice();
         let mut new_particles = Vec::with_capacity(self.particles.len());
         let mut rng = thread_rng();
+        let distr = WeightedIndex::new(particles.iter().map(|p| p.1)).unwrap();
         for _ in 0..self.particles.len() {
-            new_particles.push(*particles.choose_weighted(&mut rng, |p| p.1).unwrap());
+            new_particles.push(particles[distr.sample(&mut rng)]);
         }
         self.particles = new_particles;
     }
