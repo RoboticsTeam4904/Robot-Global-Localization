@@ -1,13 +1,19 @@
+#[macro_use]
+extern crate bitvec;
 extern crate rand;
 
+use bitvec::BitVec;
 use rand::prelude::*;
 use rand::seq::SliceRandom;
 use std::fmt;
+use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Clamps the `num` to the range `[upper, lower)`
+/// Clamps the `num` to the range `[lower, upper)`
+///
+/// If `T` is unsigned, do not use an `upper` of `0` because `upper` is tested exclusively
 fn clamp<T>(num: T, lower: T, upper: Option<T>) -> T
 where
-    T: std::ops::Add<Output = T> + std::ops::Sub<Output = T> + From<i8> + PartialOrd,
+    T: std::ops::Sub<Output = T> + From<i8> + PartialOrd,
 {
     if num < lower {
         return lower;
@@ -20,16 +26,32 @@ where
     num
 }
 
+// fn clamp_to_range<T, U>(num: T, range: U) -> T
+// where U: std::ops::RangeBounds<isize>, T: Into<isize> + From<isize>,
+// {
+//     let num = num.into();
+//     let num = match range.start_bound() {
+//         std::ops::Bound::Excluded(lower) if num <= *lower => *lower + 1isize,
+//         std::ops::Bound::Included(lower) if num < *lower => *lower,
+//         _ => num
+//     };
+//     match range.end_bound() {
+//         std::ops::Bound::Excluded(upper) if num >= *upper => *upper - 1isize,
+//         std::ops::Bound::Included(upper) if num > *upper => *upper,
+//         _ => num
+//     }.into()
+// }
+
 /// A one dimensional environment that is filled simply with either a true or false in every space
 struct BinaryEnvironment {
-    map: Vec<bool>,
+    map: BitVec,
     size: usize,
     robot_position: usize,
 }
 
 impl BinaryEnvironment {
     fn new(size: usize, map_percentage_true: f64) -> Self {
-        let mut map: Vec<bool> = Vec::with_capacity(size);
+        let mut map = BitVec::with_capacity(size);
         let mut rng = rand::thread_rng();
         for _ in 0..size {
             map.push(rng.gen_bool(map_percentage_true));
@@ -61,7 +83,7 @@ impl fmt::Display for BinaryEnvironment {
         let map = self
             .map
             .iter()
-            .map(|&bit| {
+            .map(|bit| {
                 if bit {
                     true_tile.clone()
                 } else {
@@ -120,40 +142,41 @@ impl Sensor<isize, isize> for MovementSensor {
 }
 
 struct BinarySensor {
+    breadth: isize,
     error_chance: f64,
-    triggers: Vec<Option<bool>>,
+    triggers: BitVec,
 }
 
 impl BinarySensor {
     fn new(breadth: usize, error_chance: f64) -> Self {
         Self {
+            breadth: breadth as isize,
             error_chance,
-            triggers: vec![None; 1 + 2 * breadth],
+            triggers: BitVec::with_capacity(1 + breadth * 2),
         }
     }
 }
 
-impl Sensor<&BinaryEnvironment, Vec<Option<bool>>> for BinarySensor {
+impl Sensor<&BinaryEnvironment, BitVec> for BinarySensor {
     fn update(&mut self, input: &BinaryEnvironment) -> &Self {
         self.triggers.clear();
-        let breadth = self.triggers.capacity() as isize / 2;
-        for i in -breadth..=breadth {
+        let mut rng = rand::thread_rng();
+        for i in -self.breadth..=self.breadth {
             let position = input.robot_position as isize + i;
-            if position < 0 || position >= input.size as isize {
-                self.triggers.push(None);
+            if position < 0 || position as usize >= input.map.len() {
                 continue;
             }
-            self.triggers
-                .push(Some(if rand::thread_rng().gen_bool(self.error_chance) {
-                    !input.map[position as usize]
-                } else {
-                    input.map[position as usize]
-                }));
+            let triggered = input.map[position as usize];
+            self.triggers.push(if rng.gen_bool(self.error_chance) {
+                !triggered
+            } else {
+                triggered
+            });
         }
         self
     }
 
-    fn sense(&self) -> Vec<Option<bool>> {
+    fn sense(&self) -> BitVec {
         self.triggers.clone()
     }
 }
@@ -166,7 +189,7 @@ struct BinarySensingRobot {
     environment: BinaryEnvironment,
     binary_sensor: BinarySensor,
     movement_sensor: MovementSensor,
-    ai: NaiveBinaryMCL,
+    ai: BinaryMCL,
 }
 
 impl BinarySensingRobot {
@@ -177,21 +200,43 @@ impl BinarySensingRobot {
     }
 }
 
-struct NaiveBinaryMCL {
-    particles: Vec<(usize, f64)>,
-    map: Vec<bool>,
+trait MCL<T, U> {
+    fn motion_position_update(&mut self, sensor_data: T);
+    fn sensor_weight_update(&mut self, sensor_update: U);
+    fn resample(&mut self);
+    fn get_average_position(&self) -> T;
 }
 
-impl NaiveBinaryMCL {
-    fn new(map: Vec<bool>, particle_count: usize) -> Self {
-        let mut particles = Vec::with_capacity(particle_count);
+struct BinaryMCL {
+    particles: Vec<(usize, f64)>,
+    map: BitVec,
+}
+
+impl BinaryMCL {
+    fn new(map: BitVec, particle_count: usize) -> Self {
         let mut rng = rand::thread_rng();
+        let mut particles = Vec::with_capacity(particle_count);
         for _ in 0..particle_count {
             particles.push((rng.gen_range(0, map.len()), 1.));
         }
-        Self { particles, map }
+        BinaryMCL { particles, map }
     }
 
+    fn from_distribution<U>(map: BitVec, particle_count: usize, distribution: U) -> Self
+    where
+        U: rand::distributions::Distribution<f64>,
+    {
+        let mut rng = rand::thread_rng();
+        let sampler = distribution.sample_iter(&mut rng);
+        let mut particles = Vec::with_capacity(particle_count);
+        for particle in sampler.take(particle_count) {
+            particles.push((clamp(particle, 0., Some(map.len() as f64)) as usize, 1.));
+        }
+        BinaryMCL { particles, map }
+    }
+}
+
+impl MCL<isize, BitVec> for BinaryMCL {
     fn motion_position_update(&mut self, sensor_data: isize) {
         let map = &self.map;
         self.particles.iter_mut().for_each(|p| {
@@ -199,27 +244,23 @@ impl NaiveBinaryMCL {
         });
     }
 
-    fn sensor_weight_update(&mut self, sensor_data: Vec<Option<bool>>) {
+    fn sensor_weight_update(&mut self, sensor_data: BitVec) {
         let map = &self.map;
         self.particles.iter_mut().for_each(|p| {
-            p.1 = {
-                let mut total_count = 0.;
-                let mut total_correct = 0.;
-                let breadth = sensor_data.len() as isize / 2;
-                for i in 0..sensor_data.len() {
-                    if let Some(data) = sensor_data[i] {
-                        total_count += 1.;
-                        let position = (p.0 + i) as isize - breadth;
-                        if position < 0 || position as usize >= map.len() {
-                            continue;
-                        }
-                        if map[position as usize] == data {
-                            total_correct += 1.;
-                        }
-                    }
+            let mut total_count = 0.;
+            let mut total_correct = 0.;
+            let breadth = sensor_data.len() as isize / 2;
+            for i in 0..sensor_data.len() {
+                let position = (p.0 + i) as isize - breadth;
+                if position < 0 || position as usize >= map.len() {
+                    continue;
                 }
-                clamp(total_correct / total_count, 0.01, None)
-            };
+                total_count += 1.;
+                if map[position as usize] == sensor_data[i] {
+                    total_correct += 1.;
+                }
+            }
+            p.1 = clamp(total_correct / total_count, 0.01, None);
         });
     }
 
@@ -233,12 +274,12 @@ impl NaiveBinaryMCL {
         self.particles = new_particles;
     }
 
-    fn get_average_position(&self) -> usize {
+    fn get_average_position(&self) -> isize {
         let mut pos_sum = 0;
         for particle in &self.particles {
             pos_sum += particle.0;
         }
-        pos_sum / self.particles.len()
+        (pos_sum / self.particles.len()) as isize
     }
 }
 
@@ -250,14 +291,19 @@ fn main() {
             environment: env,
             binary_sensor: BinarySensor::new(3, 0.005),
             movement_sensor: MovementSensor::new(3, 0.05),
-            ai: NaiveBinaryMCL::new(map, 1000),
+            ai: BinaryMCL::new(map, 1000),
         }
     };
     let mut rng = thread_rng();
     let mut step_count = 0;
+    let mut start_time: SystemTime;
     loop {
+        start_time = SystemTime::now();
         step_count += 1;
-        robot.make_move(rng.gen_range(-(robot.environment.size as isize) / 10, robot.environment.size as isize / 10));
+        robot.make_move(rng.gen_range(
+            -(robot.environment.size as isize) / 10,
+            robot.environment.size as isize / 10,
+        ));
         robot
             .ai
             .motion_position_update(robot.movement_sensor.sense());
@@ -265,15 +311,16 @@ fn main() {
         robot.ai.resample();
         let pose = robot.ai.get_average_position();
         let true_pose = robot.environment.robot_position;
-        let diff = pose as isize - true_pose as isize;
+        let diff = (pose as isize - true_pose as isize).abs();
         println!(
-            "{} - Percieved: {}, Real: {}, Disconnect: {}",
-            step_count, pose, true_pose, diff
+            "{} - Percieved: {}, Real: {}, Disconnect: {}, Time Taken: {:?}",
+            step_count, pose, true_pose, diff, SystemTime::now().duration_since(start_time)
         );
         // println!("{}", robot.environment);
         // let mut pose_rep = " ".repeat(pose);
         // pose_rep.insert(pose, '🤖');
         // println!("{}", pose_rep);
+
         if diff == 0 {
             break;
         }
