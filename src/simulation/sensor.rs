@@ -1,9 +1,9 @@
-extern crate rand;
 extern crate bitvec;
+extern crate rand;
 
-use rand::prelude::*;
-use bitvec::BitVec;
 use super::environment::BinaryEnvironment;
+use bitvec::BitVec;
+use rand::prelude::*;
 
 /// The generic trait for any sensor
 ///

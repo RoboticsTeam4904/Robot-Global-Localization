@@ -1,10 +1,10 @@
-extern crate rand;
 extern crate bitvec;
+extern crate rand;
 
-use rand::prelude::*;
-use rand::distributions::{Distribution, WeightedIndex};
-use bitvec::BitVec;
 use crate::utility::clamp;
+use bitvec::BitVec;
+use rand::distributions::{Distribution, WeightedIndex};
+use rand::prelude::*;
 
 pub trait MCL<T, U> {
     fn motion_position_update(&mut self, sensor_data: T);

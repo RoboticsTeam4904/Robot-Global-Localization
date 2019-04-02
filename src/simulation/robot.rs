@@ -1,6 +1,6 @@
+use super::ai::BinaryMCL;
 use super::environment::BinaryEnvironment;
 use super::sensor::{BinarySensor, MovementSensor, Sensor};
-use super::ai::BinaryMCL;
 
 /// A robot for a binary environment
 ///

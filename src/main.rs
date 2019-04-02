@@ -1,15 +1,15 @@
 extern crate bitvec;
 extern crate rand;
 
-mod utility;
 mod simulation;
+mod utility;
 
 use rand::prelude::*;
-use std::time::SystemTime;
+use simulation::ai::{BinaryMCL, MCL};
 use simulation::environment::BinaryEnvironment;
-use simulation::sensor::{Sensor, BinarySensor, MovementSensor};
 use simulation::robot::BinarySensingRobot;
-use simulation::ai::{MCL, BinaryMCL};
+use simulation::sensor::{BinarySensor, MovementSensor, Sensor};
+use std::time::SystemTime;
 
 fn main() {
     let mut robot = {
@@ -41,8 +41,12 @@ fn main() {
         let true_pose = robot.environment.robot_position;
         let diff = (pose as isize - true_pose as isize).abs();
         println!(
-            "{} - Percieved: {}, Real: {}, Disconnect: {}, Time Taken: {:?}",
-            step_count, pose, true_pose, diff, SystemTime::now().duration_since(start_time)
+            "{} - Percieved: {}, Real: {}, Error: {}, Time Taken: {:?}",
+            step_count,
+            pose,
+            true_pose,
+            diff,
+            SystemTime::now().duration_since(start_time)
         );
         // println!("{}", robot.environment);
         // let mut pose_rep = " ".repeat(pose);
@@ -50,7 +54,7 @@ fn main() {
         // println!("{}", pose_rep);
 
         if diff == 0 {
-            break;
+            // break;
         }
     }
 }

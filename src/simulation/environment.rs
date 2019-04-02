@@ -1,8 +1,8 @@
 extern crate bitvec;
 
+use crate::utility::clamp;
 use bitvec::BitVec;
 use rand::prelude::*;
-use crate::utility::clamp;
 
 use std::fmt;
 
