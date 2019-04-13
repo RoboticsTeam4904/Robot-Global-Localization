@@ -1,17 +1,16 @@
 extern crate bitvec;
 extern crate rand;
 
-mod simulation;
+mod robot;
 mod utility;
 
 use rand::prelude::*;
-use simulation::ai::{BinaryMCL, MCL};
-use simulation::environment::BinaryEnvironment;
-use simulation::robot::BinarySensingRobot;
-use simulation::sensor::{BinarySensor, MovementSensor, Sensor};
+use robot::simulation::ai::{BinaryMCL, MCL};
+use robot::simulation::environment::BinaryEnvironment;
+use robot::simulation::robot::BinarySensingRobot;
+use robot::simulation::sensor::{BinarySensor, MovementSensor};
+use robot::Sensor;
 use std::time::SystemTime;
-use vulkano::instance::Instance;
-use vulkano::instance::InstanceExtensions;
 
 fn main() {
     let mut robot = {

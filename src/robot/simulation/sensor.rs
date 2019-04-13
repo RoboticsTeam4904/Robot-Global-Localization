@@ -1,20 +1,10 @@
 extern crate bitvec;
 extern crate rand;
 
+use crate::robot::Sensor;
 use super::environment::BinaryEnvironment;
 use bitvec::BitVec;
 use rand::prelude::*;
-
-/// The generic trait for any sensor
-///
-/// `T` is what is being sensed (true info from environment) &
-/// `U` is the output of the sensor (percieved info from the environment)
-pub trait Sensor<U, T> {
-    /// Update the sensor
-    fn update(&mut self, env: U);
-    /// Gets the value that the sensor is currently sensing
-    fn sense(&self) -> T;
-}
 
 pub struct MovementSensor {
     pub error_margin: usize,
