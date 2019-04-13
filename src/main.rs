@@ -10,6 +10,8 @@ use simulation::environment::BinaryEnvironment;
 use simulation::robot::BinarySensingRobot;
 use simulation::sensor::{BinarySensor, MovementSensor, Sensor};
 use std::time::SystemTime;
+use vulkano::instance::Instance;
+use vulkano::instance::InstanceExtensions;
 
 fn main() {
     let mut robot = {
@@ -34,9 +36,7 @@ fn main() {
         ));
         robot
             .ai
-            .motion_position_update(robot.movement_sensor.sense());
-        robot.ai.sensor_weight_update(robot.binary_sensor.sense());
-        robot.ai.resample();
+            .update(robot.movement_sensor.sense(), robot.binary_sensor.sense());
         let pose = robot.ai.get_average_position();
         let true_pose = robot.environment.robot_position;
         let diff = (pose as isize - true_pose as isize).abs();

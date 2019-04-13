@@ -7,8 +7,9 @@ use rand::distributions::{Distribution, WeightedIndex};
 use rand::prelude::*;
 
 pub trait MCL<T, U> {
+    fn update(&mut self, motion_data: T, sensor_data: U);
     fn motion_position_update(&mut self, sensor_data: T);
-    fn sensor_weight_update(&mut self, sensor_update: U);
+    fn sensor_weight_update(&mut self, sensor_data: U);
     fn resample(&mut self);
     fn get_average_position(&self) -> T;
 }
@@ -43,6 +44,12 @@ impl BinaryMCL {
 }
 
 impl MCL<isize, BitVec> for BinaryMCL {
+    fn update(&mut self, motion_data: isize, sensor_data: BitVec) {
+        self.motion_position_update(motion_data);
+        self.sensor_weight_update(sensor_data);
+        self.resample();
+    }
+
     fn motion_position_update(&mut self, sensor_data: isize) {
         let map = &self.map;
         self.particles.iter_mut().for_each(|p| {
