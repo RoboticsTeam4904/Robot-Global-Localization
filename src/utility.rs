@@ -1,3 +1,64 @@
+/// Generic 2d point
+#[derive(Debug, PartialEq)]
+pub struct Point {
+    x: f64,
+    y: f64
+}
+
+impl Point {
+    pub fn dist(&self, other: Point) -> f64 {
+        ((self.x - other.x).powf(2.) + (self.y - other.y).powf(2.)).sqrt()
+    }
+
+    pub fn dot(&self, other: Point) -> f64 {
+        self.x * other.x + self.y + other.y
+    }
+}
+
+impl std::ops::Add for Point {
+    type Output = Point;
+
+    fn add(self, other: Point) -> Point {
+        Point {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
+    }
+}
+
+impl std::ops::Sub for Point {
+    type Output = Point;
+
+    fn sub(self, other: Point) -> Point {
+        Point {
+            x: self.x - other.x,
+            y: self.y - other.y,
+        }
+    }
+}
+
+impl std::ops::Mul for Point {
+    type Output = Point;
+
+    fn mul(self, other: Point) -> Point {
+        Point {
+            x: self.x * other.x,
+            y: self.y * other.y,
+        }
+    }
+}
+
+impl std::ops::Div for Point {
+    type Output = Point;
+
+    fn div(self, other: Point) -> Point {
+        Point {
+            x: self.x / other.x,
+            y: self.y / other.y,
+        }
+    }
+}
+
 /// Clamps the `num` to the range `[lower, upper)`
 ///
 /// If `T` is unsigned, do not use an `upper` of `0` because `upper` is tested exclusively
