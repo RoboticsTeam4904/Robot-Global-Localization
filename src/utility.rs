@@ -6,12 +6,20 @@ pub struct Point {
 }
 
 impl Point {
+    pub fn mag(&self) -> f64 {
+        (self.x.powf(2.) + self.y.powf(2.)).sqrt()
+    }
+
     pub fn dist(&self, other: Point) -> f64 {
         ((self.x - other.x).powf(2.) + (self.y - other.y).powf(2.)).sqrt()
     }
 
     pub fn dot(&self, other: Point) -> f64 {
-        self.x * other.x + self.y + other.y
+        self.x * other.x + self.y * other.y
+    }
+
+    pub fn cross_mag(&self, other: Point) -> f64 {
+        self.x * other.y - self.y * other.x
     }
 }
 
