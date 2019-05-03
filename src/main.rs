@@ -2,6 +2,7 @@ mod robot;
 mod utility;
 
 use rand::prelude::*;
+use rand::distributions::WeightedIndex;
 use robot::map::{Map2D, Object2D};
 use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
 use robot::Sensor;
@@ -14,14 +15,14 @@ use vitruvia::{
     text::Text,
 };
 
-struct Localizer {
+struct BasicLocalizer {
     map: Map2D,
     sensor_poses: Vec<Pose>,
     belief: Vec<Pose>,
 }
 
 // TODO: this can be multithreaded :D
-impl Localizer {
+impl BasicLocalizer {
     fn new(particle_count: usize, map: Map2D, sensor_poses: Vec<Pose>) -> Self {
         let mut rng = thread_rng();
         let mut belief = Vec::with_capacity(particle_count);
@@ -34,7 +35,7 @@ impl Localizer {
                 },
             });
         }
-        Self {
+        BasicLocalizer {
             map,
             sensor_poses,
             belief,
@@ -68,7 +69,7 @@ impl Localizer {
                 },
             });
         }
-        Self {
+        BasicLocalizer {
             map,
             sensor_poses,
             belief,
@@ -88,7 +89,6 @@ impl Localizer {
         const MAX_SENSOR_RANGE: f64 = 15.;
         let mut errors: Vec<f64> = Vec::with_capacity(self.belief.len());
         let mut highest_error = 0.;
-        let mut all_weights_zero = true;
         for sample in &self.belief {
             let mut sum_error = 0.;
             for (i, observation) in z.iter().enumerate() {
@@ -103,7 +103,6 @@ impl Localizer {
                                 0.
                             }
                         }
-                        Some(_) => 0.,
                         None => 20.,
                     },
                     None => match pred_observation {
@@ -121,21 +120,19 @@ impl Localizer {
         let mut new_particles = Vec::with_capacity(self.belief.len());
         let mut rng = thread_rng();
         let distr = if errors.iter().all(|error| error == &errors[0]) {
-            rand::distributions::WeightedIndex::new(errors.iter().map(|_| 1.))
+            WeightedIndex::new(errors.iter().map(|_| 1.))
         } else {
-            rand::distributions::WeightedIndex::new(
-                errors.iter().map(|error| highest_error - error),
-            )
-        }
-        .unwrap();
+            WeightedIndex::new(errors.iter().map(|error| highest_error - error))
+        }.unwrap();
         for _ in 0..self.belief.len() {
+            let idx = distr.sample(&mut rng);
             new_particles.push(
-                self.belief[distr.sample(&mut rng)]
-                    /*+ Pose::random(
+                self.belief[idx]
+                    + Pose::random(
                         (-FRAC_PI_8 / 10.)..(FRAC_PI_8 / 10.),
                         -0.001..0.001,
                         -0.001..0.001,
-                    ),*/ // TODO: More thought needs to be put into this artificial noise
+                    ), // TODO: More thought needs to be put into this artificial noise
             );
         }
         self.belief = new_particles;
@@ -151,7 +148,7 @@ impl Localizer {
 }
 
 struct Robot {
-    mcl: Localizer,
+    mcl: BasicLocalizer,
     motion_sensor: DummyMotionSensor,
     distance_sensors: Vec<DummyDistanceSensor>,
 }
@@ -233,7 +230,7 @@ fn main() {
             ),
         ];
         Robot {
-            mcl: Localizer::new(
+            mcl: BasicLocalizer::new(
                 20_000,
                 map.clone(),
                 distance_sensors
@@ -269,9 +266,13 @@ fn main() {
     // Make tick and time counter visual
     let mut ticks = 0;
     let mut tick_visual = root.add(Text::new("0").with_size(30.).into());
-    tick_visual.set_transform(Transform::default().with_position((500., 20.,)));
+    tick_visual.set_transform(Transform::default().with_position((500., 20.)));
     let start_time = std::time::Instant::now();
-    let mut time_visual = root.add(Text::new(format!("{:?}", start_time.elapsed()).as_str()).with_size(30.).into());
+    let mut time_visual = root.add(
+        Text::new(format!("{:?}", start_time.elapsed()).as_str())
+            .with_size(30.)
+            .into(),
+    );
     time_visual.set_transform(Transform::default().with_position((50., 20.)));
     // Make particle visuals
     let mut particle_visuals = Vec::with_capacity(robot.mcl.belief.len());
@@ -382,8 +383,16 @@ fn main() {
             );
         }
         // Update tick and time counter visual
-        tick_visual.update(Text::new(format!("{}", ticks).as_str()).with_size(30.).into());
-        time_visual.update(Text::new(format!("{:?}", start_time.elapsed()).as_str()).with_size(30.).into());
+        tick_visual.update(
+            Text::new(format!("{}", ticks).as_str())
+                .with_size(30.)
+                .into(),
+        );
+        time_visual.update(
+            Text::new(format!("{:?}", start_time.elapsed()).as_str())
+                .with_size(30.)
+                .into(),
+        );
         // Update position visuals
         predicted_pose_visual.set_transform(
             Transform::default()

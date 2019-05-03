@@ -28,6 +28,12 @@ impl Point {
         }
     }
 
+    /// Angle of `self` relative to `other`
+    pub fn angle(&self, other: Point) -> f64 {
+        let dif = other - *self;
+        (dif.y / dif.x).atan()
+    }
+
     pub fn mag(&self) -> f64 {
         (self.x.powi(2) + self.y.powi(2)).sqrt()
     }

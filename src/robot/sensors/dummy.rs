@@ -6,13 +6,45 @@ use rand::thread_rng;
 
 /// A sensor which senses all objects' relative positions within a certain fov
 pub struct DummyObjectSensor {
-    pub fov: f64,
-
+    fov: f64,
+    pub objects: Vec<Point>,
+    pub relative_pose: Pose,
+    pub robot_pose: Pose,
 }
 
-// impl Sensor<Vec<Point>> for DummyObjectSensor {
-    
-// }
+impl DummyObjectSensor {
+    pub fn new(fov: f64, objects: Vec<Point>, relative_pose: Pose, robot_pose: Pose) -> Self {
+        Self {
+            fov: fov / 2.,
+            objects,
+            relative_pose,
+            robot_pose,
+        }
+    }
+
+    pub fn update_pose(&mut self, new_pose: Pose) {
+        self.robot_pose = new_pose
+    }
+}
+
+impl Sensor<Vec<Point>> for DummyObjectSensor {
+    fn get_relative_pose(&self) -> Pose  {
+        self.relative_pose
+    }
+
+    fn sense(&self) -> Vec<Point> {
+        let sensor_pose = self.robot_pose + self.get_relative_pose();
+        let (fov_min, fov_max) = (sensor_pose.angle - self.fov, sensor_pose.angle + self.fov);
+        let mut sensed_objects = Vec::new();
+        for object in &self.objects {
+            let rel_angle = sensor_pose.position.angle(object.clone());
+            if fov_min <= rel_angle && rel_angle <= fov_max { // TODO: This is incorrect because of how angles are all under mod
+                sensed_objects.push(object.clone());
+            }
+        }
+        sensed_objects
+    }
+}
 
 pub struct DummyDistanceSensor {
     noise_distr: Normal,
