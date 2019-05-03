@@ -122,7 +122,7 @@ impl BasicLocalizer {
         let distr = if errors.iter().all(|error| error == &errors[0]) {
             WeightedIndex::new(errors.iter().map(|_| 1.))
         } else {
-            WeightedIndex::new(errors.iter().map(|error| highest_error - error))
+            WeightedIndex::new(errors.iter().map(|error| 1. / error))
         }.unwrap();
         for _ in 0..self.belief.len() {
             let idx = distr.sample(&mut rng);
