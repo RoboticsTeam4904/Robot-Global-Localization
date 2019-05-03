@@ -4,9 +4,8 @@ mod utility;
 use rand::prelude::*;
 use robot::map::{Map2D, Object2D};
 use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
+use robot::sensors::DistanceSensor;
 use robot::Sensor;
-use std::io;
-use std::io::prelude::*;
 use utility::{Point, Pose};
 use vitruvia::{
     graphics_2d,
@@ -178,14 +177,65 @@ fn main() {
             angle: 0.,
             position: Point { x: 8., y: 8. },
         };
+        let distance_sensors = vec![
+            DummyDistanceSensor::new(
+                0.01,
+                Pose::default(),
+                map.clone(),
+                starting_robot_pose,
+                None,
+            ),
+            DummyDistanceSensor::new(
+                0.01,
+                Pose::default()
+                    + Pose {
+                        angle: std::f64::consts::FRAC_PI_2,
+                        position: Point::default(),
+                    },
+                map.clone(),
+                starting_robot_pose,
+                None,
+            ),
+            DummyDistanceSensor::new(
+                0.01,
+                Pose::default()
+                    + Pose {
+                        angle: std::f64::consts::PI,
+                        position: Point::default(),
+                    },
+                map.clone(),
+                starting_robot_pose,
+                None,
+            ),
+            DummyDistanceSensor::new(
+                0.01,
+                Pose::default()
+                    + Pose {
+                        angle: std::f64::consts::PI + std::f64::consts::FRAC_PI_2,
+                        position: Point::default(),
+                    },
+                map.clone(),
+                starting_robot_pose,
+                None,
+            ),
+        ];
         Robot {
-            mcl: Localizer::new(10_000, map.clone(), vec![Pose::default()]),
-            distance_sensors: vec![DummyDistanceSensor {
-                map,
-                robot_pose: starting_robot_pose,
-                max_dist: None,
-            }],
-            motion_sensor: DummyMotionSensor::new(starting_robot_pose),
+            mcl: Localizer::new(
+                10_000,
+                map.clone(),
+                distance_sensors
+                    .iter()
+                    .map(|sensor| sensor.get_relative_pose())
+                    .collect(),
+            ),
+            distance_sensors,
+            motion_sensor: DummyMotionSensor::new(
+                starting_robot_pose,
+                Pose {
+                    angle: std::f64::consts::FRAC_PI_8 / 2.,
+                    position: Point { x: 0.01, y: 0.01 },
+                },
+            ),
         }
     };
 
@@ -267,7 +317,6 @@ fn main() {
             .for_each(|s| s.update_pose(movement_cmd));
         let real_pose = robot.motion_sensor.robot_pose;
         let predicted_pose = robot.mcl.get_prediction();
-        println!("{:?}, {:?}", predicted_pose, robot.mcl.map.raycast(predicted_pose));
         // println!("Predicted: {:?}", predicted_pose);
         // println!("Real: {:?}", real_pose);
 
