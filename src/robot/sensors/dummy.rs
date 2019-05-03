@@ -1,9 +1,18 @@
 use crate::robot::map::Map2D;
 use crate::robot::Sensor;
 use crate::utility::{Pose, Point};
-use super::DistanceSensor;
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
+
+/// A sensor which senses all objects' relative positions within a certain fov
+pub struct DummyObjectSensor {
+    pub fov: f64,
+
+}
+
+// impl Sensor<Vec<Point>> for DummyObjectSensor {
+    
+// }
 
 pub struct DummyDistanceSensor {
     noise_distr: Normal,
@@ -48,9 +57,7 @@ impl Sensor<Option<f64>> for DummyDistanceSensor {
             Some(dist + self.noise_distr.sample(&mut thread_rng()))
         }
     }
-}
 
-impl DistanceSensor<Option<f64>> for DummyDistanceSensor {
     fn get_relative_pose(&self) -> Pose  {
         self.relative_pose
     }

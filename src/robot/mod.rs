@@ -1,6 +1,8 @@
-pub mod simulation;
+use crate::utility::Pose;
+
 pub mod map;
 pub mod sensors;
+pub mod simulation;
 
 /// The generic robot trait
 pub trait Robot {
@@ -16,10 +18,14 @@ pub trait Sensor<T> {
     fn update(&mut self) {}
     /// Gets the value that the sensor is currently sensing
     fn sense(&self) -> T;
+    /// Get the pose of the sensor relative to the pose of the robot
+    fn get_relative_pose(&self) -> Pose {
+        Pose::default()
+    }
 }
 
 /// The generic trait for any actuator
-/// 
+///
 /// `T` is the input for the actuator
 pub trait Actuator<T> {
     fn set(&mut self, value: T);

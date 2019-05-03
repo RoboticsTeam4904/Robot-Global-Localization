@@ -4,6 +4,7 @@ use crate::utility::{Point, Pose};
 
 pub enum Object2D {
     Line((Point, Point)),
+    Triangle((Point, Point, Point)),
     Rectangle((Point, Point)),
 }
 
@@ -33,6 +34,14 @@ impl Map2D {
         for object in objects {
             match object {
                 Object2D::Line(l) => lines.push((add_vert(l.0), add_vert(l.1))),
+                Object2D::Triangle((c1, c2, c3)) => {
+                    let v1 = add_vert(c1);
+                    let v2 = add_vert(c2);
+                    let v3 = add_vert(c3);
+                    lines.push((v1, v2));
+                    lines.push((v2, v3));
+                    lines.push((v3, v1));
+                },
                 Object2D::Rectangle((c1, c3)) => {
                     let c2 = Point { x: c1.x, y: c3.y };
                     let c4 = Point { x: c3.x, y: c1.y };

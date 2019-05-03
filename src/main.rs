@@ -4,13 +4,14 @@ mod utility;
 use rand::prelude::*;
 use robot::map::{Map2D, Object2D};
 use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
-use robot::sensors::DistanceSensor;
 use robot::Sensor;
+use std::f64::consts::*;
 use utility::{Point, Pose};
 use vitruvia::{
     graphics_2d,
     graphics_2d::{Color, Transform},
-    path::{Builder, Path, Primitive, Stroke},
+    path::{Builder, Primitive, Stroke},
+    text::Text,
 };
 
 struct Localizer {
@@ -26,7 +27,7 @@ impl Localizer {
         let mut belief = Vec::with_capacity(particle_count);
         for _ in 0..particle_count {
             belief.push(Pose {
-                angle: rng.gen_range(0., 2. * std::f64::consts::PI),
+                angle: rng.gen_range(0., 2. * PI),
                 position: Point {
                     x: rng.gen_range(0., map.width),
                     y: rng.gen_range(0., map.height),
@@ -128,7 +129,14 @@ impl Localizer {
         }
         .unwrap();
         for _ in 0..self.belief.len() {
-            new_particles.push(self.belief[distr.sample(&mut rng)]);
+            new_particles.push(
+                self.belief[distr.sample(&mut rng)]
+                    /*+ Pose::random(
+                        (-FRAC_PI_8 / 10.)..(FRAC_PI_8 / 10.),
+                        -0.001..0.001,
+                        -0.001..0.001,
+                    ),*/ // TODO: More thought needs to be put into this artificial noise
+            );
         }
         self.belief = new_particles;
     }
@@ -167,10 +175,15 @@ fn main() {
             10.,
             10.,
             vec![
-                Object2D::Line((Point { x: 0., y: 0. }, Point { x: 10., y: 0. })),
-                Object2D::Line((Point { x: 10., y: 0. }, Point { x: 10., y: 10. })),
-                Object2D::Line((Point { x: 10., y: 10. }, Point { x: 0., y: 10. })),
-                Object2D::Line((Point { x: 0., y: 10. }, Point { x: 0., y: 0. })),
+                Object2D::Rectangle((Point::default(), Point { x: 10., y: 10. })),
+                Object2D::Rectangle((Point { x: 10., y: 10. }, Point { x: 9., y: 7. })),
+                Object2D::Rectangle((Point { x: 2.5, y: 2.5 }, Point { x: 7.5, y: 3. })),
+                Object2D::Triangle((
+                    Point { x: 1., y: 8. },
+                    Point { x: 3., y: 8. },
+                    Point { x: 2., y: 7. },
+                )),
+                Object2D::Line((Point { x: 5., y: 5. }, Point { x: 5., y: 10. })),
             ],
         );
         let starting_robot_pose = Pose {
@@ -189,7 +202,7 @@ fn main() {
                 0.01,
                 Pose::default()
                     + Pose {
-                        angle: std::f64::consts::FRAC_PI_2,
+                        angle: FRAC_PI_2,
                         position: Point::default(),
                     },
                 map.clone(),
@@ -200,7 +213,7 @@ fn main() {
                 0.01,
                 Pose::default()
                     + Pose {
-                        angle: std::f64::consts::PI,
+                        angle: PI,
                         position: Point::default(),
                     },
                 map.clone(),
@@ -211,7 +224,7 @@ fn main() {
                 0.01,
                 Pose::default()
                     + Pose {
-                        angle: std::f64::consts::PI + std::f64::consts::FRAC_PI_2,
+                        angle: PI + FRAC_PI_2,
                         position: Point::default(),
                     },
                 map.clone(),
@@ -221,7 +234,7 @@ fn main() {
         ];
         Robot {
             mcl: Localizer::new(
-                10_000,
+                20_000,
                 map.clone(),
                 distance_sensors
                     .iter()
@@ -232,7 +245,7 @@ fn main() {
             motion_sensor: DummyMotionSensor::new(
                 starting_robot_pose,
                 Pose {
-                    angle: std::f64::consts::FRAC_PI_8 / 2.,
+                    angle: FRAC_PI_8 / 4.,
                     position: Point { x: 0.01, y: 0.01 },
                 },
             ),
@@ -253,6 +266,13 @@ fn main() {
     }
     let mut map_visual = root.add(builder.done().stroke(Stroke::default()).finalize().into());
     map_visual.apply_transform(Transform::default().with_position((50., 50.)));
+    // Make tick and time counter visual
+    let mut ticks = 0;
+    let mut tick_visual = root.add(Text::new("0").with_size(30.).into());
+    tick_visual.set_transform(Transform::default().with_position((500., 20.,)));
+    let start_time = std::time::Instant::now();
+    let mut time_visual = root.add(Text::new(format!("{:?}", start_time.elapsed()).as_str()).with_size(30.).into());
+    time_visual.set_transform(Transform::default().with_position((50., 20.)));
     // Make particle visuals
     let mut particle_visuals = Vec::with_capacity(robot.mcl.belief.len());
     for particle in &robot.mcl.belief {
@@ -306,7 +326,23 @@ fn main() {
     let mut ctx = gfx.start(root);
     let mut temp = 0.;
     ctx.bind(Box::new(move |ctx| {
-        let movement_cmd = Pose::default() + robot.motion_sensor.robot_pose;
+        ticks += 1;
+        let movement_cmd = (
+            robot.motion_sensor.robot_pose
+            //     + Pose {
+            //         angle: thread_rng().gen_range(0., FRAC_PI_4),
+            //         position: Point {
+            //             x: thread_rng().gen_range(-0.2, 0.2),
+            //             y: thread_rng().gen_range(-0.2, 0.2),
+            //         },
+            //     })
+            // .clamp(
+            //     Pose::default(),
+            //     Pose {
+            //         angle: 2. * PI,
+            //         position: Point { x: 10., y: 10. },
+            //     },
+        );
 
         // Move the robot and tick the mcl algorithm
         robot.repeat();
@@ -317,6 +353,17 @@ fn main() {
             .for_each(|s| s.update_pose(movement_cmd));
         let real_pose = robot.motion_sensor.robot_pose;
         let predicted_pose = robot.mcl.get_prediction();
+        // print!("Real distance sensor data: ");
+        // robot.distance_sensors.iter().for_each(|sensor| {
+        //     let sensor_pose = real_pose + sensor.get_relative_pose();
+        //     print!("{} ", robot.mcl.map.raycast(sensor_pose).unwrap().dist(sensor_pose.position));
+        // });
+        // print!("\nFake distance sensor data: ");
+        // robot.distance_sensors.iter().for_each(|sensor| {
+        //     let sensor_pose = predicted_pose + sensor.get_relative_pose();
+        //     print!("{} ", robot.mcl.map.raycast(sensor_pose).unwrap().dist(sensor_pose.position));
+        // });
+        // println!("");
         // println!("Predicted: {:?}", predicted_pose);
         // println!("Real: {:?}", real_pose);
 
@@ -334,6 +381,9 @@ fn main() {
                     .with_scale((0.5, 0.5)),
             );
         }
+        // Update tick and time counter visual
+        tick_visual.update(Text::new(format!("{}", ticks).as_str()).with_size(30.).into());
+        time_visual.update(Text::new(format!("{:?}", start_time.elapsed()).as_str()).with_size(30.).into());
         // Update position visuals
         predicted_pose_visual.set_transform(
             Transform::default()
@@ -353,40 +403,4 @@ fn main() {
         );
     }));
     ctx.run();
-}
-
-fn parse_movement_command<'a>(cmd: String) -> Result<Pose, &'a str> {
-    Ok(if cmd.starts_with('x') {
-        Pose {
-            angle: 0.,
-            position: Point {
-                x: cmd
-                    .replace('x', "")
-                    .parse::<f64>()
-                    .map_err(|_| "Bad float")?,
-                y: 0.,
-            },
-        }
-    } else if cmd.starts_with('y') {
-        Pose {
-            angle: 0.,
-            position: Point {
-                x: 0.,
-                y: cmd
-                    .replace('y', "")
-                    .parse::<f64>()
-                    .map_err(|_| "Bad float")?,
-            },
-        }
-    } else if cmd.starts_with('a') {
-        Pose {
-            angle: cmd
-                .replace('a', "")
-                .parse::<f64>()
-                .map_err(|_| "Bad float")?,
-            position: Point::default(),
-        }
-    } else {
-        return Err("Invalid command prefix");
-    })
 }

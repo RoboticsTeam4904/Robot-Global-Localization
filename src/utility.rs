@@ -1,3 +1,6 @@
+use rand::prelude::*;
+use std::ops::Range;
+
 /// Generic 2d point
 #[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct Point {
@@ -104,6 +107,18 @@ pub struct Pose {
 }
 
 impl Pose {
+    /// Creates a random pose from uniform distribitions for each range
+    pub fn random(angle_range: Range<f64>, x_range: Range<f64>, y_range: Range<f64>) -> Pose {
+        let mut rng = thread_rng();
+        Pose {
+            angle: rng.gen_range(angle_range.start, angle_range.end),
+            position: Point {
+                x: rng.gen_range(x_range.start, x_range.end),
+                y: rng.gen_range(y_range.start, y_range.end),
+            }
+        }
+    }
+
     /// Mod `angle` by 2π
     pub fn normalize(mut self) -> Pose {
         self.angle %= 2. * std::f64::consts::PI;
