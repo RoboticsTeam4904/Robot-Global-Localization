@@ -1,8 +1,8 @@
 mod robot;
 mod utility;
 
-use rand::prelude::*;
 use rand::distributions::WeightedIndex;
+use rand::prelude::*;
 use robot::map::{Map2D, Object2D};
 use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
 use robot::Sensor;
@@ -15,18 +15,19 @@ use vitruvia::{
     text::Text,
 };
 
-struct BasicLocalizer {
+struct LHBLocalizer {
+    weight_sum_threshold: f64,
     map: Map2D,
     sensor_poses: Vec<Pose>,
     belief: Vec<Pose>,
 }
 
-// TODO: this can be multithreaded :D
-impl BasicLocalizer {
-    fn new(particle_count: usize, map: Map2D, sensor_poses: Vec<Pose>) -> Self {
+// TODO: this can be multithreaded :D (and by this I mean everything basically)
+impl LHBLocalizer {
+    fn new(initial_particle_count: usize, map: Map2D, sensor_poses: Vec<Pose>) -> Self {
         let mut rng = thread_rng();
-        let mut belief = Vec::with_capacity(particle_count);
-        for _ in 0..particle_count {
+        let mut belief = Vec::with_capacity(initial_particle_count);
+        for _ in 0..initial_particle_count {
             belief.push(Pose {
                 angle: rng.gen_range(0., 2. * PI),
                 position: Point {
@@ -35,46 +36,47 @@ impl BasicLocalizer {
                 },
             });
         }
-        BasicLocalizer {
+        LHBLocalizer {
+            weight_sum_threshold: initial_particle_count as f64, // TODO: how this is done needs ironing out / changing
             map,
             sensor_poses,
             belief,
         }
     }
 
-    fn from_distributions<T, U>(
-        x_distr: T,
-        y_distr: T,
-        angle_distr: T,
-        particle_count: usize,
-        map: Map2D,
-        sensor_poses: Vec<Pose>,
-    ) -> Self
-    where
-        T: rand::distributions::Distribution<U>,
-        U: Into<f64>,
-    {
-        let mut belief = Vec::with_capacity(particle_count);
-        for ((x, y), angle) in x_distr
-            .sample_iter(&mut thread_rng())
-            .zip(y_distr.sample_iter(&mut thread_rng()))
-            .zip(angle_distr.sample_iter(&mut thread_rng()))
-            .take(particle_count)
-        {
-            belief.push(Pose {
-                angle: angle.into(),
-                position: Point {
-                    x: x.into(),
-                    y: y.into(),
-                },
-            });
-        }
-        BasicLocalizer {
-            map,
-            sensor_poses,
-            belief,
-        }
-    }
+    // fn from_distributions<T, U>(
+    //     x_distr: T,
+    //     y_distr: T,
+    //     angle_distr: T,
+    //     particle_count: usize,
+    //     map: Map2D,
+    //     sensor_poses: Vec<Pose>,
+    // ) -> Self
+    // where
+    //     T: rand::distributions::Distribution<U>,
+    //     U: Into<f64>,
+    // {
+    //     let mut belief = Vec::with_capacity(particle_count);
+    //     for ((x, y), angle) in x_distr
+    //         .sample_iter(&mut thread_rng())
+    //         .zip(y_distr.sample_iter(&mut thread_rng()))
+    //         .zip(angle_distr.sample_iter(&mut thread_rng()))
+    //         .take(particle_count)
+    //     {
+    //         belief.push(Pose {
+    //             angle: angle.into(),
+    //             position: Point {
+    //                 x: x.into(),
+    //                 y: y.into(),
+    //             },
+    //         });
+    //     }
+    //     Self {
+    //         map,
+    //         sensor_poses,
+    //         belief,
+    //     }
+    // }
 
     fn control_update(&mut self, u: Pose) {
         for i in 0..self.belief.len() {
@@ -117,21 +119,30 @@ impl BasicLocalizer {
             errors.push(sum_error);
         }
 
-        let mut new_particles = Vec::with_capacity(self.belief.len());
+        let mut new_particles = Vec::new();
         let mut rng = thread_rng();
-        let distr = if errors.iter().all(|error| error == &errors[0]) {
-            WeightedIndex::new(errors.iter().map(|_| 1.))
+        let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
+            errors
+                .iter()
+                .map(|_| self.weight_sum_threshold / self.belief.len() as f64)
+                .collect()
         } else {
-            WeightedIndex::new(errors.iter().map(|error| 1. / error))
-        }.unwrap();
-        for _ in 0..self.belief.len() {
+            errors
+                .iter()
+                .map(|error| if error != &0. { 1. / error } else { 1. })
+                .collect() // TODO: this doesn't really work
+        };
+        let distr = WeightedIndex::new(weights.clone()).unwrap();
+        let mut sum_weights = 0.;
+        while sum_weights < self.weight_sum_threshold {
             let idx = distr.sample(&mut rng);
+            sum_weights += weights[idx];
             new_particles.push(
                 self.belief[idx]
                     + Pose::random(
-                        (-FRAC_PI_8 / 10.)..(FRAC_PI_8 / 10.),
-                        -0.001..0.001,
-                        -0.001..0.001,
+                        (-FRAC_PI_8 / 8.)..(FRAC_PI_8 / 8.),
+                        -0.01..0.01,
+                        -0.01..0.01,
                     ), // TODO: More thought needs to be put into this artificial noise
             );
         }
@@ -148,7 +159,7 @@ impl BasicLocalizer {
 }
 
 struct Robot {
-    mcl: BasicLocalizer,
+    mcl: LHBLocalizer,
     motion_sensor: DummyMotionSensor,
     distance_sensors: Vec<DummyDistanceSensor>,
 }
@@ -230,7 +241,7 @@ fn main() {
             ),
         ];
         Robot {
-            mcl: BasicLocalizer::new(
+            mcl: LHBLocalizer::new(
                 20_000,
                 map.clone(),
                 distance_sensors
@@ -263,9 +274,9 @@ fn main() {
     }
     let mut map_visual = root.add(builder.done().stroke(Stroke::default()).finalize().into());
     map_visual.apply_transform(Transform::default().with_position((50., 50.)));
-    // Make tick and time counter visual
+    // Make tick, time, and particle counters' visuals
     let mut ticks = 0;
-    let mut tick_visual = root.add(Text::new("0").with_size(30.).into());
+    let mut tick_visual = root.add(Text::new("0t").with_size(30.).into());
     tick_visual.set_transform(Transform::default().with_position((500., 20.)));
     let start_time = std::time::Instant::now();
     let mut time_visual = root.add(
@@ -274,13 +285,20 @@ fn main() {
             .into(),
     );
     time_visual.set_transform(Transform::default().with_position((50., 20.)));
+    let mut particle_count_visual = root.add(
+        Text::new(format!("{}p", robot.mcl.belief.len()).as_str())
+            .with_size(30.)
+            .into(),
+    );
+    particle_count_visual.set_transform(Transform::default().with_position((50., 570.)));
     // Make particle visuals
     let mut particle_visuals = Vec::with_capacity(robot.mcl.belief.len());
+    let path: vitruvia::graphics_2d::Content = Primitive::isoceles_triangle(5., 8.)
+        .fill(Color::black().into())
+        .finalize()
+        .into();
     for particle in &robot.mcl.belief {
-        let path = Primitive::isoceles_triangle(5., 8.)
-            .fill(Color::black().into())
-            .finalize();
-        let mut particle_visual = root.add(path.into());
+        let mut particle_visual = root.add(path.clone());
         particle_visual.apply_transform(
             Transform::default()
                 .with_position((
@@ -288,7 +306,7 @@ fn main() {
                     particle.position.y * 50. + 50.,
                 ))
                 .with_rotation(-particle.angle)
-                .with_scale((0.5, 0.5)),
+                .with_scale(0.5),
         );
         particle_visuals.push(particle_visual);
     }
@@ -324,8 +342,8 @@ fn main() {
     };
 
     // Start up the window
+    let mut root2 = root.clone();
     let mut ctx = gfx.start(root);
-    let mut temp = 0.;
     ctx.bind(Box::new(move |ctx| {
         ticks += 1;
         let movement_cmd = (
@@ -370,6 +388,19 @@ fn main() {
 
         // Update visuals
         // Update particle visuals
+        if robot.mcl.belief.len() < particle_visuals.len() {
+            for i in robot.mcl.belief.len()..particle_visuals.len() {
+                particle_visuals[i].set_transform(Transform::default().with_scale(0.00001));
+            }
+        } else if robot.mcl.belief.len() != particle_visuals.len() {
+            let path: vitruvia::graphics_2d::Content = Primitive::isoceles_triangle(5., 8.)
+                .fill(Color::black().into())
+                .finalize()
+                .into();
+            for _ in particle_visuals.len()..robot.mcl.belief.len() {
+                particle_visuals.push(root2.add(path.clone()));
+            }
+        }
         for i in 0..robot.mcl.belief.len() {
             let particle = robot.mcl.belief[i];
             particle_visuals[i].set_transform(
@@ -379,17 +410,22 @@ fn main() {
                         particle.position.y * 50. + 50.,
                     ))
                     .with_rotation(-particle.angle)
-                    .with_scale((0.5, 0.5)),
+                    .with_scale(0.5),
             );
         }
-        // Update tick and time counter visual
+        // Update tick, time, particle counters' visuals
         tick_visual.update(
-            Text::new(format!("{}", ticks).as_str())
+            Text::new(format!("{}t", ticks).as_str())
                 .with_size(30.)
                 .into(),
         );
         time_visual.update(
             Text::new(format!("{:?}", start_time.elapsed()).as_str())
+                .with_size(30.)
+                .into(),
+        );
+        particle_count_visual.update(
+            Text::new(format!("{}p", robot.mcl.belief.len()).as_str())
                 .with_size(30.)
                 .into(),
         );
