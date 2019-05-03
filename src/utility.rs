@@ -1,17 +1,36 @@
 /// Generic 2d point
-#[derive(Debug, PartialEq)]
+#[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct Point {
-    x: f64,
-    y: f64
+    pub x: f64,
+    pub y: f64,
 }
 
 impl Point {
+    pub fn clamp(self, lower: Point, upper: Point) -> Point {
+        Point {
+            x: if self.x > upper.x {
+                upper.x
+            } else if self.x < lower.x {
+                lower.x
+            } else {
+                self.x
+            },
+            y: if self.y > upper.y {
+                upper.y
+            } else if self.y < lower.y {
+                lower.y
+            } else {
+                self.y
+            },
+        }
+    }
+
     pub fn mag(&self) -> f64 {
-        (self.x.powf(2.) + self.y.powf(2.)).sqrt()
+        (self.x.powi(2) + self.y.powi(2)).sqrt()
     }
 
     pub fn dist(&self, other: Point) -> f64 {
-        ((self.x - other.x).powf(2.) + (self.y - other.y).powf(2.)).sqrt()
+        ((self.x - other.x).powi(2) + (self.y - other.y).powi(2)).sqrt()
     }
 
     pub fn dot(&self, other: Point) -> f64 {
@@ -63,6 +82,90 @@ impl std::ops::Div for Point {
         Point {
             x: self.x / other.x,
             y: self.y / other.y,
+        }
+    }
+}
+
+impl std::ops::Mul<f64> for Point {
+    type Output = Point;
+
+    fn mul(self, other: f64) -> Point {
+        Point {
+            x: self.x * other,
+            y: self.y * other,
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct Pose {
+    pub angle: f64,
+    pub position: Point,
+}
+
+impl Pose {
+    /// Mod `angle` by 2π
+    pub fn normalize(mut self) -> Pose {
+        self.angle %= 2. * std::f64::consts::PI;
+        self
+    }
+
+    pub fn clamp(self, lower: Pose, upper: Pose) -> Pose {
+        Pose {
+            angle: if self.angle > upper.angle {
+                upper.angle
+            } else if self.angle < lower.angle {
+                lower.angle
+            } else {
+                self.angle
+            },
+            position: self.position.clamp(lower.position, upper.position)
+        }
+    }
+}
+
+impl std::ops::Add for Pose {
+    type Output = Pose;
+
+    /// Does normalize angle
+    fn add(self, other: Pose) -> Pose {
+        Pose {
+            angle: (self.angle + other.angle) % (2. * std::f64::consts::PI),
+            position: self.position + other.position,
+        }
+    }
+}
+
+impl std::ops::Sub for Pose {
+    type Output = Pose;
+
+    /// Does normalize angle
+    fn sub(self, other: Pose) -> Pose {
+        Pose {
+            angle: (self.angle - other.angle) % (2. * std::f64::consts::PI),
+            position: self.position - other.position,
+        }
+    }
+}
+
+impl std::ops::Div<f64> for Pose {
+    type Output = Pose;
+
+    /// Does normalize angle
+    fn div(self, other: f64) -> Pose {
+        Pose {
+            angle: (self.angle / other) % (2. * std::f64::consts::PI),
+            position: self.position * (1. / other),
+        }
+    }
+}
+
+impl std::ops::AddAssign for Pose {
+    /// Does not normalize angle
+    fn add_assign(&mut self, other: Pose) {
+        *self = Pose {
+            angle: self.angle + other.angle,
+            position: self.position + other.position,
         }
     }
 }

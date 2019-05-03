@@ -1,4 +1,4 @@
-use crate::robot::Sensor;
+use super::sensor::Sensor;
 use super::ai::BinaryMCL;
 use super::environment::BinaryEnvironment;
 use super::sensor::{BinarySensor, MovementSensor};
