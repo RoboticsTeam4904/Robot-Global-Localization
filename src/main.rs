@@ -90,17 +90,16 @@ impl LHBLocalizer {
         // TODO: Don't just use a constant, c'mon
         const MAX_SENSOR_RANGE: f64 = 15.;
         let mut errors: Vec<f64> = Vec::with_capacity(self.belief.len());
-        let mut highest_error = 0.;
         for sample in &self.belief {
             let mut sum_error = 0.;
             for (i, observation) in z.iter().enumerate() {
                 let pred_observation = self.map.raycast(*sample + self.sensor_poses[i]);
                 sum_error += match observation {
-                    Some(real) => match pred_observation {
+                    Some(real_dist) => match pred_observation {
                         Some(pred) => {
-                            let dist = pred.dist(sample.position);
-                            if dist <= MAX_SENSOR_RANGE {
-                                (real - dist).powi(2)
+                            let pred_dist = pred.dist(sample.position);
+                            if pred_dist <= MAX_SENSOR_RANGE {
+                                (real_dist - pred_dist).powi(2)
                             } else {
                                 0.
                             }
@@ -112,9 +111,6 @@ impl LHBLocalizer {
                         None => 0.,
                     },
                 };
-            }
-            if highest_error < sum_error {
-                highest_error = sum_error;
             }
             errors.push(sum_error);
         }
