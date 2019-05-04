@@ -454,7 +454,7 @@ version = "0.1.0"
 dependencies = [
  "bitvec 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "vitruvia 0.1.0",
+ "vitruvia 0.1.0 (git+https://gitlab.com/__ex_nihilo/__vitruvia.git?branch=native2d-mvp)",
 ]
 
 [[package]]
@@ -920,6 +920,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "vitruvia"
 version = "0.1.0"
+source = "git+https://gitlab.com/__ex_nihilo/__vitruvia.git?branch=native2d-mvp#80c2b8f4c2a786d5867e567b7122ba20d0a9fe6f"
 dependencies = [
  "cairo-rs 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cairo-sys-rs 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1231,6 +1232,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum syn 0.15.33 (registry+https://github.com/rust-lang/crates.io-index)" = "ec52cd796e5f01d0067225a5392e70084acc4c0013fa71d55166d38a8b307836"
 "checksum synstructure 0.10.1 (registry+https://github.com/rust-lang/crates.io-index)" = "73687139bf99285483c96ac0add482c3776528beac1d97d444f6e91f203a2015"
 "checksum unicode-xid 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fc72304796d0818e357ead4e000d19c9c174ab23dc11093ac919054d20a6a7fc"
+"checksum vitruvia 0.1.0 (git+https://gitlab.com/__ex_nihilo/__vitruvia.git?branch=native2d-mvp)" = "<none>"
 "checksum void 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 "checksum walkdir 2.2.7 (registry+https://github.com/rust-lang/crates.io-index)" = "9d9d7ed3431229a144296213105a390676cc49c9b6a72bd19f3176c98e129fa1"
 "checksum wasm-bindgen 0.2.43 (registry+https://github.com/rust-lang/crates.io-index)" = "546e4ab1bf7f9a3532d21472efd72d01a23f55abd885c60b165f393394dbad95"

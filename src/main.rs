@@ -6,7 +6,7 @@ use rand::prelude::*;
 use robot::map::{Map2D, Object2D};
 use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
 use robot::Sensor;
-use std::f64::consts::*;
+use std::f64::consts::{PI, FRAC_PI_2, FRAC_PI_8};
 use utility::{Point, Pose};
 use vitruvia::{
     graphics_2d,
@@ -37,7 +37,7 @@ impl LHBLocalizer {
             });
         }
         LHBLocalizer {
-            weight_sum_threshold: initial_particle_count as f64, // TODO: how this is done needs ironing out / changing
+            weight_sum_threshold: initial_particle_count as f64 / 100., // TODO: how this is done needs ironing out / changing
             map,
             sensor_poses,
             belief,
@@ -125,7 +125,7 @@ impl LHBLocalizer {
         } else {
             errors
                 .iter()
-                .map(|error| if error != &0. { 1. / error } else { 1. })
+                .map(|error| 2f64.powf(-error))
                 .collect() // TODO: this doesn't really work
         };
         let distr = WeightedIndex::new(weights.clone()).unwrap();
@@ -137,8 +137,8 @@ impl LHBLocalizer {
                 self.belief[idx]
                     + Pose::random(
                         (-FRAC_PI_8 / 8.)..(FRAC_PI_8 / 8.),
-                        -0.01..0.01,
-                        -0.01..0.01,
+                        -0.03..0.03,
+                        -0.03..0.03,
                     ), // TODO: More thought needs to be put into this artificial noise
             );
         }
@@ -289,7 +289,7 @@ fn main() {
     particle_count_visual.set_transform(Transform::default().with_position((50., 570.)));
     // Make particle visuals
     let mut particle_visuals = Vec::with_capacity(robot.mcl.belief.len());
-    let path: vitruvia::graphics_2d::Content = Primitive::isoceles_triangle(5., 8.)
+    let path: vitruvia::graphics_2d::Content = isoceles_triangle(5., 8.)
         .fill(Color::black().into())
         .finalize()
         .into();
@@ -308,7 +308,7 @@ fn main() {
     }
     // Make position visuals
     let mut predicted_pose_visual = {
-        let path = Primitive::isoceles_triangle(10., 16.)
+        let path = isoceles_triangle(10., 16.)
             .fill(Color::rgb(255, 0, 0).into())
             .finalize();
         let mut visual = root.add(path.into());
@@ -324,7 +324,7 @@ fn main() {
         visual
     };
     let mut real_pose_visual = {
-        let path = Primitive::isoceles_triangle(10., 16.)
+        let path = isoceles_triangle(10., 16.)
             .fill(Color::rgb(0, 0, 255).into())
             .finalize();
         let mut visual = root.add(path.into());
@@ -340,7 +340,7 @@ fn main() {
     // Start up the window
     let mut root2 = root.clone();
     let mut ctx = gfx.start(root);
-    ctx.bind(Box::new(move |ctx| {
+    ctx.bind(Box::new(move |_| {
         ticks += 1;
         let movement_cmd = (
             robot.motion_sensor.robot_pose
@@ -389,7 +389,7 @@ fn main() {
                 particle_visuals[i].set_transform(Transform::default().with_scale(0.00001));
             }
         } else if robot.mcl.belief.len() != particle_visuals.len() {
-            let path: vitruvia::graphics_2d::Content = Primitive::isoceles_triangle(5., 8.)
+            let path: vitruvia::graphics_2d::Content = isoceles_triangle(5., 8.)
                 .fill(Color::black().into())
                 .finalize()
                 .into();
@@ -445,3 +445,12 @@ fn main() {
     }));
     ctx.run();
 }
+
+    /// Creates an isoceles triangle
+    pub fn isoceles_triangle(base: f64, height:f64) -> vitruvia::path::StyleHelper {
+        Builder::new()
+            .move_to(vitruvia::graphics_2d::Vector::default())
+            .line_to(vitruvia::graphics_2d::Vector { x: 0., y: base})
+            .line_to(vitruvia::graphics_2d::Vector { x: height, y: base / 2.})
+            .done()
+    }
