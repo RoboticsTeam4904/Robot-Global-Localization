@@ -1,3 +1,4 @@
+#![allow(dead_code)] // TODO: This will be removed after organizational overhall and a lib.rs
 mod robot;
 mod utility;
 
@@ -47,39 +48,41 @@ impl LHBLocalizer {
         }
     }
 
-    // fn from_distributions<T, U>(
-    //     x_distr: T,
-    //     y_distr: T,
-    //     angle_distr: T,
-    //     particle_count: usize,
-    //     map: Map2D,
-    //     sensor_poses: Vec<Pose>,
-    // ) -> Self
-    // where
-    //     T: rand::distributions::Distribution<U>,
-    //     U: Into<f64>,
-    // {
-    //     let mut belief = Vec::with_capacity(particle_count);
-    //     for ((x, y), angle) in x_distr
-    //         .sample_iter(&mut thread_rng())
-    //         .zip(y_distr.sample_iter(&mut thread_rng()))
-    //         .zip(angle_distr.sample_iter(&mut thread_rng()))
-    //         .take(particle_count)
-    //     {
-    //         belief.push(Pose {
-    //             angle: angle.into(),
-    //             position: Point {
-    //                 x: x.into(),
-    //                 y: y.into(),
-    //             },
-    //         });
-    //     }
-    //     Self {
-    //         map,
-    //         sensor_poses,
-    //         belief,
-    //     }
-    // }
+    fn from_distributions<T, U>(
+        x_distr: T,
+        y_distr: T,
+        angle_distr: T,
+        max_particle_count: usize,
+        map: Map2D,
+        sensor_poses: Vec<Pose>,
+    ) -> Self
+    where
+        T: Distribution<U>,
+        U: Into<f64>,
+    {
+        let mut belief = Vec::with_capacity(max_particle_count);
+        for ((x, y), angle) in x_distr
+            .sample_iter(&mut thread_rng())
+            .zip(y_distr.sample_iter(&mut thread_rng()))
+            .zip(angle_distr.sample_iter(&mut thread_rng()))
+            .take(max_particle_count)
+        {
+            belief.push(Pose {
+                angle: angle.into(),
+                position: Point {
+                    x: x.into(),
+                    y: y.into(),
+                },
+            });
+        }
+        Self {
+            max_particle_count,
+            weight_sum_threshold: max_particle_count as f64 / 50., // TODO: fixed parameter
+            map,
+            sensor_poses,
+            belief,
+        }
+    }
 
     fn control_update(&mut self, u: Pose) {
         for i in 0..self.belief.len() {
@@ -102,7 +105,7 @@ impl LHBLocalizer {
                         Some(pred) => {
                             let pred_dist = pred.dist(sample.position);
                             if pred_dist <= MAX_SENSOR_RANGE {
-                                (real_dist - pred_dist).abs() //powi(2)
+                                (real_dist - pred_dist).abs() //powi(2) // TODO: fixed parameter
                             } else {
                                 0.
                             }
@@ -133,6 +136,8 @@ impl LHBLocalizer {
         };
         let distr = WeightedIndex::new(weights.clone()).unwrap();
         let mut sum_weights = 0.;
+        // TODO: rather than have max particle count and weight sum threshold parameters, 
+        // it might be beneficial to use some dynamic combination of the two as the break condition.
         while sum_weights < self.weight_sum_threshold && new_particles.len() < self.max_particle_count {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
@@ -364,20 +369,6 @@ fn main() {
             .for_each(|s| s.update_pose(movement_cmd));
         let real_pose = robot.motion_sensor.robot_pose;
         let predicted_pose = robot.mcl.get_prediction();
-        // print!("Real distance sensor data: ");
-        // robot.distance_sensors.iter().for_each(|sensor| {
-        //     let sensor_pose = real_pose + sensor.get_relative_pose();
-        //     print!("{} ", robot.mcl.map.raycast(sensor_pose).unwrap().dist(sensor_pose.position));
-        // });
-        // print!("\nFake distance sensor data: ");
-        // robot.distance_sensors.iter().for_each(|sensor| {
-        //     let sensor_pose = predicted_pose + sensor.get_relative_pose();
-        //     print!("{} ", robot.mcl.map.raycast(sensor_pose).unwrap().dist(sensor_pose.position));
-        // });
-        // println!("");
-        // println!("Predicted: {:?}", predicted_pose);
-        // println!("Real: {:?}", real_pose);
-
         // Update visuals
         // Update particle visuals
         if robot.mcl.belief.len() < particle_visuals.len() {
