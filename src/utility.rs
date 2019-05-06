@@ -95,6 +95,17 @@ impl std::ops::Div for Point {
     }
 }
 
+impl std::ops::Add<f64> for Point {
+    type Output = Point;
+
+    fn add(self, other: f64) -> Point {
+        Point {
+            x: self.x + other,
+            y: self.y + other,
+        }
+    }
+}
+
 impl std::ops::Mul<f64> for Point {
     type Output = Point;
 

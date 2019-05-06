@@ -7,14 +7,14 @@ use rand::prelude::*;
 use robot::map::{Map2D, Object2D};
 use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
 use robot::Sensor;
-use std::f64::consts::{PI, FRAC_PI_2, FRAC_PI_8};
+use std::f64::consts::{FRAC_PI_2, FRAC_PI_8, PI};
 use utility::{Point, Pose};
 use vitruvia::{
     graphics_2d,
-    graphics_2d::{Color, Transform},
+    graphics_2d::{Color, Transform, Vector},
+    interaction::keyboard::{Arrow, Key},
     path::{Builder, Stroke},
     text::Text,
-    interaction::keyboard::{Key, Arrow},
 };
 
 struct LHBLocalizer {
@@ -123,6 +123,7 @@ impl LHBLocalizer {
 
         let mut new_particles = Vec::new();
         let mut rng = thread_rng();
+        #[allow(clippy::float_cmp)]
         let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
             errors
                 .iter()
@@ -136,9 +137,11 @@ impl LHBLocalizer {
         };
         let distr = WeightedIndex::new(weights.clone()).unwrap();
         let mut sum_weights = 0.;
-        // TODO: rather than have max particle count and weight sum threshold parameters, 
+        // TODO: rather than have max particle count and weight sum threshold parameters,
         // it might be beneficial to use some dynamic combination of the two as the break condition.
-        while sum_weights < self.weight_sum_threshold && new_particles.len() < self.max_particle_count {
+        while sum_weights < self.weight_sum_threshold
+            && new_particles.len() < self.max_particle_count
+        {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
             new_particles.push(
@@ -274,8 +277,8 @@ fn main() {
         let v1 = robot.mcl.map.get_vertex(line.0);
         let v2 = robot.mcl.map.get_vertex(line.1);
         builder = builder
-            .move_to((v1.x * 50., v1.y * 50.))
-            .line_to((v2.x * 50., v2.y * 50.));
+            .move_to(v1 * 50.)
+            .line_to(v2 * 50.);
     }
     let mut map_visual = root.add(builder.done().stroke(Stroke::default()).finalize().into());
     map_visual.apply_transform(Transform::default().with_position((50., 50.)));
@@ -306,10 +309,7 @@ fn main() {
         let mut particle_visual = root.add(path.clone());
         particle_visual.apply_transform(
             Transform::default()
-                .with_position((
-                    particle.position.x * 50. + 50.,
-                    particle.position.y * 50. + 50.,
-                ))
+                .with_position(particle.position * 50. + 50.)
                 .with_rotation(-particle.angle)
                 .with_scale(0.5),
         );
@@ -324,10 +324,7 @@ fn main() {
         let estimation = robot.mcl.get_prediction();
         visual.apply_transform(
             Transform::default()
-                .with_position((
-                    estimation.position.x * 50. + 50.,
-                    estimation.position.y * 50. + 50.,
-                ))
+                .with_position(estimation.position * 50. + 50.)
                 .with_rotation(-estimation.angle),
         );
         visual
@@ -340,7 +337,7 @@ fn main() {
         let pose = robot.motion_sensor.robot_pose;
         visual.apply_transform(
             Transform::default()
-                .with_position((pose.position.x * 50. + 50., pose.position.y * 50. + 50.))
+                .with_position(pose.position * 50. + 50.)
                 .with_rotation(-pose.angle),
         );
         visual
@@ -351,8 +348,7 @@ fn main() {
     let mut ctx = gfx.start(root);
     ctx.bind(Box::new(move |_| {
         ticks += 1;
-        let movement_cmd =
-            robot.motion_sensor.robot_pose;
+        let movement_cmd = robot.motion_sensor.robot_pose;
         // if ctx.keyboard().poll(Key::Arrow(Arrow::Up)) {
 
         // }
@@ -388,10 +384,7 @@ fn main() {
             let particle = robot.mcl.belief[i];
             particle_visuals[i].set_transform(
                 Transform::default()
-                    .with_position((
-                        particle.position.x * 50. + 50.,
-                        particle.position.y * 50. + 50.,
-                    ))
+                    .with_position(particle.position * 50. + 50.)
                     .with_rotation(-particle.angle)
                     .with_scale(0.5),
             );
@@ -415,29 +408,32 @@ fn main() {
         // Update position visuals
         predicted_pose_visual.set_transform(
             Transform::default()
-                .with_position((
-                    predicted_pose.position.x * 50. + 50.,
-                    predicted_pose.position.y * 50. + 50.,
-                ))
+                .with_position(predicted_pose.position * 50. + 50.)
                 .with_rotation(-predicted_pose.angle),
         );
         real_pose_visual.set_transform(
             Transform::default()
-                .with_position((
-                    real_pose.position.x * 50. + 50.,
-                    real_pose.position.y * 50. + 50.,
-                ))
+                .with_position(real_pose.position * 50. + 50.)
                 .with_rotation(-real_pose.angle),
         );
     }));
     ctx.run();
 }
 
-    /// Creates an isoceles triangle
-    pub fn isoceles_triangle(base: f64, height:f64) -> vitruvia::path::StyleHelper {
-        Builder::new()
-            .move_to(vitruvia::graphics_2d::Vector::default())
-            .line_to(vitruvia::graphics_2d::Vector { x: 0., y: base})
-            .line_to(vitruvia::graphics_2d::Vector { x: height, y: base / 2.})
-            .done()
+/// Creates an isoceles triangle
+pub fn isoceles_triangle(base: f64, height: f64) -> vitruvia::path::StyleHelper {
+    Builder::new()
+        .move_to(Vector::default())
+        .line_to(Vector { x: 0., y: base })
+        .line_to(Vector {
+            x: height,
+            y: base / 2.,
+        })
+        .done()
+}
+
+impl Into<Vector> for Point {
+    fn into(self) -> Vector {
+        Vector { x: self.x, y: self.y }
     }
+}
