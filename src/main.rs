@@ -40,7 +40,7 @@ impl LHBLocalizer {
         }
         LHBLocalizer {
             max_particle_count: max_particle_count,
-            weight_sum_threshold: max_particle_count as f64 / 50., // TODO: how this is done needs ironing out / changing
+            weight_sum_threshold: max_particle_count as f64 / 50., // TODO: fixed parameter
             map,
             sensor_poses,
             belief,
@@ -107,10 +107,10 @@ impl LHBLocalizer {
                                 0.
                             }
                         }
-                        None => 20.,
+                        None => 20., // TODO: fixed parameter
                     },
                     None => match pred_observation {
-                        Some(_) => 20.,
+                        Some(_) => 20., // TODO: fixed parameter
                         None => 0.,
                     },
                 };
@@ -123,13 +123,13 @@ impl LHBLocalizer {
         let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
             errors
                 .iter()
-                .map(|_| 5. * self.weight_sum_threshold / self.belief.len() as f64)
+                .map(|_| 5. * self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
                 .collect()
         } else {
             errors
                 .iter()
-                .map(|error| 2f64.powf(-error))
-                .collect() // TODO: this doesn't really work
+                .map(|error| 2f64.powf(-error)) // TODO: fixed parameter
+                .collect()
         };
         let distr = WeightedIndex::new(weights.clone()).unwrap();
         let mut sum_weights = 0.;
@@ -142,7 +142,7 @@ impl LHBLocalizer {
                         (-FRAC_PI_8 / 8.)..(FRAC_PI_8 / 8.),
                         -0.03..0.03,
                         -0.03..0.03,
-                    ), // TODO: More thought needs to be put into this artificial noise
+                    ), // TODO: fixed parameter
             );
         }
         self.belief = new_particles;
