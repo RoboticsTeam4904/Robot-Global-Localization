@@ -11,11 +11,13 @@ use utility::{Point, Pose};
 use vitruvia::{
     graphics_2d,
     graphics_2d::{Color, Transform},
-    path::{Builder, Primitive, Stroke},
+    path::{Builder, Stroke},
     text::Text,
+    interaction::keyboard::{Key, Arrow},
 };
 
 struct LHBLocalizer {
+    max_particle_count: usize,
     weight_sum_threshold: f64,
     map: Map2D,
     sensor_poses: Vec<Pose>,
@@ -24,10 +26,10 @@ struct LHBLocalizer {
 
 // TODO: this can be multithreaded :D (and by this I mean everything basically)
 impl LHBLocalizer {
-    fn new(initial_particle_count: usize, map: Map2D, sensor_poses: Vec<Pose>) -> Self {
+    fn new(max_particle_count: usize, map: Map2D, sensor_poses: Vec<Pose>) -> Self {
         let mut rng = thread_rng();
-        let mut belief = Vec::with_capacity(initial_particle_count);
-        for _ in 0..initial_particle_count {
+        let mut belief = Vec::with_capacity(max_particle_count);
+        for _ in 0..max_particle_count {
             belief.push(Pose {
                 angle: rng.gen_range(0., 2. * PI),
                 position: Point {
@@ -37,7 +39,8 @@ impl LHBLocalizer {
             });
         }
         LHBLocalizer {
-            weight_sum_threshold: initial_particle_count as f64 / 100., // TODO: how this is done needs ironing out / changing
+            max_particle_count: max_particle_count,
+            weight_sum_threshold: max_particle_count as f64 / 50., // TODO: how this is done needs ironing out / changing
             map,
             sensor_poses,
             belief,
@@ -99,7 +102,7 @@ impl LHBLocalizer {
                         Some(pred) => {
                             let pred_dist = pred.dist(sample.position);
                             if pred_dist <= MAX_SENSOR_RANGE {
-                                (real_dist - pred_dist).powi(2)
+                                (real_dist - pred_dist).abs() //powi(2)
                             } else {
                                 0.
                             }
@@ -120,7 +123,7 @@ impl LHBLocalizer {
         let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
             errors
                 .iter()
-                .map(|_| self.weight_sum_threshold / self.belief.len() as f64)
+                .map(|_| 5. * self.weight_sum_threshold / self.belief.len() as f64)
                 .collect()
         } else {
             errors
@@ -130,7 +133,7 @@ impl LHBLocalizer {
         };
         let distr = WeightedIndex::new(weights.clone()).unwrap();
         let mut sum_weights = 0.;
-        while sum_weights < self.weight_sum_threshold {
+        while sum_weights < self.weight_sum_threshold && new_particles.len() < self.max_particle_count {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
             new_particles.push(
@@ -194,16 +197,17 @@ fn main() {
             angle: 0.,
             position: Point { x: 8., y: 8. },
         };
+        let distance_sensor_noise = 0.5;
         let distance_sensors = vec![
             DummyDistanceSensor::new(
-                0.01,
+                distance_sensor_noise,
                 Pose::default(),
                 map.clone(),
                 starting_robot_pose,
                 None,
             ),
             DummyDistanceSensor::new(
-                0.01,
+                distance_sensor_noise,
                 Pose::default()
                     + Pose {
                         angle: FRAC_PI_2,
@@ -214,7 +218,7 @@ fn main() {
                 None,
             ),
             DummyDistanceSensor::new(
-                0.01,
+                distance_sensor_noise,
                 Pose::default()
                     + Pose {
                         angle: PI,
@@ -225,7 +229,7 @@ fn main() {
                 None,
             ),
             DummyDistanceSensor::new(
-                0.01,
+                distance_sensor_noise,
                 Pose::default()
                     + Pose {
                         angle: PI + FRAC_PI_2,
@@ -249,8 +253,8 @@ fn main() {
             motion_sensor: DummyMotionSensor::new(
                 starting_robot_pose,
                 Pose {
-                    angle: FRAC_PI_8 / 4.,
-                    position: Point { x: 0.01, y: 0.01 },
+                    angle: FRAC_PI_8,
+                    position: Point { x: 0.1, y: 0.1 },
                 },
             ),
         }
@@ -342,22 +346,14 @@ fn main() {
     let mut ctx = gfx.start(root);
     ctx.bind(Box::new(move |_| {
         ticks += 1;
-        let movement_cmd = (
-            robot.motion_sensor.robot_pose
-            //     + Pose {
-            //         angle: thread_rng().gen_range(0., FRAC_PI_4),
-            //         position: Point {
-            //             x: thread_rng().gen_range(-0.2, 0.2),
-            //             y: thread_rng().gen_range(-0.2, 0.2),
-            //         },
-            //     })
-            // .clamp(
-            //     Pose::default(),
-            //     Pose {
-            //         angle: 2. * PI,
-            //         position: Point { x: 10., y: 10. },
-            //     },
-        );
+        let movement_cmd =
+            robot.motion_sensor.robot_pose;
+        // if ctx.keyboard().poll(Key::Arrow(Arrow::Up)) {
+
+        // }
+        // if ctx.keyboard().poll(Key::Arrow(Arrow::Down)) {
+
+        // }
 
         // Move the robot and tick the mcl algorithm
         robot.repeat();
