@@ -19,7 +19,9 @@ pub struct Map2D {
 
 impl Map2D {
     pub fn new<U>(width: f64, height: f64, objects: U) -> Self
-    where U: IntoIterator<Item = Object2D> {
+    where
+        U: IntoIterator<Item = Object2D>,
+    {
         let mut vertices = Vec::new();
         let mut lines = Vec::new();
         let mut add_vert = |point: Point| -> usize {
@@ -41,7 +43,7 @@ impl Map2D {
                     lines.push((v1, v2));
                     lines.push((v2, v3));
                     lines.push((v3, v1));
-                },
+                }
                 Object2D::Rectangle((c1, c3)) => {
                     let c2 = Point { x: c1.x, y: c3.y };
                     let c4 = Point { x: c3.x, y: c1.y };
@@ -135,7 +137,11 @@ impl Map2D {
                 },
             ));
         }
-        Ok(Self::new(width, height, lines.iter().map(|l| Object2D::Line(*l))))
+        Ok(Self::new(
+            width,
+            height,
+            lines.iter().map(|l| Object2D::Line(*l)),
+        ))
     }
 
     pub fn get_vertex(&self, idx: usize) -> Point {
@@ -173,5 +179,19 @@ impl Map2D {
             }
         }
         closest_intersection
+    }
+
+    pub fn make_visual(&self, scale: f64) -> vitruvia::graphics_2d::Content {
+        let mut segments = Vec::new();
+        for line in &self.lines {
+            let v1 = self.get_vertex(line.0);
+            let v2 = self.get_vertex(line.1);
+            segments.push(vitruvia::path::Segment::MoveTo((v1 * scale).into()));
+            segments.push(vitruvia::path::Segment::LineTo((v2 * scale).into()));
+        }
+        vitruvia::path::StyleHelper::new(segments)
+            .stroke(vitruvia::path::Stroke::default())
+            .finalize()
+            .into()
     }
 }

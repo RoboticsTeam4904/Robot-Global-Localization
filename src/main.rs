@@ -8,7 +8,7 @@ use robot::map::{Map2D, Object2D};
 use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
 use robot::Sensor;
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_8, PI};
-use utility::{Point, Pose};
+use utility::{Point, Pose, isoceles_triangle};
 use vitruvia::{
     graphics_2d,
     graphics_2d::{Color, Transform, Vector},
@@ -271,16 +271,8 @@ fn main() {
     // Setup visuals
     let gfx = graphics_2d::new();
     let mut root = gfx.frame();
-    let mut builder = Builder::new();
     // Make map visual
-    for line in &robot.mcl.map.lines {
-        let v1 = robot.mcl.map.get_vertex(line.0);
-        let v2 = robot.mcl.map.get_vertex(line.1);
-        builder = builder
-            .move_to(v1 * 50.)
-            .line_to(v2 * 50.);
-    }
-    let mut map_visual = root.add(builder.done().stroke(Stroke::default()).finalize().into());
+    let mut map_visual = root.add(robot.mcl.map.make_visual(50.));
     map_visual.apply_transform(Transform::default().with_position((50., 50.)));
     // Make tick, time, and particle counters' visuals
     let mut ticks = 0;
@@ -418,22 +410,4 @@ fn main() {
         );
     }));
     ctx.run();
-}
-
-/// Creates an isoceles triangle
-pub fn isoceles_triangle(base: f64, height: f64) -> vitruvia::path::StyleHelper {
-    Builder::new()
-        .move_to(Vector::default())
-        .line_to(Vector { x: 0., y: base })
-        .line_to(Vector {
-            x: height,
-            y: base / 2.,
-        })
-        .done()
-}
-
-impl Into<Vector> for Point {
-    fn into(self) -> Vector {
-        Vector { x: self.x, y: self.y }
-    }
 }
