@@ -347,7 +347,7 @@ fn main() {
             // Get user input to move the robot
             let mut inp = String::new();
             std::io::stdin().read_line(&mut inp).unwrap();
-            let mut movement_cmd = robot.motion_sensor.robot_pose
+            let movement_cmd = robot.motion_sensor.robot_pose
                 + Pose {
                     angle: PI / 8.
                         * if inp == "q\n" {
