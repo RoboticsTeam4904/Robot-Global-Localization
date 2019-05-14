@@ -1,6 +1,6 @@
 use rand::prelude::*;
 use std::ops::Range;
-use vitruvia::graphics_2d::{Vector, Transform};
+use vitruvia::graphics_2d::{Transform, Vector};
 
 /// Generic 2d point
 #[derive(Default, Debug, PartialEq, Clone, Copy)]
@@ -54,7 +54,10 @@ impl Point {
 
 impl Into<Vector> for Point {
     fn into(self) -> Vector {
-        Vector { x: self.x, y: self.y }
+        Vector {
+            x: self.x,
+            y: self.y,
+        }
     }
 }
 
@@ -139,8 +142,16 @@ impl Pose {
             position: Point {
                 x: rng.gen_range(x_range.start, x_range.end),
                 y: rng.gen_range(y_range.start, y_range.end),
-            }
+            },
         }
+    }
+
+    pub fn random_from_range(range: Pose) -> Pose {
+        Pose::random(
+            -range.angle..range.angle,
+            -range.position.x..range.position.x,
+            -range.position.y..range.position.y,
+        )
     }
 
     /// Mod `angle` by 2π
@@ -158,7 +169,7 @@ impl Pose {
             } else {
                 self.angle
             },
-            position: self.position.clamp(lower.position, upper.position)
+            position: self.position.clamp(lower.position, upper.position),
         }
     }
 }

@@ -1,6 +1,6 @@
 use crate::robot::map::Map2D;
-use crate::robot::Sensor;
 use crate::utility::{Pose, Point};
+use super::{Sensor, LimitedSensor};
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 
@@ -94,6 +94,8 @@ impl Sensor<Option<f64>> for DummyDistanceSensor {
         self.relative_pose
     }
 }
+
+impl LimitedSensor<f64, Option<f64>> for DummyDistanceSensor {}
 
 pub struct DummyMotionSensor {
     angle_noise_distr: Normal,

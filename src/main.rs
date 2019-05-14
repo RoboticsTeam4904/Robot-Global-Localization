@@ -3,14 +3,14 @@ mod robot;
 mod utility;
 
 use robot::map::{Map2D, Object2D};
-use robot::Sensor;
+use robot::sensors::Sensor;
 use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
-use robot::AI::localization::DistanceFinderMCL;
-use std::f64::consts::{FRAC_PI_2, FRAC_PI_8, PI};
+use robot::ai::localization::DistanceFinderMCL;
+use std::f64::consts::{FRAC_PI_8, PI};
 use utility::{isoceles_triangle, Point, Pose};
 use vitruvia::{
     graphics_2d,
-    graphics_2d::{Color, Transform, Content},
+    graphics_2d::{Color, Content, Transform},
     interaction::keyboard::{Arrow, Key},
     text::Text,
 };
@@ -25,13 +25,8 @@ struct Robot {
 
 impl Robot {
     fn repeat(&mut self) {
-        self.mcl.control_update(self.motion_sensor.sense()); // TODO: dummy motion sensor and its usage are currently oversimplified
-        self.mcl.observation_update(
-            self.distance_sensors
-                .iter()
-                .map(|sensor| sensor.sense())
-                .collect(),
-        );
+        self.mcl.control_update(&self.motion_sensor); // TODO: dummy motion sensor and its usage are currently oversimplified
+        self.mcl.observation_update(&self.distance_sensors);
     }
 }
 
@@ -65,48 +60,22 @@ fn main() {
                 position: Point { x: 8., y: 8. },
             };
             let distance_sensor_noise = 0.1;
-            let distance_sensors = vec![
-                DummyDistanceSensor::new(
-                    distance_sensor_noise,
-                    Pose::default(),
-                    map.clone(),
-                    starting_robot_pose,
-                    None,
-                ),
-                DummyDistanceSensor::new(
-                    distance_sensor_noise,
-                    Pose::default()
-                        + Pose {
-                            angle: FRAC_PI_2,
-                            position: Point::default(),
+            let distance_sensors = {
+                let mut sensors = Vec::new();
+                for i in 0..4 {
+                    sensors.push(DummyDistanceSensor::new(
+                        distance_sensor_noise,
+                        Pose {
+                            angle: PI / 4. * i as f64,
+                            ..Default::default()
                         },
-                    map.clone(),
-                    starting_robot_pose,
-                    None,
-                ),
-                DummyDistanceSensor::new(
-                    distance_sensor_noise,
-                    Pose::default()
-                        + Pose {
-                            angle: PI,
-                            position: Point::default(),
-                        },
-                    map.clone(),
-                    starting_robot_pose,
-                    None,
-                ),
-                DummyDistanceSensor::new(
-                    distance_sensor_noise,
-                    Pose::default()
-                        + Pose {
-                            angle: PI + FRAC_PI_2,
-                            position: Point::default(),
-                        },
-                    map.clone(),
-                    starting_robot_pose,
-                    None,
-                ),
-            ];
+                        map.clone(),
+                        starting_robot_pose,
+                        None,
+                    ));
+                }
+                sensors
+            };
             Robot {
                 mcl: DistanceFinderMCL::new(
                     20_000,
@@ -116,6 +85,10 @@ fn main() {
                         .map(|sensor| sensor.get_relative_pose())
                         .collect(),
                     Box::new(|error| 2f64.powf(-error)),
+                    Pose {
+                        angle: FRAC_PI_8 / 4.,
+                        position: Point { x: 0.05, y: 0.05 },
+                    },
                 ),
                 distance_sensors,
                 motion_sensor: DummyMotionSensor::new(
@@ -142,12 +115,14 @@ fn main() {
         );
         let start_time = std::time::Instant::now();
         let mut time_visual = root.add(
-            Content::from(Text::new(format!("{:?}", start_time.elapsed()).as_str())
-                .with_size(30.)).with_transform(Transform::default().with_position((50., 20.)))
+            Content::from(Text::new(format!("{:?}", start_time.elapsed()).as_str()).with_size(30.))
+                .with_transform(Transform::default().with_position((50., 20.))),
         );
         let mut particle_count_visual = root.add(
-            Content::from(Text::new(format!("{}p", robot.mcl.belief.len()).as_str())
-                .with_size(30.)).with_transform(Transform::default().with_position((50., 570.))),
+            Content::from(
+                Text::new(format!("{}p", robot.mcl.belief.len()).as_str()).with_size(30.),
+            )
+            .with_transform(Transform::default().with_position((50., 570.))),
         );
         // Make particle visuals
         let mut particle_visuals = {

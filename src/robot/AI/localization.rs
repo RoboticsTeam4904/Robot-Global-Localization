@@ -1,26 +1,32 @@
-use std::f64::consts::{FRAC_PI_8, PI};
+use crate::robot::map::Map2D;
+use crate::robot::sensors::LimitedSensor;
+use crate::utility::{Point, Pose};
+use crate::robot::sensors::Sensor;
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
-use crate::utility::{Point, Pose};
-use crate::robot::map::Map2D;
+use std::f64::consts::PI;
 
-/// A localizer that uses likelyhood-based Monte Carlo Localization
+/// A pose localizer that uses likelyhood-based Monte Carlo Localization
 /// and takes in motion and range finder sensor data
 pub struct DistanceFinderMCL {
+    pub map: Map2D,
+    pub belief: Vec<Pose>,
     max_particle_count: usize,
     weight_sum_threshold: f64,
-    pub map: Map2D,
     sensor_poses: Vec<Pose>,
     weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-    pub belief: Vec<Pose>,
+    resampling_noise: Pose,
 }
 
 impl DistanceFinderMCL {
+    /// Generates a new localizer with the given parameters.
+    /// Every step, the localizer should recieve a control and observation update
     pub fn new(
         max_particle_count: usize,
         map: Map2D,
         sensor_poses: Vec<Pose>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
+        resampling_noise: Pose,
     ) -> Self {
         let mut belief = Vec::with_capacity(max_particle_count);
         for _ in 0..max_particle_count {
@@ -33,22 +39,25 @@ impl DistanceFinderMCL {
             sensor_poses,
             weight_from_error,
             belief,
+            resampling_noise,
         }
     }
 
+    /// Similar to new, but instead of generating `belief` based on a uniform distribution,
+    /// generates it based on the given `pose_distr` which is in the form (angle distribution, (x distribution, y distribution))
     pub fn from_distributions<T, U>(
-        x_distr: T,
-        y_distr: T,
-        angle_distr: T,
+        pose_distr: (T, (T, T)),
         max_particle_count: usize,
         map: Map2D,
         sensor_poses: Vec<Pose>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
+        resampling_noise: Pose,
     ) -> Self
     where
         T: Distribution<U>,
         U: Into<f64>,
     {
+        let (angle_distr, (x_distr, y_distr)) = pose_distr;
         let mut belief = Vec::with_capacity(max_particle_count);
         for ((x, y), angle) in x_distr
             .sample_iter(&mut thread_rng())
@@ -71,31 +80,32 @@ impl DistanceFinderMCL {
             sensor_poses,
             weight_from_error,
             belief,
+            resampling_noise,
         }
     }
 
     /// Takes in the total change in pose sensed by motion sensors since the last update
-    pub fn control_update(&mut self, u: Pose) {
+    pub fn control_update<U: Sensor<Pose>>(&mut self, u: &U) {
         for i in 0..self.belief.len() {
-            self.belief[i] += u;
+            self.belief[i] += u.sense();
         }
     }
 
     /// Takes in a vector of ranges indexed synchronously with `self.sensor_poses`
-    pub fn observation_update(&mut self, z: Vec<Option<f64>>) {
-        // TODO: These weights need a lot more fixing
-        // TODO: Don't just use a constant, c'mon
-        const MAX_SENSOR_RANGE: f64 = 15.;
+    pub fn observation_update<Z>(&mut self, z: &[Z])
+    where
+        Z: Sensor<Option<f64>> + LimitedSensor<f64, Option<f64>>,
+    {
         let mut errors: Vec<f64> = Vec::with_capacity(self.belief.len());
         for sample in &self.belief {
             let mut sum_error = 0.;
-            for (i, observation) in z.iter().enumerate() {
-                let pred_observation = self.map.raycast(*sample + self.sensor_poses[i]);
-                sum_error += match observation {
+            for sensor in z.iter() {
+                let pred_observation = self.map.raycast(*sample + sensor.get_relative_pose());
+                sum_error += match sensor.sense() {
                     Some(real_dist) => match pred_observation {
                         Some(pred) => {
                             let pred_dist = pred.dist(sample.position);
-                            if pred_dist <= MAX_SENSOR_RANGE {
+                            if pred_dist <= sensor.range().unwrap_or(std::f64::MAX) {
                                 (real_dist - pred_dist).abs() // powi(2) // TODO: fixed parameter
                             } else {
                                 0.
@@ -135,14 +145,7 @@ impl DistanceFinderMCL {
         {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
-            new_particles.push(
-                self.belief[idx]
-                    + Pose::random(
-                        (-FRAC_PI_8 / 8.)..(FRAC_PI_8 / 8.),
-                        -0.05..0.05,
-                        -0.05..0.05,
-                    ), // TODO: fixed parameter
-            );
+            new_particles.push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
         }
         self.belief = new_particles;
     }
