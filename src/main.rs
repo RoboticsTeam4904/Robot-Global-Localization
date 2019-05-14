@@ -8,12 +8,11 @@ use robot::map::{Map2D, Object2D};
 use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
 use robot::Sensor;
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_8, PI};
-use utility::{Point, Pose, isoceles_triangle};
+use utility::{isoceles_triangle, Point, Pose};
 use vitruvia::{
     graphics_2d,
-    graphics_2d::{Color, Transform, Vector},
+    graphics_2d::{Color, Transform},
     interaction::keyboard::{Arrow, Key},
-    path::{Builder, Stroke},
     text::Text,
 };
 
@@ -22,28 +21,28 @@ struct LHBLocalizer {
     weight_sum_threshold: f64,
     map: Map2D,
     sensor_poses: Vec<Pose>,
+    weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
     belief: Vec<Pose>,
 }
 
 // TODO: this can be multithreaded :D (and by this I mean everything basically)
 impl LHBLocalizer {
-    fn new(max_particle_count: usize, map: Map2D, sensor_poses: Vec<Pose>) -> Self {
-        let mut rng = thread_rng();
+    fn new(
+        max_particle_count: usize,
+        map: Map2D,
+        sensor_poses: Vec<Pose>,
+        weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
+    ) -> Self {
         let mut belief = Vec::with_capacity(max_particle_count);
         for _ in 0..max_particle_count {
-            belief.push(Pose {
-                angle: rng.gen_range(0., 2. * PI),
-                position: Point {
-                    x: rng.gen_range(0., map.width),
-                    y: rng.gen_range(0., map.height),
-                },
-            });
+            belief.push(Pose::random(0.0..2. * PI, 0.0..map.width, 0.0..map.height));
         }
         LHBLocalizer {
             max_particle_count: max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 50., // TODO: fixed parameter
             map,
             sensor_poses,
+            weight_from_error,
             belief,
         }
     }
@@ -55,6 +54,7 @@ impl LHBLocalizer {
         max_particle_count: usize,
         map: Map2D,
         sensor_poses: Vec<Pose>,
+        weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
     ) -> Self
     where
         T: Distribution<U>,
@@ -80,6 +80,7 @@ impl LHBLocalizer {
             weight_sum_threshold: max_particle_count as f64 / 50., // TODO: fixed parameter
             map,
             sensor_poses,
+            weight_from_error,
             belief,
         }
     }
@@ -105,20 +106,20 @@ impl LHBLocalizer {
                         Some(pred) => {
                             let pred_dist = pred.dist(sample.position);
                             if pred_dist <= MAX_SENSOR_RANGE {
-                                (real_dist - pred_dist).abs() //powi(2) // TODO: fixed parameter
+                                (real_dist - pred_dist).abs() // powi(2) // TODO: fixed parameter
                             } else {
                                 0.
                             }
                         }
-                        None => 20., // TODO: fixed parameter
+                        None => 5., // TODO: fixed parameter
                     },
                     None => match pred_observation {
-                        Some(_) => 20., // TODO: fixed parameter
+                        Some(_) => 5., // TODO: fixed parameter
                         None => 0.,
                     },
                 };
             }
-            errors.push(sum_error);
+            errors.push(sum_error / z.len() as f64);
         }
 
         let mut new_particles = Vec::new();
@@ -127,12 +128,12 @@ impl LHBLocalizer {
         let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
             errors
                 .iter()
-                .map(|_| 5. * self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
+                .map(|_| 2. * self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
                 .collect()
         } else {
             errors
                 .iter()
-                .map(|error| 2f64.powf(-error)) // TODO: fixed parameter
+                .map(|error| (self.weight_from_error)(error))
                 .collect()
         };
         let distr = WeightedIndex::new(weights.clone()).unwrap();
@@ -148,8 +149,8 @@ impl LHBLocalizer {
                 self.belief[idx]
                     + Pose::random(
                         (-FRAC_PI_8 / 8.)..(FRAC_PI_8 / 8.),
-                        -0.03..0.03,
-                        -0.03..0.03,
+                        -0.05..0.05,
+                        -0.05..0.05,
                     ), // TODO: fixed parameter
             );
         }
@@ -184,230 +185,247 @@ impl Robot {
 }
 
 fn main() {
-    // Make a robot
-    let mut robot = {
-        let map = Map2D::new(
-            10.,
-            10.,
-            vec![
-                Object2D::Rectangle((Point::default(), Point { x: 10., y: 10. })),
-                Object2D::Rectangle((Point { x: 10., y: 10. }, Point { x: 9., y: 7. })),
-                Object2D::Rectangle((Point { x: 2.5, y: 2.5 }, Point { x: 7.5, y: 3. })),
-                Object2D::Triangle((
-                    Point { x: 1., y: 8. },
-                    Point { x: 3., y: 8. },
-                    Point { x: 2., y: 7. },
-                )),
-                Object2D::Line((Point { x: 5., y: 5. }, Point { x: 5., y: 10. })),
-            ],
-        );
-        let starting_robot_pose = Pose {
-            angle: 0.,
-            position: Point { x: 8., y: 8. },
-        };
-        let distance_sensor_noise = 0.5;
-        let distance_sensors = vec![
-            DummyDistanceSensor::new(
-                distance_sensor_noise,
-                Pose::default(),
-                map.clone(),
-                starting_robot_pose,
-                None,
-            ),
-            DummyDistanceSensor::new(
-                distance_sensor_noise,
-                Pose::default()
-                    + Pose {
-                        angle: FRAC_PI_2,
-                        position: Point::default(),
-                    },
-                map.clone(),
-                starting_robot_pose,
-                None,
-            ),
-            DummyDistanceSensor::new(
-                distance_sensor_noise,
-                Pose::default()
-                    + Pose {
-                        angle: PI,
-                        position: Point::default(),
-                    },
-                map.clone(),
-                starting_robot_pose,
-                None,
-            ),
-            DummyDistanceSensor::new(
-                distance_sensor_noise,
-                Pose::default()
-                    + Pose {
-                        angle: PI + FRAC_PI_2,
-                        position: Point::default(),
-                    },
-                map.clone(),
-                starting_robot_pose,
-                None,
-            ),
-        ];
-        Robot {
-            mcl: LHBLocalizer::new(
-                20_000,
-                map.clone(),
-                distance_sensors
-                    .iter()
-                    .map(|sensor| sensor.get_relative_pose())
-                    .collect(),
-            ),
-            distance_sensors,
-            motion_sensor: DummyMotionSensor::new(
-                starting_robot_pose,
-                Pose {
-                    angle: FRAC_PI_8,
-                    position: Point { x: 0.1, y: 0.1 },
-                },
-            ),
-        }
-    };
-
     // Setup visuals
     let gfx = graphics_2d::new();
-    let mut root = gfx.frame();
-    // Make map visual
-    let mut map_visual = root.add(robot.mcl.map.make_visual(50.));
-    map_visual.apply_transform(Transform::default().with_position((50., 50.)));
-    // Make tick, time, and particle counters' visuals
-    let mut ticks = 0;
-    let mut tick_visual = root.add(Text::new("0t").with_size(30.).into());
-    tick_visual.set_transform(Transform::default().with_position((500., 20.)));
-    let start_time = std::time::Instant::now();
-    let mut time_visual = root.add(
-        Text::new(format!("{:?}", start_time.elapsed()).as_str())
-            .with_size(30.)
-            .into(),
-    );
-    time_visual.set_transform(Transform::default().with_position((50., 20.)));
-    let mut particle_count_visual = root.add(
-        Text::new(format!("{}p", robot.mcl.belief.len()).as_str())
-            .with_size(30.)
-            .into(),
-    );
-    particle_count_visual.set_transform(Transform::default().with_position((50., 570.)));
-    // Make particle visuals
-    let mut particle_visuals = Vec::with_capacity(robot.mcl.belief.len());
-    let path: vitruvia::graphics_2d::Content = isoceles_triangle(5., 8.)
-        .fill(Color::black().into())
-        .finalize()
-        .into();
-    for particle in &robot.mcl.belief {
-        let mut particle_visual = root.add(path.clone());
-        particle_visual.apply_transform(
-            Transform::default()
-                .with_position(particle.position * 50. + 50.)
-                .with_rotation(-particle.angle)
-                .with_scale(0.5),
-        );
-        particle_visuals.push(particle_visual);
-    }
-    // Make position visuals
-    let mut predicted_pose_visual = {
-        let path = isoceles_triangle(10., 16.)
-            .fill(Color::rgb(255, 0, 0).into())
-            .finalize();
-        let mut visual = root.add(path.into());
-        let estimation = robot.mcl.get_prediction();
-        visual.apply_transform(
-            Transform::default()
-                .with_position(estimation.position * 50. + 50.)
-                .with_rotation(-estimation.angle),
-        );
-        visual
-    };
-    let mut real_pose_visual = {
-        let path = isoceles_triangle(10., 16.)
-            .fill(Color::rgb(0, 0, 255).into())
-            .finalize();
-        let mut visual = root.add(path.into());
-        let pose = robot.motion_sensor.robot_pose;
-        visual.apply_transform(
-            Transform::default()
-                .with_position(pose.position * 50. + 50.)
-                .with_rotation(-pose.angle),
-        );
-        visual
-    };
-
+    let mut _root = gfx.frame();
     // Start up the window
-    let mut root2 = root.clone();
-    let mut ctx = gfx.start(root);
-    ctx.bind(Box::new(move |_| {
-        ticks += 1;
-        let movement_cmd = robot.motion_sensor.robot_pose;
-        // if ctx.keyboard().poll(Key::Arrow(Arrow::Up)) {
-
-        // }
-        // if ctx.keyboard().poll(Key::Arrow(Arrow::Down)) {
-
-        // }
-
-        // Move the robot and tick the mcl algorithm
-        robot.repeat();
-        robot.motion_sensor.update_pose(movement_cmd);
-        robot
-            .distance_sensors
-            .iter_mut()
-            .for_each(|s| s.update_pose(movement_cmd));
-        let real_pose = robot.motion_sensor.robot_pose;
-        let predicted_pose = robot.mcl.get_prediction();
-        // Update visuals
-        // Update particle visuals
-        if robot.mcl.belief.len() < particle_visuals.len() {
-            for i in robot.mcl.belief.len()..particle_visuals.len() {
-                particle_visuals[i].set_transform(Transform::default().with_scale(0.00001));
-            }
-        } else if robot.mcl.belief.len() != particle_visuals.len() {
-            let path: vitruvia::graphics_2d::Content = isoceles_triangle(5., 8.)
-                .fill(Color::black().into())
-                .finalize()
-                .into();
-            for _ in particle_visuals.len()..robot.mcl.belief.len() {
-                particle_visuals.push(root2.add(path.clone()));
-            }
-        }
-        for i in 0..robot.mcl.belief.len() {
-            let particle = robot.mcl.belief[i];
-            particle_visuals[i].set_transform(
-                Transform::default()
-                    .with_position(particle.position * 50. + 50.)
-                    .with_rotation(-particle.angle)
-                    .with_scale(0.5),
+    let mut root = _root.clone();
+    let ctx = gfx.start(_root);
+    ctx.run_with(Box::new(move |mut context| {
+        // Make a robot
+        let mut robot = {
+            let map = Map2D::new(
+                10.,
+                10.,
+                vec![
+                    Object2D::Rectangle((Point::default(), Point { x: 10., y: 10. })),
+                    Object2D::Rectangle((Point { x: 10., y: 10. }, Point { x: 9., y: 7. })),
+                    Object2D::Rectangle((Point { x: 2.5, y: 2.5 }, Point { x: 7.5, y: 3. })),
+                    Object2D::Triangle((
+                        Point { x: 1., y: 8. },
+                        Point { x: 3., y: 8. },
+                        Point { x: 2., y: 7. },
+                    )),
+                    Object2D::Line((Point { x: 5., y: 5. }, Point { x: 5., y: 10. })),
+                ],
             );
-        }
-        // Update tick, time, particle counters' visuals
-        tick_visual.update(
-            Text::new(format!("{}t", ticks).as_str())
-                .with_size(30.)
-                .into(),
-        );
-        time_visual.update(
+            let starting_robot_pose = Pose {
+                angle: 0.,
+                position: Point { x: 8., y: 8. },
+            };
+            let distance_sensor_noise = 0.1;
+            let distance_sensors = vec![
+                DummyDistanceSensor::new(
+                    distance_sensor_noise,
+                    Pose::default(),
+                    map.clone(),
+                    starting_robot_pose,
+                    None,
+                ),
+                DummyDistanceSensor::new(
+                    distance_sensor_noise,
+                    Pose::default()
+                        + Pose {
+                            angle: FRAC_PI_2,
+                            position: Point::default(),
+                        },
+                    map.clone(),
+                    starting_robot_pose,
+                    None,
+                ),
+                DummyDistanceSensor::new(
+                    distance_sensor_noise,
+                    Pose::default()
+                        + Pose {
+                            angle: PI,
+                            position: Point::default(),
+                        },
+                    map.clone(),
+                    starting_robot_pose,
+                    None,
+                ),
+                DummyDistanceSensor::new(
+                    distance_sensor_noise,
+                    Pose::default()
+                        + Pose {
+                            angle: PI + FRAC_PI_2,
+                            position: Point::default(),
+                        },
+                    map.clone(),
+                    starting_robot_pose,
+                    None,
+                ),
+            ];
+            Robot {
+                mcl: LHBLocalizer::new(
+                    20_000,
+                    map.clone(),
+                    distance_sensors
+                        .iter()
+                        .map(|sensor| sensor.get_relative_pose())
+                        .collect(),
+                    Box::new(|error| 2f64.powf(-error)),
+                ),
+                distance_sensors,
+                motion_sensor: DummyMotionSensor::new(
+                    starting_robot_pose,
+                    Pose {
+                        angle: FRAC_PI_8 / 4.,
+                        position: Point { x: 0.01, y: 0.01 },
+                    },
+                ),
+            }
+        };
+        // Make map visual
+        let mut map_visual = root.add(robot.mcl.map.make_visual(50.));
+        map_visual.apply_transform(Transform::default().with_position((50., 50.)));
+        // Make tick, time, and particle counters' visuals
+        let mut tick_visual = root.add(Text::new("0t").with_size(30.).into());
+        tick_visual.set_transform(Transform::default().with_position((500., 20.)));
+        let start_time = std::time::Instant::now();
+        let mut time_visual = root.add(
             Text::new(format!("{:?}", start_time.elapsed()).as_str())
                 .with_size(30.)
                 .into(),
         );
-        particle_count_visual.update(
+        time_visual.set_transform(Transform::default().with_position((50., 20.)));
+        let mut particle_count_visual = root.add(
             Text::new(format!("{}p", robot.mcl.belief.len()).as_str())
                 .with_size(30.)
                 .into(),
         );
-        // Update position visuals
-        predicted_pose_visual.set_transform(
-            Transform::default()
-                .with_position(predicted_pose.position * 50. + 50.)
-                .with_rotation(-predicted_pose.angle),
-        );
-        real_pose_visual.set_transform(
-            Transform::default()
-                .with_position(real_pose.position * 50. + 50.)
-                .with_rotation(-real_pose.angle),
-        );
+        particle_count_visual.set_transform(Transform::default().with_position((50., 570.)));
+        // Make particle visuals
+        let mut particle_visuals = {
+            let mut visuals = Vec::with_capacity(robot.mcl.belief.len());
+            let path: vitruvia::graphics_2d::Content = isoceles_triangle(5., 8.)
+                .fill(Color::black().into())
+                .finalize()
+                .into();
+            for particle in &robot.mcl.belief {
+                let mut particle_visual = root.add(path.clone());
+                particle_visual.apply_transform(
+                    Transform::default()
+                        .with_position(particle.position * 50. + 50.)
+                        .with_rotation(-particle.angle)
+                        .with_scale(0.5),
+                );
+                visuals.push(particle_visual);
+            }
+            visuals
+        };
+        // Make position visuals
+        let mut predicted_pose_visual = {
+            let path = isoceles_triangle(10., 16.)
+                .fill(Color::rgb(255, 0, 0).into())
+                .finalize();
+            let mut visual = root.add(path.into());
+            let estimation = robot.mcl.get_prediction();
+            visual.apply_transform(
+                Transform::default()
+                    .with_position(estimation.position * 50. + 50.)
+                    .with_rotation(-estimation.angle),
+            );
+            visual
+        };
+        let mut real_pose_visual = {
+            let path = isoceles_triangle(10., 16.)
+                .fill(Color::rgb(0, 0, 255).into())
+                .finalize();
+            let mut visual = root.add(path.into());
+            let pose = robot.motion_sensor.robot_pose;
+            visual.apply_transform(
+                Transform::default()
+                    .with_position(pose.position * 50. + 50.)
+                    .with_rotation(-pose.angle),
+            );
+            visual
+        };
+        let mut root = root.clone();
+        let ctx = context.clone();
+        context.bind(Box::new(move |t| {
+            // Get user input to move the robot
+            let mut inp = String::new();
+            std::io::stdin().read_line(&mut inp).unwrap();
+            let mut movement_cmd = robot.motion_sensor.robot_pose
+                + Pose {
+                    angle: PI / 8.
+                        * if inp == "q\n" {
+                            1.
+                        } else if inp == "e\n" {
+                            -1.
+                        } else {
+                            0.
+                        },
+                    position: if inp == "w\n" {
+                        Point { x: 0., y: -0.5 }
+                    } else if inp == "s\n" {
+                        Point { x: 0., y: 0.5 }
+                    } else if inp == "a\n" {
+                        Point { x: -0.5, y: 0. }
+                    } else if inp == "d\n" {
+                        Point { x: 0.5, y: 0. }
+                    } else {
+                        Point::default()
+                    },
+                };
+            // Move the robot and tick the mcl algorithm
+            robot.motion_sensor.update_pose(movement_cmd);
+            robot
+                .distance_sensors
+                .iter_mut()
+                .for_each(|s| s.update_pose(movement_cmd));
+            robot.repeat();
+            let real_pose = robot.motion_sensor.robot_pose;
+            let predicted_pose = robot.mcl.get_prediction();
+            // Update visuals
+            // Update particle visuals
+            if robot.mcl.belief.len() < particle_visuals.len() {
+                for i in robot.mcl.belief.len()..particle_visuals.len() {
+                    particle_visuals[i]
+                        .set_transform(Transform::default().with_scale(0.1e-100_f64));
+                }
+            } else if robot.mcl.belief.len() != particle_visuals.len() {
+                let path: vitruvia::graphics_2d::Content = isoceles_triangle(5., 8.)
+                    .fill(Color::black().into())
+                    .finalize()
+                    .into();
+                for _ in particle_visuals.len()..robot.mcl.belief.len() {
+                    particle_visuals.push(root.add(path.clone()));
+                }
+            }
+            for i in 0..robot.mcl.belief.len() {
+                let particle = robot.mcl.belief[i];
+                particle_visuals[i].set_transform(
+                    Transform::default()
+                        .with_position(particle.position * 50. + 50.)
+                        .with_rotation(-particle.angle)
+                        .with_scale(0.5),
+                );
+            }
+            // Update tick, time, particle counters' visuals
+            tick_visual.update(Text::new(format!("{}t", t).as_str()).with_size(30.).into());
+            time_visual.update(
+                Text::new(format!("{:?}", start_time.elapsed()).as_str())
+                    .with_size(30.)
+                    .into(),
+            );
+            particle_count_visual.update(
+                Text::new(format!("{}p", robot.mcl.belief.len()).as_str())
+                    .with_size(30.)
+                    .into(),
+            );
+            // Update position visuals
+            predicted_pose_visual.set_transform(
+                Transform::default()
+                    .with_position(predicted_pose.position * 50. + 50.)
+                    .with_rotation(-predicted_pose.angle),
+            );
+            real_pose_visual.set_transform(
+                Transform::default()
+                    .with_position(real_pose.position * 50. + 50.)
+                    .with_rotation(-real_pose.angle),
+            );
+        }));
     }));
-    ctx.run();
 }
