@@ -1036,7 +1036,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "vitruvia"
 version = "0.1.0"
-source = "git+https://gitlab.com/__ex_nihilo/__vitruvia.git?branch=native2d-mvp#155d5b645c2a6431edd05142ded91495c1cf4355"
+source = "git+https://gitlab.com/__ex_nihilo/__vitruvia.git?branch=native2d-mvp#80d3e3806d4ba95e221c94c3ec17e84249d537b5"
 dependencies = [
  "cairo-rs 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cairo-sys-rs 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",

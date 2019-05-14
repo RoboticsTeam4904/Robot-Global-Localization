@@ -2,7 +2,8 @@ use crate::utility::Pose;
 
 pub mod map;
 pub mod sensors;
-pub mod simulation;
+pub mod AI;
+pub mod simulation; // TODO
 
 /// The generic robot trait
 pub trait Robot {

@@ -2,172 +2,23 @@
 mod robot;
 mod utility;
 
-use rand::distributions::WeightedIndex;
-use rand::prelude::*;
 use robot::map::{Map2D, Object2D};
-use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
 use robot::Sensor;
+use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
+use robot::AI::localization::DistanceFinderMCL;
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_8, PI};
 use utility::{isoceles_triangle, Point, Pose};
 use vitruvia::{
     graphics_2d,
-    graphics_2d::{Color, Transform},
+    graphics_2d::{Color, Transform, Content},
     interaction::keyboard::{Arrow, Key},
     text::Text,
 };
 
-struct LHBLocalizer {
-    max_particle_count: usize,
-    weight_sum_threshold: f64,
-    map: Map2D,
-    sensor_poses: Vec<Pose>,
-    weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-    belief: Vec<Pose>,
-}
-
-// TODO: this can be multithreaded :D (and by this I mean everything basically)
-impl LHBLocalizer {
-    fn new(
-        max_particle_count: usize,
-        map: Map2D,
-        sensor_poses: Vec<Pose>,
-        weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-    ) -> Self {
-        let mut belief = Vec::with_capacity(max_particle_count);
-        for _ in 0..max_particle_count {
-            belief.push(Pose::random(0.0..2. * PI, 0.0..map.width, 0.0..map.height));
-        }
-        LHBLocalizer {
-            max_particle_count: max_particle_count,
-            weight_sum_threshold: max_particle_count as f64 / 50., // TODO: fixed parameter
-            map,
-            sensor_poses,
-            weight_from_error,
-            belief,
-        }
-    }
-
-    fn from_distributions<T, U>(
-        x_distr: T,
-        y_distr: T,
-        angle_distr: T,
-        max_particle_count: usize,
-        map: Map2D,
-        sensor_poses: Vec<Pose>,
-        weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-    ) -> Self
-    where
-        T: Distribution<U>,
-        U: Into<f64>,
-    {
-        let mut belief = Vec::with_capacity(max_particle_count);
-        for ((x, y), angle) in x_distr
-            .sample_iter(&mut thread_rng())
-            .zip(y_distr.sample_iter(&mut thread_rng()))
-            .zip(angle_distr.sample_iter(&mut thread_rng()))
-            .take(max_particle_count)
-        {
-            belief.push(Pose {
-                angle: angle.into(),
-                position: Point {
-                    x: x.into(),
-                    y: y.into(),
-                },
-            });
-        }
-        Self {
-            max_particle_count,
-            weight_sum_threshold: max_particle_count as f64 / 50., // TODO: fixed parameter
-            map,
-            sensor_poses,
-            weight_from_error,
-            belief,
-        }
-    }
-
-    fn control_update(&mut self, u: Pose) {
-        for i in 0..self.belief.len() {
-            self.belief[i] += u;
-        }
-    }
-
-    /// Takes in a vector of ranges indexed synchronously with `self.sensor_poses`
-    fn observation_update(&mut self, z: Vec<Option<f64>>) {
-        // TODO: These weights need a lot more fixing
-        // TODO: Don't just use a constant, c'mon
-        const MAX_SENSOR_RANGE: f64 = 15.;
-        let mut errors: Vec<f64> = Vec::with_capacity(self.belief.len());
-        for sample in &self.belief {
-            let mut sum_error = 0.;
-            for (i, observation) in z.iter().enumerate() {
-                let pred_observation = self.map.raycast(*sample + self.sensor_poses[i]);
-                sum_error += match observation {
-                    Some(real_dist) => match pred_observation {
-                        Some(pred) => {
-                            let pred_dist = pred.dist(sample.position);
-                            if pred_dist <= MAX_SENSOR_RANGE {
-                                (real_dist - pred_dist).abs() // powi(2) // TODO: fixed parameter
-                            } else {
-                                0.
-                            }
-                        }
-                        None => 5., // TODO: fixed parameter
-                    },
-                    None => match pred_observation {
-                        Some(_) => 5., // TODO: fixed parameter
-                        None => 0.,
-                    },
-                };
-            }
-            errors.push(sum_error / z.len() as f64);
-        }
-
-        let mut new_particles = Vec::new();
-        let mut rng = thread_rng();
-        #[allow(clippy::float_cmp)]
-        let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
-            errors
-                .iter()
-                .map(|_| 2. * self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
-                .collect()
-        } else {
-            errors
-                .iter()
-                .map(|error| (self.weight_from_error)(error))
-                .collect()
-        };
-        let distr = WeightedIndex::new(weights.clone()).unwrap();
-        let mut sum_weights = 0.;
-        // TODO: rather than have max particle count and weight sum threshold parameters,
-        // it might be beneficial to use some dynamic combination of the two as the break condition.
-        while sum_weights < self.weight_sum_threshold
-            && new_particles.len() < self.max_particle_count
-        {
-            let idx = distr.sample(&mut rng);
-            sum_weights += weights[idx];
-            new_particles.push(
-                self.belief[idx]
-                    + Pose::random(
-                        (-FRAC_PI_8 / 8.)..(FRAC_PI_8 / 8.),
-                        -0.05..0.05,
-                        -0.05..0.05,
-                    ), // TODO: fixed parameter
-            );
-        }
-        self.belief = new_particles;
-    }
-
-    fn get_prediction(&self) -> Pose {
-        let mut average_pose = Pose::default();
-        for sample in &self.belief {
-            average_pose += *sample;
-        }
-        average_pose / (self.belief.len() as f64)
-    }
-}
+// TODO: Multithread everything
 
 struct Robot {
-    mcl: LHBLocalizer,
+    mcl: DistanceFinderMCL,
     motion_sensor: DummyMotionSensor,
     distance_sensors: Vec<DummyDistanceSensor>,
 }
@@ -257,7 +108,7 @@ fn main() {
                 ),
             ];
             Robot {
-                mcl: LHBLocalizer::new(
+                mcl: DistanceFinderMCL::new(
                     20_000,
                     map.clone(),
                     distance_sensors
@@ -277,24 +128,27 @@ fn main() {
             }
         };
         // Make map visual
-        let mut map_visual = root.add(robot.mcl.map.make_visual(50.));
-        map_visual.apply_transform(Transform::default().with_position((50., 50.)));
+        root.add(
+            robot
+                .mcl
+                .map
+                .make_visual(50.)
+                .with_transform(Transform::default().with_position((50., 50.))),
+        );
         // Make tick, time, and particle counters' visuals
-        let mut tick_visual = root.add(Text::new("0t").with_size(30.).into());
-        tick_visual.set_transform(Transform::default().with_position((500., 20.)));
+        let mut tick_visual = root.add(
+            Content::from(Text::new("0t").with_size(30.))
+                .with_transform(Transform::default().with_position((500., 20.))),
+        );
         let start_time = std::time::Instant::now();
         let mut time_visual = root.add(
-            Text::new(format!("{:?}", start_time.elapsed()).as_str())
-                .with_size(30.)
-                .into(),
+            Content::from(Text::new(format!("{:?}", start_time.elapsed()).as_str())
+                .with_size(30.)).with_transform(Transform::default().with_position((50., 20.)))
         );
-        time_visual.set_transform(Transform::default().with_position((50., 20.)));
         let mut particle_count_visual = root.add(
-            Text::new(format!("{}p", robot.mcl.belief.len()).as_str())
-                .with_size(30.)
-                .into(),
+            Content::from(Text::new(format!("{}p", robot.mcl.belief.len()).as_str())
+                .with_size(30.)).with_transform(Transform::default().with_position((50., 570.))),
         );
-        particle_count_visual.set_transform(Transform::default().with_position((50., 570.)));
         // Make particle visuals
         let mut particle_visuals = {
             let mut visuals = Vec::with_capacity(robot.mcl.belief.len());
