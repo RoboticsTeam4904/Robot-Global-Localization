@@ -5,11 +5,12 @@ use crate::robot::sensors::Sensor;
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
 use std::f64::consts::PI;
+use std::sync::Arc;
 
 /// A pose localizer that uses likelyhood-based Monte Carlo Localization
 /// and takes in motion and range finder sensor data
 pub struct DistanceFinderMCL {
-    pub map: Map2D,
+    pub map: Arc<Map2D>,
     pub belief: Vec<Pose>,
     max_particle_count: usize,
     weight_sum_threshold: f64,
@@ -23,7 +24,7 @@ impl DistanceFinderMCL {
     /// Every step, the localizer should recieve a control and observation update
     pub fn new(
         max_particle_count: usize,
-        map: Map2D,
+        map: Arc<Map2D>,
         sensor_poses: Vec<Pose>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
         resampling_noise: Pose,
@@ -48,7 +49,7 @@ impl DistanceFinderMCL {
     pub fn from_distributions<T, U>(
         pose_distr: (T, (T, T)),
         max_particle_count: usize,
-        map: Map2D,
+        map: Arc<Map2D>,
         sensor_poses: Vec<Pose>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
         resampling_noise: Pose,

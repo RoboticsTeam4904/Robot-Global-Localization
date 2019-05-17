@@ -10,4 +10,4 @@ bitvec = "0.10.0"
 
 [dependencies.vitruvia]
 git = "https://gitlab.com/__ex_nihilo/__vitruvia.git"
-branch = "native2d-mvp"
+branch = "cm-cache"

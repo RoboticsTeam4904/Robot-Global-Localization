@@ -1,8 +1,9 @@
+use super::{LimitedSensor, Sensor};
 use crate::robot::map::Map2D;
-use crate::utility::{Pose, Point};
-use super::{Sensor, LimitedSensor};
+use crate::utility::{Point, Pose};
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
+use std::sync::Arc;
 
 /// A sensor which senses all objects' relative positions within a certain fov
 pub struct DummyObjectSensor {
@@ -28,7 +29,7 @@ impl DummyObjectSensor {
 }
 
 impl Sensor<Vec<Point>> for DummyObjectSensor {
-    fn get_relative_pose(&self) -> Pose  {
+    fn get_relative_pose(&self) -> Pose {
         self.relative_pose
     }
 
@@ -38,7 +39,8 @@ impl Sensor<Vec<Point>> for DummyObjectSensor {
         let mut sensed_objects = Vec::new();
         for object in &self.objects {
             let rel_angle = sensor_pose.position.angle(object.clone());
-            if fov_min <= rel_angle && rel_angle <= fov_max { // TODO: This is incorrect because of how angles are all under mod
+            if fov_min <= rel_angle && rel_angle <= fov_max {
+                // TODO: This is incorrect because of how angles are all under mod
                 sensed_objects.push(object.clone());
             }
         }
@@ -49,7 +51,7 @@ impl Sensor<Vec<Point>> for DummyObjectSensor {
 pub struct DummyDistanceSensor {
     noise_distr: Normal,
     relative_pose: Pose,
-    pub map: Map2D,
+    pub map: Arc<Map2D>,
     pub robot_pose: Pose,
     pub max_dist: Option<f64>,
 }
@@ -57,13 +59,19 @@ pub struct DummyDistanceSensor {
 impl DummyDistanceSensor {
     /// Noise is Guassian and `noise_margin` is each equal to three standard deviations of the noise distribution.
     /// `relative_pose` is the pose of the sensor relative to the robot
-    pub fn new(noise_margin: f64, relative_pose: Pose, map: Map2D, robot_pose: Pose, max_dist: Option<f64>) -> Self {
+    pub fn new(
+        noise_margin: f64,
+        relative_pose: Pose,
+        map: Arc<Map2D>,
+        robot_pose: Pose,
+        max_dist: Option<f64>,
+    ) -> Self {
         Self {
             noise_distr: Normal::new(0., noise_margin / 3.),
             relative_pose,
             map,
             robot_pose,
-            max_dist
+            max_dist,
         }
     }
 
@@ -75,10 +83,7 @@ impl DummyDistanceSensor {
 impl Sensor<Option<f64>> for DummyDistanceSensor {
     fn sense(&self) -> Option<f64> {
         let sensor_pose = self.relative_pose + self.robot_pose;
-        let dist = self
-            .map
-            .raycast(sensor_pose)?
-            .dist(sensor_pose.position);
+        let dist = self.map.raycast(sensor_pose)?.dist(sensor_pose.position);
         if let Some(max_dist) = self.max_dist {
             if dist > max_dist {
                 None
@@ -90,7 +95,7 @@ impl Sensor<Option<f64>> for DummyDistanceSensor {
         }
     }
 
-    fn get_relative_pose(&self) -> Pose  {
+    fn get_relative_pose(&self) -> Pose {
         self.relative_pose
     }
 }

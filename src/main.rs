@@ -2,11 +2,12 @@
 mod robot;
 mod utility;
 
-use robot::map::{Map2D, Object2D};
-use robot::sensors::Sensor;
-use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
 use robot::ai::localization::DistanceFinderMCL;
+use robot::map::{Map2D, Object2D};
+use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
+use robot::sensors::Sensor;
 use std::f64::consts::{FRAC_PI_8, PI};
+use std::sync::Arc;
 use utility::{isoceles_triangle, Point, Pose};
 use vitruvia::{
     graphics_2d,
@@ -40,7 +41,7 @@ fn main() {
     ctx.run_with(Box::new(move |mut context| {
         // Make a robot
         let mut robot = {
-            let map = Map2D::new(
+            let map = Arc::new(Map2D::new(
                 10.,
                 10.,
                 vec![
@@ -54,19 +55,20 @@ fn main() {
                     )),
                     Object2D::Line((Point { x: 5., y: 5. }, Point { x: 5., y: 10. })),
                 ],
-            );
+            ));
             let starting_robot_pose = Pose {
                 angle: 0.,
                 position: Point { x: 8., y: 8. },
             };
             let distance_sensor_noise = 0.1;
             let distance_sensors = {
-                let mut sensors = Vec::new();
-                for i in 0..4 {
+                let sensor_count = 4;
+                let mut sensors = Vec::with_capacity(sensor_count);
+                for i in 0..sensor_count {
                     sensors.push(DummyDistanceSensor::new(
                         distance_sensor_noise,
                         Pose {
-                            angle: PI / 4. * i as f64,
+                            angle: 2. * i as f64 * PI / sensor_count as f64,
                             ..Default::default()
                         },
                         map.clone(),
@@ -171,33 +173,35 @@ fn main() {
             visual
         };
         let mut root = root.clone();
-        let ctx = context.clone();
-        context.bind(Box::new(move |t| {
+        // let ctx = context.clone();
+        let mut tick = 0;
+        context.bind(Box::new(move |_| {
             // Get user input to move the robot
-            let mut inp = String::new();
-            std::io::stdin().read_line(&mut inp).unwrap();
+            // let mut inp = String::new();
+            // std::io::stdin().read_line(&mut inp).unwrap();
             let movement_cmd = robot.motion_sensor.robot_pose
-                + Pose {
-                    angle: PI / 8.
-                        * if inp == "q\n" {
-                            1.
-                        } else if inp == "e\n" {
-                            -1.
-                        } else {
-                            0.
-                        },
-                    position: if inp == "w\n" {
-                        Point { x: 0., y: -0.5 }
-                    } else if inp == "s\n" {
-                        Point { x: 0., y: 0.5 }
-                    } else if inp == "a\n" {
-                        Point { x: -0.5, y: 0. }
-                    } else if inp == "d\n" {
-                        Point { x: 0.5, y: 0. }
-                    } else {
-                        Point::default()
-                    },
-                };
+                // + Pose {
+                //     angle: FRAC_PI_8
+                //         * if inp == "e\n" {
+                //             1.
+                //         } else if inp == "q\n" {
+                //             -1.
+                //         } else {
+                //             0.
+                //         },
+                //     position: if inp == "w\n" {
+                //         Point { x: 0., y: -0.5 }
+                //     } else if inp == "s\n" {
+                //         Point { x: 0., y: 0.5 }
+                //     } else if inp == "a\n" {
+                //         Point { x: -0.5, y: 0. }
+                //     } else if inp == "d\n" {
+                //         Point { x: 0.5, y: 0. }
+                //     } else {
+                //         Point::default()
+                //     },
+                // }
+                ;
             // Move the robot and tick the mcl algorithm
             robot.motion_sensor.update_pose(movement_cmd);
             robot
@@ -233,7 +237,11 @@ fn main() {
                 );
             }
             // Update tick, time, particle counters' visuals
-            tick_visual.update(Text::new(format!("{}t", t).as_str()).with_size(30.).into());
+            tick_visual.update(
+                Text::new(format!("{}t", tick).as_str())
+                    .with_size(30.)
+                    .into(),
+            );
             time_visual.update(
                 Text::new(format!("{:?}", start_time.elapsed()).as_str())
                     .with_size(30.)
@@ -255,6 +263,7 @@ fn main() {
                     .with_position(real_pose.position * 50. + 50.)
                     .with_rotation(-real_pose.angle),
             );
+            tick += 1;
         }));
     }));
 }
