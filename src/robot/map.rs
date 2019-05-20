@@ -1,20 +1,22 @@
 use crate::utility::{Point, Pose};
+use vitruvia::path::Segment;
 
 // TODO: this file is lazy
 
 pub enum Object2D {
+    Point(Point),
     Line((Point, Point)),
     Triangle((Point, Point, Point)),
     Rectangle((Point, Point)),
 }
 
 /// A Simple 2D map of line segments
-#[derive(Clone)]
 pub struct Map2D {
     pub width: f64,
     pub height: f64,
     pub vertices: Vec<Point>,
     pub lines: Vec<(usize, usize)>,
+    pub points: Vec<usize>,
 }
 
 impl Map2D {
@@ -24,6 +26,7 @@ impl Map2D {
     {
         let mut vertices = Vec::new();
         let mut lines = Vec::new();
+        let mut points = Vec::new();
         let mut add_vert = |point: Point| -> usize {
             if let Some(idx) = vertices.iter().position(|&v| v == point) {
                 idx
@@ -56,6 +59,7 @@ impl Map2D {
                     lines.push((v3, v4));
                     lines.push((v4, v1));
                 }
+                Object2D::Point(p) => points.push(add_vert(p)),
             };
         }
 
@@ -64,6 +68,7 @@ impl Map2D {
             height,
             vertices,
             lines,
+            points,
         }
     }
 
@@ -178,7 +183,42 @@ impl Map2D {
                 }
             }
         }
+        #[allow(clippy::float_cmp)]
+        for point in &self.points {
+            let point = self.get_vertex(*point) - start.position;
+            // TODO: tune? fuzzy comparison for slope comparison
+            if (point.x == point.y && start.angle == std::f64::consts::FRAC_PI_2)
+                || (start.angle.tan() - point.y / point.x).abs() < 0.01
+            {
+                let dist = point.dist(start.position);
+                if closest_intersection == None || closest_intersection_dist > dist {
+                    closest_intersection = Some(point);
+                    closest_intersection_dist = dist;
+                }
+            }
+        }
         closest_intersection
+    }
+
+    // TODO: name this wtf
+    pub fn cast_visible_points(&self, start: Pose, fov: f64) -> Vec<Point> {
+        let (fov_min, fov_max) = (start.angle - fov / 2., start.angle + fov / 2.);
+        let mut sensed_objects = Vec::new();
+        for object in &self.points {
+            let object = self.get_vertex(*object);
+            let rel_angle = start.position.angle(object);
+            if fov_min <= rel_angle
+                && rel_angle <= fov_max
+                && self
+                    .raycast(start.with_angle(start.position.angle(object)))
+                    .unwrap() // if this panics then soemthing went wrong. it should at least return object
+                    == object
+            {
+                // TODO: This is incorrect because of how angles are all under mod
+                sensed_objects.push(object - start.position);
+            }
+        }
+        sensed_objects
     }
 
     pub fn make_visual(&self, scale: f64) -> vitruvia::graphics_2d::Content {
@@ -186,8 +226,17 @@ impl Map2D {
         for line in &self.lines {
             let v1 = self.get_vertex(line.0);
             let v2 = self.get_vertex(line.1);
-            segments.push(vitruvia::path::Segment::MoveTo((v1 * scale).into()));
-            segments.push(vitruvia::path::Segment::LineTo((v2 * scale).into()));
+            segments.push(Segment::MoveTo((v1 * scale).into()));
+            segments.push(Segment::LineTo((v2 * scale).into()));
+        }
+        let radius = 5. * scale;
+        for point in &self.points {
+            let point = self.get_vertex(*point);
+            segments.push(Segment::MoveTo((point - (radius, radius).into()).into()));
+            segments.push(Segment::LineTo((point - (radius, -radius).into()).into()));
+            segments.push(Segment::LineTo((point - (-radius, -radius).into()).into())); // TODO: clippy was yelling at me
+            segments.push(Segment::LineTo((point - (-radius, radius).into()).into()));
+            segments.push(Segment::LineTo((point - (radius, radius).into()).into()));
         }
         vitruvia::path::StyleHelper::new(segments)
             .stroke(vitruvia::path::Stroke::default())

@@ -13,7 +13,7 @@ pub trait Sensor<T> {
     /// Gets the value that the sensor is currently sensing
     fn sense(&self) -> T;
     /// Get the pose of the sensor relative to the pose of the robot
-    fn get_relative_pose(&self) -> Pose {
+    fn relative_pose(&self) -> Pose {
         Pose::default()
     }
 }

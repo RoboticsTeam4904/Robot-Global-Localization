@@ -2,7 +2,7 @@
 mod robot;
 mod utility;
 
-use robot::ai::localization::DistanceFinderMCL;
+use robot::ai::localization::{DistanceFinderMCL};
 use robot::map::{Map2D, Object2D};
 use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
 use robot::sensors::Sensor;
@@ -60,15 +60,15 @@ fn main() {
                 angle: 0.,
                 position: Point { x: 8., y: 8. },
             };
-            let distance_sensor_noise = 0.1;
             let distance_sensors = {
-                let sensor_count = 4;
-                let mut sensors = Vec::with_capacity(sensor_count);
-                for i in 0..sensor_count {
+                let noise = 0.05;
+                let count = 4;
+                let mut sensors = Vec::with_capacity(count);
+                for i in 0..count {
                     sensors.push(DummyDistanceSensor::new(
-                        distance_sensor_noise,
+                        noise,
                         Pose {
-                            angle: 2. * i as f64 * PI / sensor_count as f64,
+                            angle: 2. * i as f64 * PI / count as f64,
                             ..Default::default()
                         },
                         map.clone(),
@@ -84,7 +84,7 @@ fn main() {
                     map.clone(),
                     distance_sensors
                         .iter()
-                        .map(|sensor| sensor.get_relative_pose())
+                        .map(|sensor| sensor.relative_pose())
                         .collect(),
                     Box::new(|error| 2f64.powf(-error)),
                     Pose {
@@ -177,30 +177,30 @@ fn main() {
         let mut tick = 0;
         context.bind(Box::new(move |_| {
             // Get user input to move the robot
-            // let mut inp = String::new();
-            // std::io::stdin().read_line(&mut inp).unwrap();
+            let mut inp = String::new();
+            std::io::stdin().read_line(&mut inp).unwrap();
             let movement_cmd = robot.motion_sensor.robot_pose
-                // + Pose {
-                //     angle: FRAC_PI_8
-                //         * if inp == "e\n" {
-                //             1.
-                //         } else if inp == "q\n" {
-                //             -1.
-                //         } else {
-                //             0.
-                //         },
-                //     position: if inp == "w\n" {
-                //         Point { x: 0., y: -0.5 }
-                //     } else if inp == "s\n" {
-                //         Point { x: 0., y: 0.5 }
-                //     } else if inp == "a\n" {
-                //         Point { x: -0.5, y: 0. }
-                //     } else if inp == "d\n" {
-                //         Point { x: 0.5, y: 0. }
-                //     } else {
-                //         Point::default()
-                //     },
-                // }
+                + Pose {
+                    angle: FRAC_PI_8
+                        * if inp == "e\n" {
+                            1.
+                        } else if inp == "q\n" {
+                            -1.
+                        } else {
+                            0.
+                        },
+                    position: if inp == "w\n" {
+                        Point { x: 0., y: -0.5 }
+                    } else if inp == "s\n" {
+                        Point { x: 0., y: 0.5 }
+                    } else if inp == "a\n" {
+                        Point { x: -0.5, y: 0. }
+                    } else if inp == "d\n" {
+                        Point { x: 0.5, y: 0. }
+                    } else {
+                        Point::default()
+                    },
+                }
                 ;
             // Move the robot and tick the mcl algorithm
             robot.motion_sensor.update_pose(movement_cmd);

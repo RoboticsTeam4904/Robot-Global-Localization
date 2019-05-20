@@ -8,16 +8,16 @@ use std::sync::Arc;
 /// A sensor which senses all objects' relative positions within a certain fov
 pub struct DummyObjectSensor {
     fov: f64,
-    pub objects: Vec<Point>,
+    pub map: Arc<Map2D>,
     pub relative_pose: Pose,
     pub robot_pose: Pose,
 }
 
 impl DummyObjectSensor {
-    pub fn new(fov: f64, objects: Vec<Point>, relative_pose: Pose, robot_pose: Pose) -> Self {
+    pub fn new(fov: f64, map: Arc<Map2D>, relative_pose: Pose, robot_pose: Pose) -> Self {
         Self {
-            fov: fov / 2.,
-            objects,
+            fov,
+            map,
             relative_pose,
             robot_pose,
         }
@@ -29,22 +29,13 @@ impl DummyObjectSensor {
 }
 
 impl Sensor<Vec<Point>> for DummyObjectSensor {
-    fn get_relative_pose(&self) -> Pose {
+    fn relative_pose(&self) -> Pose {
         self.relative_pose
     }
 
     fn sense(&self) -> Vec<Point> {
-        let sensor_pose = self.robot_pose + self.get_relative_pose();
-        let (fov_min, fov_max) = (sensor_pose.angle - self.fov, sensor_pose.angle + self.fov);
-        let mut sensed_objects = Vec::new();
-        for object in &self.objects {
-            let rel_angle = sensor_pose.position.angle(object.clone());
-            if fov_min <= rel_angle && rel_angle <= fov_max {
-                // TODO: This is incorrect because of how angles are all under mod
-                sensed_objects.push(object.clone());
-            }
-        }
-        sensed_objects
+        let sensor_pose = self.robot_pose + self.relative_pose();
+        self.map.cast_visible_points(sensor_pose, self.fov)
     }
 }
 
@@ -95,7 +86,7 @@ impl Sensor<Option<f64>> for DummyDistanceSensor {
         }
     }
 
-    fn get_relative_pose(&self) -> Pose {
+    fn relative_pose(&self) -> Pose {
         self.relative_pose
     }
 }

@@ -181,6 +181,16 @@ impl Pose {
             position: self.position.clamp(lower.position, upper.position),
         }
     }
+
+    pub fn with_angle(mut self, angle: f64) -> Pose {
+        self.angle = angle;
+        self
+    }
+
+    pub fn with_position(mut self, position: Point) -> Pose {
+        self.position = position;
+        self
+    }
 }
 
 impl Into<Transform> for Pose {

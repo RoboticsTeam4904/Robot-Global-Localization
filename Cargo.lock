@@ -541,7 +541,7 @@ version = "0.1.0"
 dependencies = [
  "bitvec 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.6.5 (registry+https://github.com/rust-lang/crates.io-index)",
- "vitruvia 0.1.0 (git+https://gitlab.com/__ex_nihilo/__vitruvia.git?branch=cm-cache)",
+ "vitruvia 0.1.0 (git+https://gitlab.com/__ex_nihilo/__vitruvia.git?branch=native2d-mvp)",
 ]
 
 [[package]]
@@ -1036,7 +1036,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "vitruvia"
 version = "0.1.0"
-source = "git+https://gitlab.com/__ex_nihilo/__vitruvia.git?branch=cm-cache#8bc5eb573ccc731869d18e43351ad3a97fca0b95"
+source = "git+https://gitlab.com/__ex_nihilo/__vitruvia.git?branch=native2d-mvp#c47e1154a2b9254b2d6b43ef5e2f9ab7904dfb29"
 dependencies = [
  "cairo-rs 0.6.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "cairo-sys-rs 0.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1372,7 +1372,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum syn 0.15.34 (registry+https://github.com/rust-lang/crates.io-index)" = "a1393e4a97a19c01e900df2aec855a29f71cf02c402e2f443b8d2747c25c5dbe"
 "checksum synstructure 0.10.2 (registry+https://github.com/rust-lang/crates.io-index)" = "02353edf96d6e4dc81aea2d8490a7e9db177bf8acb0e951c24940bf866cb313f"
 "checksum unicode-xid 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fc72304796d0818e357ead4e000d19c9c174ab23dc11093ac919054d20a6a7fc"
-"checksum vitruvia 0.1.0 (git+https://gitlab.com/__ex_nihilo/__vitruvia.git?branch=cm-cache)" = "<none>"
+"checksum vitruvia 0.1.0 (git+https://gitlab.com/__ex_nihilo/__vitruvia.git?branch=native2d-mvp)" = "<none>"
 "checksum void 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
 "checksum walkdir 2.2.7 (registry+https://github.com/rust-lang/crates.io-index)" = "9d9d7ed3431229a144296213105a390676cc49c9b6a72bd19f3176c98e129fa1"
 "checksum wasm-bindgen 0.2.44 (registry+https://github.com/rust-lang/crates.io-index)" = "df659e080ba2ee410d3651a84e33cc09f5bd355b0c6f014876502231f2f91659"
