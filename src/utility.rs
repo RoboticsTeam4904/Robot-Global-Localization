@@ -1,6 +1,6 @@
 use rand::prelude::*;
 use std::ops::Range;
-use std::f64::consts::FRAC_PI_2;
+use std::f64::consts::{PI, FRAC_PI_2};
 use vitruvia::graphics_2d::{Transform, Vector};
 
 /// Generic 2d point
@@ -33,7 +33,19 @@ impl Point {
     /// Angle of `self` relative to `other`
     pub fn angle(&self, other: Point) -> f64 {
         let dif = other - *self;
-        if dif.x == 0. { FRAC_PI_2 } else { (dif.y / dif.x).atan() }
+        if dif.x == 0. {
+            if other.y > self.y {
+                FRAC_PI_2
+            } else {
+                PI + FRAC_PI_2
+            }
+        } else {
+            let mut angle = (dif.y / dif.x).atan();
+            if dif.x < 0. {
+                angle += PI;
+            }
+            angle % (2. * PI)
+        }
     }
 
     pub fn mag(&self) -> f64 {
@@ -166,7 +178,7 @@ impl Pose {
 
     /// Mod `angle` by 2π
     pub fn normalize(mut self) -> Pose {
-        self.angle %= 2. * std::f64::consts::PI;
+        self.angle %= 2. * PI;
         self
     }
 
@@ -211,7 +223,7 @@ impl std::ops::Add for Pose {
     /// Does normalize angle
     fn add(self, other: Pose) -> Pose {
         Pose {
-            angle: (self.angle + other.angle) % (2. * std::f64::consts::PI),
+            angle: (self.angle + other.angle) % (2. * PI),
             position: self.position + other.position,
         }
     }
@@ -223,7 +235,7 @@ impl std::ops::Sub for Pose {
     /// Does normalize angle
     fn sub(self, other: Pose) -> Pose {
         Pose {
-            angle: (self.angle - other.angle) % (2. * std::f64::consts::PI),
+            angle: (self.angle - other.angle) % (2. * PI),
             position: self.position - other.position,
         }
     }
@@ -235,7 +247,7 @@ impl std::ops::Div<f64> for Pose {
     /// Does normalize angle
     fn div(self, other: f64) -> Pose {
         Pose {
-            angle: (self.angle / other) % (2. * std::f64::consts::PI),
+            angle: (self.angle / other) % (2. * PI),
             position: self.position * (1. / other),
         }
     }

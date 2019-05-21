@@ -187,10 +187,9 @@ impl Map2D {
         }
         #[allow(clippy::float_cmp)]
         for point in &self.points {
-            let point = self.get_vertex(*point) - start.position;
+            let point = self.get_vertex(*point);
             // TODO: tune? fuzzy comparison for slope comparison
-            if (point.x == point.y && start.angle == FRAC_PI_2)
-                || (start.angle.tan() - point.y / point.x).abs() < 0.01
+            if (start.position.angle(point) - start.angle).abs() < 0.01
             {
                 let dist = point.dist(start.position);
                 if closest_intersection == None || closest_intersection_dist > dist {
@@ -203,13 +202,13 @@ impl Map2D {
     }
 
     // TODO: name this wtf
-    pub fn cast_visible_points(&self, start: Pose, fov: f64) -> Vec<Point> {
+    pub fn cull_points(&self, start: Pose, fov: f64) -> Vec<Point> {
         let mut sensed_objects = Vec::new();
         for object in &self.points {
             let object = self.get_vertex(*object);
             let object_angle = start.position.angle(object);
             let rel_angle = PI - (PI - (start.angle - object_angle).abs()).abs();
-            if fov / 2. <= rel_angle
+            if fov / 2. >= rel_angle
                 && self
                     .raycast(start.with_angle(object_angle))
                     .unwrap() // if this panics then soemthing went wrong. it should at least return object

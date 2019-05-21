@@ -35,7 +35,13 @@ impl Sensor<Vec<Point>> for DummyObjectSensor {
 
     fn sense(&self) -> Vec<Point> {
         let sensor_pose = self.robot_pose + self.relative_pose();
-        self.map.cast_visible_points(sensor_pose, self.fov)
+        self.map.cull_points(sensor_pose, self.fov)
+    }
+}
+
+impl LimitedSensor<f64, Vec<Point>> for DummyObjectSensor {
+    fn range(&self) -> Option<f64> {
+        Some(self.fov)
     }
 }
 

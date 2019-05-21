@@ -1,5 +1,4 @@
 use crate::robot::map::Map2D;
-use crate::robot::sensors::dummy::DummyObjectSensor;
 use crate::robot::sensors::LimitedSensor;
 use crate::robot::sensors::Sensor;
 use crate::utility::{Point, Pose};
@@ -60,7 +59,6 @@ pub struct DistanceFinderMCL {
     pub belief: Vec<Pose>,
     max_particle_count: usize,
     weight_sum_threshold: f64,
-    sensor_poses: Vec<Pose>,
     weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
     resampling_noise: Pose,
 }
@@ -71,7 +69,6 @@ impl DistanceFinderMCL {
     pub fn new(
         max_particle_count: usize,
         map: Arc<Map2D>,
-        sensor_poses: Vec<Pose>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
         resampling_noise: Pose,
     ) -> Self {
@@ -81,7 +78,6 @@ impl DistanceFinderMCL {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 50., // TODO: fixed parameter
             map,
-            sensor_poses,
             weight_from_error,
             belief,
             resampling_noise,
@@ -94,7 +90,6 @@ impl DistanceFinderMCL {
         pose_distr: (T, (T, T)),
         max_particle_count: usize,
         map: Arc<Map2D>,
-        sensor_poses: Vec<Pose>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
         resampling_noise: Pose,
     ) -> Self
@@ -108,7 +103,6 @@ impl DistanceFinderMCL {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 50., // TODO: fixed parameter
             map,
-            sensor_poses,
             weight_from_error,
             belief,
             resampling_noise,
@@ -192,12 +186,10 @@ impl DistanceFinderMCL {
 /// A pose localizer that uses likelyhood-based Monte Carlo Localization
 /// and takes in motion and range finder sensor data
 pub struct ObjectDetectorMCL {
-    pub objects: Arc<Vec<Point>>,
     pub map: Arc<Map2D>,
     pub belief: Vec<Pose>,
     max_particle_count: usize,
     weight_sum_threshold: f64,
-    sensor_poses: Vec<Pose>,
     weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
     resampling_noise: Pose,
 }
@@ -207,9 +199,7 @@ impl ObjectDetectorMCL {
     /// Every step, the localizer should recieve a control and observation update
     pub fn new(
         max_particle_count: usize,
-        objects: Arc<Vec<Point>>,
         map: Arc<Map2D>,
-        sensor_poses: Vec<Pose>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
         resampling_noise: Pose,
     ) -> Self {
@@ -218,9 +208,7 @@ impl ObjectDetectorMCL {
         Self {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 50., // TODO: fixed parameter
-            objects,
             map,
-            sensor_poses,
             weight_from_error,
             belief,
             resampling_noise,
@@ -232,9 +220,7 @@ impl ObjectDetectorMCL {
     pub fn from_distributions<T, U>(
         pose_distr: (T, (T, T)),
         max_particle_count: usize,
-        objects: Arc<Vec<Point>>,
         map: Arc<Map2D>,
-        sensor_poses: Vec<Pose>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
         resampling_noise: Pose,
     ) -> Self
@@ -247,9 +233,7 @@ impl ObjectDetectorMCL {
         Self {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 50., // TODO: fixed parameter
-            objects,
             map,
-            sensor_poses,
             weight_from_error,
             belief,
             resampling_noise,
@@ -263,7 +247,7 @@ impl ObjectDetectorMCL {
     }
 
     /// Takes in a sensor which senses all objects within a certain field of view
-    pub fn observation_update<V, Z>(&mut self, z: &Z)
+    pub fn observation_update<Z>(&mut self, z: &Z)
     where
         Z: Sensor<Vec<Point>> + LimitedSensor<f64, Vec<Point>>,
     {
@@ -283,24 +267,27 @@ impl ObjectDetectorMCL {
             let pred_observation = {
                 let mut pred_observation = self
                     .map
-                    .cast_visible_points(*sample + z.relative_pose(), fov);
+                    .cull_points(*sample + z.relative_pose(), fov);
                 pred_observation.sort_by(|a, b| a.mag().partial_cmp(&b.mag()).unwrap());
                 pred_observation
             };
-            // TODO: fixed parameter
-            // observation.len() does not necessarily equal pred_observation.len()
+            // TODO: fixed parameter 
+            // This method of calculating error is not entirely sound
+            let mut total = 0;
             for (real, pred) in observation.iter().zip(pred_observation.iter()) {
                 sum_error += (*real - *pred).mag();
+                total += 1;
             }
+            sum_error += 5. * (observation.len() as f64 - pred_observation.len()  as f64).abs();  // TODO: fixed parameter
             errors.push(sum_error);
         }
 
         let mut new_particles = Vec::new();
         #[allow(clippy::float_cmp)]
-        let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
+        let weights: Vec<f64> = if errors.iter().all(|error| error == &0. || error == &std::f64::NAN) {
             errors
                 .iter()
-                .map(|_| 2. * self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
+                .map(|_| self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
                 .collect()
         } else {
             errors

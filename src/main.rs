@@ -2,9 +2,9 @@
 mod robot;
 mod utility;
 
-use robot::ai::localization::DistanceFinderMCL;
+use robot::ai::localization::{DistanceFinderMCL, ObjectDetectorMCL};
 use robot::map::{Map2D, Object2D};
-use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
+use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor, DummyObjectSensor};
 use robot::sensors::Sensor;
 use std::f64::consts::{FRAC_PI_8, PI};
 use std::sync::Arc;
@@ -18,16 +18,29 @@ use vitruvia::{
 
 // TODO: Multithread everything
 
-struct Robot {
+struct DistanceSensorRobot {
     mcl: DistanceFinderMCL,
     motion_sensor: DummyMotionSensor,
     distance_sensors: Vec<DummyDistanceSensor>,
 }
 
-impl Robot {
+impl DistanceSensorRobot {
     fn repeat(&mut self) {
         self.mcl.control_update(&self.motion_sensor); // TODO: dummy motion sensor and its usage are currently oversimplified
         self.mcl.observation_update(&self.distance_sensors);
+    }
+}
+
+struct ObjectSensorRobot {
+    mcl: ObjectDetectorMCL,
+    motion_sensor: DummyMotionSensor,
+    object_sensor: DummyObjectSensor,
+}
+
+impl ObjectSensorRobot {
+    fn repeat(&mut self) {
+        self.mcl.control_update(&self.motion_sensor); // TODO: dummy motion sensor and its usage are currently oversimplified
+        self.mcl.observation_update(&self.object_sensor);
     }
 }
 
@@ -54,6 +67,7 @@ fn main() {
                         Point { x: 2., y: 7. },
                     )),
                     Object2D::Line((Point { x: 5., y: 5. }, Point { x: 5., y: 10. })),
+                    Object2D::Point(Point { x: 2., y: 1. }),
                     Object2D::Point(Point { x: 5., y: 5. }),
                     Object2D::Point(Point { x: 1., y: 1. }),
                     Object2D::Point(Point { x: 1., y: 4. }),
@@ -69,39 +83,19 @@ fn main() {
                 angle: PI,
                 position: Point { x: 8., y: 8. },
             };
-            let distance_sensors = {
-                let noise = 0.05;
-                let count = 4;
-                let mut sensors = Vec::with_capacity(count);
-                for i in 0..count {
-                    sensors.push(DummyDistanceSensor::new(
-                        noise,
-                        Pose {
-                            angle: 2. * i as f64 * PI / count as f64,
-                            ..Default::default()
-                        },
-                        map.clone(),
-                        starting_robot_pose,
-                        None,
-                    ));
-                }
-                sensors
-            };
-            Robot {
-                mcl: DistanceFinderMCL::new(
+            let object_sensor =
+                DummyObjectSensor::new(PI, map.clone(), Pose::default(), starting_robot_pose);
+            ObjectSensorRobot {
+                mcl: ObjectDetectorMCL::new(
                     20_000,
                     map.clone(),
-                    distance_sensors
-                        .iter()
-                        .map(|sensor| sensor.relative_pose())
-                        .collect(),
                     Box::new(|error| 2f64.powf(-error)),
                     Pose {
                         angle: FRAC_PI_8 / 4.,
                         position: Point { x: 0.05, y: 0.05 },
                     },
                 ),
-                distance_sensors,
+                object_sensor,
                 motion_sensor: DummyMotionSensor::new(
                     starting_robot_pose,
                     Pose {
@@ -178,7 +172,7 @@ fn main() {
             visual
         };
         let mut root = root.clone();
-        // let ctx = context.clone();
+        let ctx = context.clone();
         let mut tick = 0;
         context.bind(Box::new(move |_| {
             // Get user input to move the robot
@@ -209,10 +203,7 @@ fn main() {
                 ;
             // Move the robot and tick the mcl algorithm
             robot.motion_sensor.update_pose(movement_cmd);
-            robot
-                .distance_sensors
-                .iter_mut()
-                .for_each(|s| s.update_pose(movement_cmd));
+            robot.object_sensor.update_pose(movement_cmd);
             robot.repeat();
             let real_pose = robot.motion_sensor.robot_pose;
             let predicted_pose = robot.mcl.get_prediction();
