@@ -1,5 +1,7 @@
 use crate::utility::{Point, Pose};
-use vitruvia::path::Segment;
+use std::f64::consts::{FRAC_PI_2, PI};
+use vitruvia::graphics_2d::{Color, Content, Transform};
+use vitruvia::path::{Primitive, Segment};
 
 // TODO: this file is lazy
 
@@ -187,7 +189,7 @@ impl Map2D {
         for point in &self.points {
             let point = self.get_vertex(*point) - start.position;
             // TODO: tune? fuzzy comparison for slope comparison
-            if (point.x == point.y && start.angle == std::f64::consts::FRAC_PI_2)
+            if (point.x == point.y && start.angle == FRAC_PI_2)
                 || (start.angle.tan() - point.y / point.x).abs() < 0.01
             {
                 let dist = point.dist(start.position);
@@ -202,26 +204,24 @@ impl Map2D {
 
     // TODO: name this wtf
     pub fn cast_visible_points(&self, start: Pose, fov: f64) -> Vec<Point> {
-        let (fov_min, fov_max) = (start.angle - fov / 2., start.angle + fov / 2.);
         let mut sensed_objects = Vec::new();
         for object in &self.points {
             let object = self.get_vertex(*object);
-            let rel_angle = start.position.angle(object);
-            if fov_min <= rel_angle
-                && rel_angle <= fov_max
+            let object_angle = start.position.angle(object);
+            let rel_angle = PI - (PI - (start.angle - object_angle).abs()).abs();
+            if fov / 2. <= rel_angle
                 && self
-                    .raycast(start.with_angle(start.position.angle(object)))
+                    .raycast(start.with_angle(object_angle))
                     .unwrap() // if this panics then soemthing went wrong. it should at least return object
                     == object
             {
-                // TODO: This is incorrect because of how angles are all under mod
                 sensed_objects.push(object - start.position);
             }
         }
         sensed_objects
     }
 
-    pub fn make_visual(&self, scale: f64) -> vitruvia::graphics_2d::Content {
+    pub fn make_visual(&self, scale: f64) -> Vec<Content> {
         let mut segments = Vec::new();
         for line in &self.lines {
             let v1 = self.get_vertex(line.0);
@@ -229,18 +229,19 @@ impl Map2D {
             segments.push(Segment::MoveTo((v1 * scale).into()));
             segments.push(Segment::LineTo((v2 * scale).into()));
         }
-        let radius = 5. * scale;
-        for point in &self.points {
-            let point = self.get_vertex(*point);
-            segments.push(Segment::MoveTo((point - (radius, radius).into()).into()));
-            segments.push(Segment::LineTo((point - (radius, -radius).into()).into()));
-            segments.push(Segment::LineTo((point - (-radius, -radius).into()).into())); // TODO: clippy was yelling at me
-            segments.push(Segment::LineTo((point - (-radius, radius).into()).into()));
-            segments.push(Segment::LineTo((point - (radius, radius).into()).into()));
-        }
-        vitruvia::path::StyleHelper::new(segments)
+        let mut visuals = vec![vitruvia::path::StyleHelper::new(segments)
             .stroke(vitruvia::path::Stroke::default())
             .finalize()
-            .into()
+            .into()];
+        for point in &self.points {
+            visuals.push(
+                Primitive::circle(scale / 10.)
+                    .fill(Color::rgb(0, 255, 0).into())
+                    .finalize()
+                    .with_origin(self.get_vertex(*point) * -scale)
+                    .into(),
+            );
+        }
+        visuals
     }
 }

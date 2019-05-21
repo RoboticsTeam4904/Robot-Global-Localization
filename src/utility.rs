@@ -1,5 +1,6 @@
 use rand::prelude::*;
 use std::ops::Range;
+use std::f64::consts::FRAC_PI_2;
 use vitruvia::graphics_2d::{Transform, Vector};
 
 /// Generic 2d point
@@ -32,7 +33,7 @@ impl Point {
     /// Angle of `self` relative to `other`
     pub fn angle(&self, other: Point) -> f64 {
         let dif = other - *self;
-        (dif.y / dif.x).atan()
+        if dif.x == 0. { FRAC_PI_2 } else { (dif.y / dif.x).atan() }
     }
 
     pub fn mag(&self) -> f64 {

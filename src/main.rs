@@ -2,7 +2,7 @@
 mod robot;
 mod utility;
 
-use robot::ai::localization::{DistanceFinderMCL};
+use robot::ai::localization::DistanceFinderMCL;
 use robot::map::{Map2D, Object2D};
 use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor};
 use robot::sensors::Sensor;
@@ -54,10 +54,19 @@ fn main() {
                         Point { x: 2., y: 7. },
                     )),
                     Object2D::Line((Point { x: 5., y: 5. }, Point { x: 5., y: 10. })),
+                    Object2D::Point(Point { x: 5., y: 5. }),
+                    Object2D::Point(Point { x: 1., y: 1. }),
+                    Object2D::Point(Point { x: 1., y: 4. }),
+                    Object2D::Point(Point { x: 8., y: 5. }),
+                    Object2D::Point(Point { x: 3., y: 9. }),
+                    Object2D::Point(Point { x: 2., y: 5. }),
+                    Object2D::Point(Point { x: 8., y: 2. }),
+                    Object2D::Point(Point { x: 7., y: 9. }),
+                    Object2D::Point(Point { x: 5., y: 7.5 }),
                 ],
             ));
             let starting_robot_pose = Pose {
-                angle: 0.,
+                angle: PI,
                 position: Point { x: 8., y: 8. },
             };
             let distance_sensors = {
@@ -103,13 +112,9 @@ fn main() {
             }
         };
         // Make map visual
-        root.add(
-            robot
-                .mcl
-                .map
-                .make_visual(50.)
-                .with_transform(Transform::default().with_position((50., 50.))),
-        );
+        for visual in robot.mcl.map.make_visual(50.) {
+            root.add(visual.with_transform(Transform::default().with_position((50., 50.))));
+        }
         // Make tick, time, and particle counters' visuals
         let mut tick_visual = root.add(
             Content::from(Text::new("0t").with_size(30.))
@@ -177,30 +182,30 @@ fn main() {
         let mut tick = 0;
         context.bind(Box::new(move |_| {
             // Get user input to move the robot
-            let mut inp = String::new();
-            std::io::stdin().read_line(&mut inp).unwrap();
+            // let mut inp = String::new();
+            // std::io::stdin().read_line(&mut inp).unwrap();
             let movement_cmd = robot.motion_sensor.robot_pose
-                + Pose {
-                    angle: FRAC_PI_8
-                        * if inp == "e\n" {
-                            1.
-                        } else if inp == "q\n" {
-                            -1.
-                        } else {
-                            0.
-                        },
-                    position: if inp == "w\n" {
-                        Point { x: 0., y: -0.5 }
-                    } else if inp == "s\n" {
-                        Point { x: 0., y: 0.5 }
-                    } else if inp == "a\n" {
-                        Point { x: -0.5, y: 0. }
-                    } else if inp == "d\n" {
-                        Point { x: 0.5, y: 0. }
-                    } else {
-                        Point::default()
-                    },
-                }
+                // + Pose {
+                //     angle: FRAC_PI_8
+                //         * if inp == "e\n" {
+                //             1.
+                //         } else if inp == "q\n" {
+                //             -1.
+                //         } else {
+                //             0.
+                //         },
+                //     position: if inp == "w\n" {
+                //         Point { x: 0., y: -0.5 }
+                //     } else if inp == "s\n" {
+                //         Point { x: 0., y: 0.5 }
+                //     } else if inp == "a\n" {
+                //         Point { x: -0.5, y: 0. }
+                //     } else if inp == "d\n" {
+                //         Point { x: 0.5, y: 0. }
+                //     } else {
+                //         Point::default()
+                //     },
+                // }
                 ;
             // Move the robot and tick the mcl algorithm
             robot.motion_sensor.update_pose(movement_cmd);
