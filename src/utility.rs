@@ -127,6 +127,24 @@ impl std::ops::Div for Point {
     }
 }
 
+impl std::ops::Add<(f64, f64)> for Point {
+    type Output = Point;
+
+    fn add(self, other: (f64, f64)) -> Point  {
+        let other: Point = other.into();
+        self + other
+    }
+}
+
+impl std::ops::Sub<(f64, f64)> for Point {
+    type Output = Point;
+
+    fn sub(self, other: (f64, f64)) -> Point  {
+        let other: Point = other.into();
+        self - other
+    }
+}
+
 impl std::ops::Add<f64> for Point {
     type Output = Point;
 

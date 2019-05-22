@@ -103,24 +103,26 @@ fn main() {
             }
         };
         // Make map visual
-        for visual in robot.mcl.map.make_visual(50.) {
-            root.add(visual.with_transform(Transform::default().with_position((50., 50.))));
+        let map_scale = 50.;
+        let map_offset: Point = (50., 50.).into();
+        for visual in robot.mcl.map.make_visual(map_scale) {
+            root.add(visual.with_transform(Transform::default().with_position(map_offset)));
         }
         // Make tick, time, and particle counters' visuals
         let mut tick_visual = root.add(
-            Content::from(Text::new("0t").with_size(30.))
-                .with_transform(Transform::default().with_position((500., 20.))),
+            Content::from(Text::new("0t").with_size(0.6 * map_scale))
+                .with_transform(Transform::default().with_position(map_offset + (450., -30.))),
         );
         let start_time = std::time::Instant::now();
         let mut time_visual = root.add(
-            Content::from(Text::new(format!("{:?}", start_time.elapsed()).as_str()).with_size(30.))
-                .with_transform(Transform::default().with_position((50., 20.))),
+            Content::from(Text::new(format!("{:?}", start_time.elapsed()).as_str()).with_size(0.6 * map_scale))
+                .with_transform(Transform::default().with_position(map_offset + (0., -30.))),
         );
         let mut particle_count_visual = root.add(
             Content::from(
-                Text::new(format!("{}p", robot.mcl.belief.len()).as_str()).with_size(30.),
+                Text::new(format!("{}p", robot.mcl.belief.len()).as_str()).with_size(0.6 * map_scale),
             )
-            .with_transform(Transform::default().with_position((50., 570.))),
+            .with_transform(Transform::default().with_position(map_offset + (0., 520.))),
         );
         // Make particle visuals
         let mut particle_visuals = {
@@ -133,7 +135,7 @@ fn main() {
                 let mut particle_visual = root.add(path.clone());
                 particle_visual.apply_transform(
                     Transform::default()
-                        .with_position(particle.position * 50. + 50.)
+                        .with_position(particle.position * map_scale + map_offset)
                         .with_rotation(-particle.angle)
                         .with_scale(0.5),
                 );
@@ -150,7 +152,7 @@ fn main() {
             let estimation = robot.mcl.get_prediction();
             visual.apply_transform(
                 Transform::default()
-                    .with_position(estimation.position * 50. + 50.)
+                    .with_position(estimation.position * map_scale + map_offset)
                     .with_rotation(-estimation.angle),
             );
             visual
@@ -163,23 +165,11 @@ fn main() {
             let pose = robot.motion_sensor.robot_pose;
             visual.apply_transform(
                 Transform::default()
-                    .with_position(pose.position * 50. + 50.)
+                    .with_position(pose.position * map_scale + map_offset)
                     .with_rotation(-pose.angle),
             );
             visual
         };
-        root.add(
-            Content::from(
-                Text::new("Global Robot Localization").with_size(40.),
-            )
-            .with_transform(Transform::default().with_position((700., 105.))),
-        );
-        root.add(
-            Content::from(
-                Text::new("Leo Conrad-Shah").with_size(30.),
-            )
-            .with_transform(Transform::default().with_position((800., 175.))),
-        );
         let mut root = root.clone();
         // let keyboard = context.keyboard().clone();
         let mut tick = 0;
@@ -223,7 +213,7 @@ fn main() {
             if robot.mcl.belief.len() < particle_visuals.len() {
                 for i in robot.mcl.belief.len()..particle_visuals.len() {
                     particle_visuals[i]
-                        .set_transform(Transform::default().with_scale(0.1e-100_f64));
+                        .set_transform(Transform::default().with_scale(0.1e-100_f64)); // TODO: yes
                 }
             } else if robot.mcl.belief.len() != particle_visuals.len() {
                 let path: vitruvia::graphics_2d::Content = isoceles_triangle(5., 8.)
@@ -238,7 +228,7 @@ fn main() {
                 let particle = robot.mcl.belief[i];
                 particle_visuals[i].set_transform(
                     Transform::default()
-                        .with_position(particle.position * 50. + 50.)
+                        .with_position(particle.position * map_scale + map_offset)
                         .with_rotation(-particle.angle)
                         .with_scale(0.5),
                 );
@@ -262,12 +252,12 @@ fn main() {
             // Update position visuals
             predicted_pose_visual.set_transform(
                 Transform::default()
-                    .with_position(predicted_pose.position * 50. + 50.)
+                    .with_position(predicted_pose.position * map_scale + map_offset)
                     .with_rotation(-predicted_pose.angle),
             );
             real_pose_visual.set_transform(
                 Transform::default()
-                    .with_position(real_pose.position * 50. + 50.)
+                    .with_position(real_pose.position * map_scale + map_offset)
                     .with_rotation(-real_pose.angle),
             );
             tick += 1;

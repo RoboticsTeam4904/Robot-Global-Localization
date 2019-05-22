@@ -24,10 +24,7 @@ impl PoseBelief {
         belief
     }
 
-    fn from_distributions<T, U>(
-        max_particle_count: usize,
-        pose_distr: (T, (T, T)),
-    ) -> Vec<Pose>
+    fn from_distributions<T, U>(max_particle_count: usize, pose_distr: (T, (T, T))) -> Vec<Pose>
     where
         T: Distribution<U>,
         U: Into<f64>,
@@ -97,8 +94,7 @@ impl DistanceFinderMCL {
         T: Distribution<U>,
         U: Into<f64>,
     {
-        let belief =
-            PoseBelief::from_distributions(max_particle_count, pose_distr);
+        let belief = PoseBelief::from_distributions(max_particle_count, pose_distr);
         Self {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 50., // TODO: fixed parameter
@@ -228,8 +224,7 @@ impl ObjectDetectorMCL {
         T: Distribution<U>,
         U: Into<f64>,
     {
-        let belief =
-            PoseBelief::from_distributions(max_particle_count, pose_distr);
+        let belief = PoseBelief::from_distributions(max_particle_count, pose_distr);
         Self {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 50., // TODO: fixed parameter
@@ -265,26 +260,29 @@ impl ObjectDetectorMCL {
         for sample in &self.belief {
             let mut sum_error = 0.;
             let pred_observation = {
-                let mut pred_observation = self
-                    .map
-                    .cull_points(*sample + z.relative_pose(), fov);
+                let mut pred_observation = self.map.cull_points(*sample + z.relative_pose(), fov);
                 pred_observation.sort_by(|a, b| a.mag().partial_cmp(&b.mag()).unwrap());
                 pred_observation
             };
-            // TODO: fixed parameter 
+            // TODO: fixed parameter
             // This method of calculating error is not entirely sound
             let mut total = 0;
             for (real, pred) in observation.iter().zip(pred_observation.iter()) {
                 sum_error += (*real - *pred).mag();
                 total += 1;
             }
-            sum_error += 5. * (observation.len() as f64 - pred_observation.len()  as f64).abs();  // TODO: fixed parameter
+            // TODO: fixed parameter
+            // TODO: panics at Uniform::new called with `low >= high` when erorr is divided by total
+            sum_error += 5. * (observation.len() as f64 - pred_observation.len() as f64).abs();
             errors.push(sum_error);
         }
 
         let mut new_particles = Vec::new();
         #[allow(clippy::float_cmp)]
-        let weights: Vec<f64> = if errors.iter().all(|error| error == &0. || error == &std::f64::NAN) {
+        let weights: Vec<f64> = if errors
+            .iter()
+            .all(|error| error == &0. || error == &std::f64::NAN)
+        {
             errors
                 .iter()
                 .map(|_| self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
