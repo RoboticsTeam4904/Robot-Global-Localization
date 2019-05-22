@@ -5,7 +5,6 @@ mod utility;
 use robot::ai::localization::{DistanceFinderMCL, ObjectDetectorMCL};
 use robot::map::{Map2D, Object2D};
 use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor, DummyObjectSensor};
-use robot::sensors::Sensor;
 use std::f64::consts::{FRAC_PI_8, PI};
 use std::sync::Arc;
 use utility::{isoceles_triangle, Point, Pose};
@@ -66,17 +65,15 @@ fn main() {
                         Point { x: 3., y: 8. },
                         Point { x: 2., y: 7. },
                     )),
-                    Object2D::Line((Point { x: 5., y: 5. }, Point { x: 5., y: 10. })),
+                    // Object2D::Line((Point { x: 5., y: 5. }, Point { x: 5., y: 10. })),
                     Object2D::Point(Point { x: 2., y: 1. }),
                     Object2D::Point(Point { x: 5., y: 5. }),
                     Object2D::Point(Point { x: 1., y: 1. }),
                     Object2D::Point(Point { x: 1., y: 4. }),
-                    Object2D::Point(Point { x: 8., y: 5. }),
                     Object2D::Point(Point { x: 3., y: 9. }),
                     Object2D::Point(Point { x: 2., y: 5. }),
                     Object2D::Point(Point { x: 8., y: 2. }),
                     Object2D::Point(Point { x: 7., y: 9. }),
-                    Object2D::Point(Point { x: 5., y: 7.5 }),
                 ],
             ));
             let starting_robot_pose = Pose {
@@ -84,12 +81,12 @@ fn main() {
                 position: Point { x: 8., y: 8. },
             };
             let object_sensor =
-                DummyObjectSensor::new(PI, map.clone(), Pose::default(), starting_robot_pose);
+                DummyObjectSensor::new(PI, map.clone(), Pose::default(), starting_robot_pose, Point { x: 0.05, y: 0.05 });
             ObjectSensorRobot {
                 mcl: ObjectDetectorMCL::new(
                     20_000,
                     map.clone(),
-                    Box::new(|error| 2f64.powf(-error)),
+                    Box::new(|error| 1.05f64.powf(-error)),
                     Pose {
                         angle: FRAC_PI_8 / 4.,
                         position: Point { x: 0.05, y: 0.05 },
@@ -171,14 +168,28 @@ fn main() {
             );
             visual
         };
+        root.add(
+            Content::from(
+                Text::new("Global Robot Localization").with_size(40.),
+            )
+            .with_transform(Transform::default().with_position((700., 105.))),
+        );
+        root.add(
+            Content::from(
+                Text::new("Leo Conrad-Shah").with_size(30.),
+            )
+            .with_transform(Transform::default().with_position((800., 175.))),
+        );
         let mut root = root.clone();
-        let ctx = context.clone();
+        // let keyboard = context.keyboard().clone();
         let mut tick = 0;
         context.bind(Box::new(move |_| {
             // Get user input to move the robot
             // let mut inp = String::new();
             // std::io::stdin().read_line(&mut inp).unwrap();
-            let movement_cmd = robot.motion_sensor.robot_pose
+            let t = tick as f64 / 10.;
+            let position = Point { x: t.cos(), y: t.sin() };
+            let movement_cmd = Pose { angle: PI + (position.x / -position.y).atan() + if position.y < 0. { PI } else { 0. }, position: position + Point  { x: 5., y: 5. } }
                 // + Pose {
                 //     angle: FRAC_PI_8
                 //         * if inp == "e\n" {

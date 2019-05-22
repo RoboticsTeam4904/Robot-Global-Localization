@@ -7,19 +7,23 @@ use std::sync::Arc;
 
 /// A sensor which senses all objects' relative positions within a certain fov
 pub struct DummyObjectSensor {
-    fov: f64,
     pub map: Arc<Map2D>,
     pub relative_pose: Pose,
     pub robot_pose: Pose,
+    fov: f64,
+    x_noise_distr: Normal,
+    y_noise_distr: Normal,
 }
 
 impl DummyObjectSensor {
-    pub fn new(fov: f64, map: Arc<Map2D>, relative_pose: Pose, robot_pose: Pose) -> Self {
+    pub fn new(fov: f64, map: Arc<Map2D>, relative_pose: Pose, robot_pose: Pose, noise_margins: Point) -> Self {
         Self {
             fov,
             map,
             relative_pose,
             robot_pose,
+            x_noise_distr: Normal::new(0., noise_margins.x / 3.),
+            y_noise_distr: Normal::new(0., noise_margins.y / 3.),
         }
     }
 
@@ -35,7 +39,7 @@ impl Sensor<Vec<Point>> for DummyObjectSensor {
 
     fn sense(&self) -> Vec<Point> {
         let sensor_pose = self.robot_pose + self.relative_pose();
-        self.map.cull_points(sensor_pose, self.fov)
+        self.map.cull_points(sensor_pose, self.fov).iter().map(|o| *o + Point { x: self.x_noise_distr.sample(&mut thread_rng()), y: self.y_noise_distr.sample(&mut thread_rng())}).collect()
     }
 }
 
