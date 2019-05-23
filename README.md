@@ -18,11 +18,11 @@ The general algorithm is as follows:
 
 
 ### Kalman Filter
-Kalman filters offer a unique opportunity to integrate sensor data, odometry data, and uncertainty into a state prediction. It represents the prediction as a "Gaussian blob", where there is a normal distribution, with a mean and variance, for every element of the state vector. One of the drawbacks of the normal algorithm is that it only functions accurately in linear systems: there are some variants of the Kalman filter which improve on some of its limitations:
+Kalman filters offer a unique opportunity to integrate sensor data, odometry data, and uncertainty into a state prediction. It represents the prediction as a "Gaussian blob", which creates a multi-dimensional normal distribution by combining the variances in to a "covariance matrix". This covariance matrix allows the algorithm to incorporate the potential relationship between elements of the state. One of the drawbacks of the normal algorithm is that it only functions accurately in linear systems: there are some variants of the Kalman filter which improve on some of its limitations:
 1. Extended Kalman Filters
 2. Unscented Kalman Filters
 3. Multi Modal Kalman Filters
 
 In every time step, the algorithm has two main steps:
-1. Prediction Update: In this update, the algorithm moves forward one time step—it first updates the state vector ignoring outside influence, and then uses a control vector (which might contain odometry data) to update the position further.
+1. Prediction Update: In this update, the algorithm moves forward one time step—it first updates the state vector ignoring outside influence, and then uses a control vector (which might contain odometry data) to update the state further.
 2. Measurement Update: After moving forward one time step, the algorithm now incorporates sensor data into its calculations, and finally returns the resulting predicted Gaussian blob.
