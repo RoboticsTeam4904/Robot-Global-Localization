@@ -80,8 +80,13 @@ fn main() {
                 angle: PI,
                 position: Point { x: 8., y: 8. },
             };
-            let object_sensor =
-                DummyObjectSensor::new(PI, map.clone(), Pose::default(), starting_robot_pose, Point { x: 0.05, y: 0.05 });
+            let object_sensor = DummyObjectSensor::new(
+                PI,
+                map.clone(),
+                Pose::default(),
+                starting_robot_pose,
+                Point { x: 0.05, y: 0.05 },
+            );
             ObjectSensorRobot {
                 mcl: ObjectDetectorMCL::new(
                     20_000,
@@ -115,12 +120,16 @@ fn main() {
         );
         let start_time = std::time::Instant::now();
         let mut time_visual = root.add(
-            Content::from(Text::new(format!("{:?}", start_time.elapsed()).as_str()).with_size(0.6 * map_scale))
-                .with_transform(Transform::default().with_position(map_offset + (0., -30.))),
+            Content::from(
+                Text::new(format!("{:?}", start_time.elapsed()).as_str())
+                    .with_size(0.6 * map_scale),
+            )
+            .with_transform(Transform::default().with_position(map_offset + (0., -30.))),
         );
         let mut particle_count_visual = root.add(
             Content::from(
-                Text::new(format!("{}p", robot.mcl.belief.len()).as_str()).with_size(0.6 * map_scale),
+                Text::new(format!("{}p", robot.mcl.belief.len()).as_str())
+                    .with_size(0.6 * map_scale),
             )
             .with_transform(Transform::default().with_position(map_offset + (0., 520.))),
         );
@@ -171,37 +180,33 @@ fn main() {
             visual
         };
         let mut root = root.clone();
-        // let keyboard = context.keyboard().clone();
+        let mut keyboard = context.keyboard().state().clone();
         let mut tick = 0;
         context.bind(Box::new(move |_| {
             // Get user input to move the robot
             // let mut inp = String::new();
             // std::io::stdin().read_line(&mut inp).unwrap();
-            let t = tick as f64 / 10.;
-            let position = Point { x: t.cos(), y: t.sin() };
-            let movement_cmd = Pose { angle: PI + (position.x / -position.y).atan() + if position.y < 0. { PI } else { 0. }, position: position + Point  { x: 5., y: 5. } }
-                // + Pose {
-                //     angle: FRAC_PI_8
-                //         * if inp == "e\n" {
-                //             1.
-                //         } else if inp == "q\n" {
-                //             -1.
-                //         } else {
-                //             0.
-                //         },
-                //     position: if inp == "w\n" {
-                //         Point { x: 0., y: -0.5 }
-                //     } else if inp == "s\n" {
-                //         Point { x: 0., y: 0.5 }
-                //     } else if inp == "a\n" {
-                //         Point { x: -0.5, y: 0. }
-                //     } else if inp == "d\n" {
-                //         Point { x: 0.5, y: 0. }
-                //     } else {
-                //         Point::default()
-                //     },
-                // }
-                ;
+            let movement_cmd = robot.motion_sensor.robot_pose
+                + Pose {
+                    angle: FRAC_PI_8
+                        * if keyboard.poll(Key::Arrow(Arrow::Left)) {
+                            -1.
+                        } else if keyboard.poll(Key::Arrow(Arrow::Right)) {
+                            1.
+                        } else {
+                            0.
+                        },
+                    position: Point {
+                        x: robot.motion_sensor.robot_pose.angle.cos(),
+                        y: robot.motion_sensor.robot_pose.angle.sin(),
+                    } * if keyboard.poll(Key::Arrow(Arrow::Up)) {
+                        0.5
+                    } else if keyboard.poll(Key::Arrow(Arrow::Down)) {
+                        -0.5
+                    } else {
+                        0.
+                    },
+                };
             // Move the robot and tick the mcl algorithm
             robot.motion_sensor.update_pose(movement_cmd);
             robot.object_sensor.update_pose(movement_cmd);
