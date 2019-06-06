@@ -167,6 +167,17 @@ impl std::ops::Mul<f64> for Point {
     }
 }
 
+impl std::ops::Div<f64> for Point {
+    type Output = Point;
+
+    fn div(self, other: f64) -> Point {
+        Point {
+            x: self.x / other,
+            y: self.y / other,
+        }
+    }
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Pose {
     pub angle: f64,

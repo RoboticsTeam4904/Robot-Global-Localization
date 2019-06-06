@@ -57,31 +57,34 @@ fn main() {
                 10.,
                 10.,
                 vec![
-                    Object2D::Rectangle((Point::default(), Point { x: 10., y: 10. })),
-                    Object2D::Rectangle((Point { x: 10., y: 10. }, Point { x: 9., y: 7. })),
-                    Object2D::Rectangle((Point { x: 2.5, y: 2.5 }, Point { x: 7.5, y: 3. })),
-                    Object2D::Triangle((
-                        Point { x: 1., y: 8. },
-                        Point { x: 3., y: 8. },
-                        Point { x: 2., y: 7. },
-                    )),
-                    // Object2D::Line((Point { x: 5., y: 5. }, Point { x: 5., y: 10. })),
-                    Object2D::Point(Point { x: 2., y: 1. }),
-                    Object2D::Point(Point { x: 5., y: 5. }),
-                    Object2D::Point(Point { x: 1., y: 1. }),
-                    Object2D::Point(Point { x: 1., y: 4. }),
-                    Object2D::Point(Point { x: 3., y: 9. }),
-                    Object2D::Point(Point { x: 2., y: 5. }),
-                    Object2D::Point(Point { x: 8., y: 2. }),
-                    Object2D::Point(Point { x: 7., y: 9. }),
-                ],
+                    Object2D::Point((213.57, 17.93).into()),
+                    Object2D::Point((228.28, 27.44).into()),
+                    Object2D::Point((242.99, 17.93).into()),
+                    Object2D::Point((259.8, 133.13).into()),
+                    Object2D::Point((259.8, 133.13).into()),
+                    Object2D::Point((281.55, 133.13).into()),
+                    Object2D::Point((-303.3, 133.13).into()),
+                    Object2D::Point((220.25, 151.13).into()),
+                    Object2D::Point((0., 25.72).into()),
+                    Object2D::Line(((220.25, 133.13).into(), (323.81, 133.13).into())),
+                    Object2D::Line(((220.25, 133.13).into(), (220.25, 188.13).into())),
+                    Object2D::Line(((218.56, 27.44).into(), (238., 27.44).into())),
+                    Object2D::Line(((218.56, 27.44).into(), (207.75, 7.82).into())),
+                    Object2D::Line(((207.75, 7.82).into(), (248.7, 7.82).into())),
+                    Object2D::Line(((248.7, 7.82).into(), (238., 27.44).into())),
+                ].iter().map(|o| match o { // temp
+                    Object2D::Point(p) => Object2D::Point(*p / 50.),
+                    Object2D::Line((p1, p2)) => Object2D::Line((*p1 / 50., *p2 / 50.)),
+                    Object2D::Rectangle(r) => Object2D::Rectangle(*r),
+                    Object2D::Triangle(t) => Object2D::Triangle(*t),
+                }),
             ));
             let starting_robot_pose = Pose {
                 angle: PI,
                 position: Point { x: 8., y: 8. },
             };
             let object_sensor = DummyObjectSensor::new(
-                PI,
+                2. * PI,
                 map.clone(),
                 Pose::default(),
                 starting_robot_pose,
@@ -102,7 +105,7 @@ fn main() {
                     starting_robot_pose,
                     Pose {
                         angle: FRAC_PI_8 / 4.,
-                        position: Point { x: 0.01, y: 0.01 },
+                        position: Point { x: 0.03, y: 0.03 },
                     },
                 ),
             }
@@ -190,9 +193,9 @@ fn main() {
                 + Pose {
                     angle: FRAC_PI_8
                         * if keyboard.poll(Key::Arrow(Arrow::Left)) {
-                            -1.
+                            -0.5
                         } else if keyboard.poll(Key::Arrow(Arrow::Right)) {
-                            1.
+                            0.5
                         } else {
                             0.
                         },
@@ -200,9 +203,9 @@ fn main() {
                         x: robot.motion_sensor.robot_pose.angle.cos(),
                         y: robot.motion_sensor.robot_pose.angle.sin(),
                     } * if keyboard.poll(Key::Arrow(Arrow::Up)) {
-                        0.5
+                        0.25
                     } else if keyboard.poll(Key::Arrow(Arrow::Down)) {
-                        -0.5
+                        -0.25
                     } else {
                         0.
                     },

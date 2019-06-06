@@ -16,7 +16,13 @@ pub struct DummyObjectSensor {
 }
 
 impl DummyObjectSensor {
-    pub fn new(fov: f64, map: Arc<Map2D>, relative_pose: Pose, robot_pose: Pose, noise_margins: Point) -> Self {
+    pub fn new(
+        fov: f64,
+        map: Arc<Map2D>,
+        relative_pose: Pose,
+        robot_pose: Pose,
+        noise_margins: Point,
+    ) -> Self {
         Self {
             fov,
             map,
@@ -39,7 +45,16 @@ impl Sensor<Vec<Point>> for DummyObjectSensor {
 
     fn sense(&self) -> Vec<Point> {
         let sensor_pose = self.robot_pose + self.relative_pose();
-        self.map.cull_points(sensor_pose, self.fov).iter().map(|o| *o + Point { x: self.x_noise_distr.sample(&mut thread_rng()), y: self.y_noise_distr.sample(&mut thread_rng())}).collect()
+        self.map
+            .cull_points(sensor_pose, self.fov)
+            .iter()
+            .map(|o| {
+                *o + Point {
+                    x: self.x_noise_distr.sample(&mut thread_rng()),
+                    y: self.y_noise_distr.sample(&mut thread_rng()),
+                }
+            })
+            .collect()
     }
 }
 
