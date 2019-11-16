@@ -4,7 +4,7 @@ mod utility;
 
 use robot::ai::localization::{DistanceFinderMCL, ObjectDetectorMCL};
 use robot::map::{Map2D, Object2D};
-use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor, DummyObjectSensor};
+use robot::sensors::dummy::{DummyDistanceSensor, DummyPositionSensor, DummyObjectSensor};
 use std::f64::consts::{FRAC_PI_8, PI};
 use std::sync::Arc;
 use utility::{isoceles_triangle, Point, Pose};
@@ -19,7 +19,7 @@ use vitruvia::{
 
 struct DistanceSensorRobot {
     mcl: DistanceFinderMCL,
-    motion_sensor: DummyMotionSensor,
+    motion_sensor: DummyPositionSensor,
     distance_sensors: Vec<DummyDistanceSensor>,
 }
 
@@ -32,7 +32,7 @@ impl DistanceSensorRobot {
 
 struct ObjectSensorRobot {
     mcl: ObjectDetectorMCL,
-    motion_sensor: DummyMotionSensor,
+    motion_sensor: DummyPositionSensor,
     object_sensor: DummyObjectSensor,
 }
 
@@ -101,7 +101,7 @@ fn main() {
                     },
                 ),
                 object_sensor,
-                motion_sensor: DummyMotionSensor::new(
+                motion_sensor: DummyPositionSensor::new(
                     starting_robot_pose,
                     Pose {
                         angle: FRAC_PI_8 / 4.,

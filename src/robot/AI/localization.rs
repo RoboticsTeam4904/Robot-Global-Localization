@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 // TODO: c o d e d u p l i c a t i o n
 
-struct PoseBelief {}
+struct PoseBelief;
 
 impl PoseBelief {
     fn new(max_particle_count: usize, max_position: Point) -> Vec<Pose> {

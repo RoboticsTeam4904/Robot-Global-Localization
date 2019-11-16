@@ -4,6 +4,7 @@ use crate::utility::{Point, Pose};
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 use std::sync::Arc;
+use std::time::Instant;
 
 /// A sensor which senses all objects' relative positions within a certain fov
 pub struct DummyObjectSensor {
@@ -118,7 +119,7 @@ impl Sensor<Option<f64>> for DummyDistanceSensor {
 
 impl LimitedSensor<f64, Option<f64>> for DummyDistanceSensor {}
 
-pub struct DummyMotionSensor {
+pub struct DummyPositionSensor {
     angle_noise_distr: Normal,
     x_noise_distr: Normal,
     y_noise_distr: Normal,
@@ -126,7 +127,7 @@ pub struct DummyMotionSensor {
     pub robot_pose: Pose,
 }
 
-impl DummyMotionSensor {
+impl DummyPositionSensor {
     /// Noise is Guassian and `noise_margins` are each equal to three standard deviations of the noise distributions
     pub fn new(robot_pose: Pose, noise_margins: Pose) -> Self {
         Self {
@@ -144,7 +145,7 @@ impl DummyMotionSensor {
     }
 }
 
-impl Sensor<Pose> for DummyMotionSensor {
+impl Sensor<Pose> for DummyPositionSensor {
     fn sense(&self) -> Pose {
         let mut rng = thread_rng();
         self.robot_pose - self.prev_robot_pose
@@ -154,6 +155,34 @@ impl Sensor<Pose> for DummyMotionSensor {
                     x: self.x_noise_distr.sample(&mut rng),
                     y: self.y_noise_distr.sample(&mut rng),
                 },
+            }
+    }
+}
+
+pub struct DummyMotionSensor {
+    left_noise_distr: Normal,
+    right_noise_distr: Normal,
+    prev_robot_vel: Point,
+    prev_measurement_timestep: Instant,
+    pub robot_vel: Point,
+}
+
+impl Sensor<Point> for DummyMotionSensor {
+    fn update(&mut self) {
+        self.prev_measurement_timestep = Instant::now();
+    }
+
+    fn sense(&self) -> Point {
+        let mut rng = thread_rng();
+        (self.robot_vel - self.prev_robot_vel)
+            / self
+                .prev_measurement_timestep
+                .duration_since(Instant::now())
+                .as_millis() as f64
+            / 1000.
+            + Point {
+                x: self.left_noise_distr.sample(&mut rng),
+                y: self.left_noise_distr.sample(&mut rng),
             }
     }
 }

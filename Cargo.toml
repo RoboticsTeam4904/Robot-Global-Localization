@@ -1,13 +1,12 @@
 [package]
-name = "name-this-later"
+name = "global-robot-localization"
 version = "0.1.0"
 authors = ["Codadillo <leoconr@nuevaschool.org>"]
 edition = "2018"
 
 [dependencies]
 rand = "0.6.5"
-bitvec = "0.10.0"
 
 [dependencies.vitruvia]
-git = "https://gitlab.com/__ex_nihilo/__vitruvia.git"
+git = "https://gitlab.com/vessels/vessels.git"
 branch = "native2d-mvp"
