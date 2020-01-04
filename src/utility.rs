@@ -1,7 +1,6 @@
 use rand::prelude::*;
+use std::f64::consts::{FRAC_PI_2, PI};
 use std::ops::Range;
-use std::f64::consts::{PI, FRAC_PI_2};
-use vitruvia::graphics_2d::{Transform, Vector};
 
 /// Generic 2d point
 #[derive(Default, Debug, PartialEq, Clone, Copy)]
@@ -65,15 +64,6 @@ impl Point {
     }
 }
 
-impl Into<Vector> for Point {
-    fn into(self) -> Vector {
-        Vector {
-            x: self.x,
-            y: self.y,
-        }
-    }
-}
-
 impl Into<Point> for (f64, f64) {
     fn into(self) -> Point {
         Point {
@@ -130,7 +120,7 @@ impl std::ops::Div for Point {
 impl std::ops::Add<(f64, f64)> for Point {
     type Output = Point;
 
-    fn add(self, other: (f64, f64)) -> Point  {
+    fn add(self, other: (f64, f64)) -> Point {
         let other: Point = other.into();
         self + other
     }
@@ -139,7 +129,7 @@ impl std::ops::Add<(f64, f64)> for Point {
 impl std::ops::Sub<(f64, f64)> for Point {
     type Output = Point;
 
-    fn sub(self, other: (f64, f64)) -> Point  {
+    fn sub(self, other: (f64, f64)) -> Point {
         let other: Point = other.into();
         self - other
     }
@@ -235,17 +225,6 @@ impl Pose {
     }
 }
 
-impl Into<Transform> for Pose {
-    fn into(self) -> Transform {
-        Transform {
-            position: self.position.into(),
-            scale: Vector::default(),
-            // This is negative because with vitruvia the y-axis is "mirrored" from a cartesion coordinate system.
-            rotation: -self.angle,
-        }
-    }
-}
-
 impl std::ops::Add for Pose {
     type Output = Pose;
 
@@ -308,18 +287,6 @@ where
         }
     }
     num
-}
-
-/// Creates an isoceles triangle
-pub fn isoceles_triangle(base: f64, height: f64) -> vitruvia::path::StyleHelper {
-    vitruvia::path::Builder::new()
-        .move_to(Vector::default())
-        .line_to(Vector { x: 0., y: base })
-        .line_to(Vector {
-            x: height,
-            y: base / 2.,
-        })
-        .done()
 }
 
 // pub fn clamp_to_range<T, U>(num: T, range: U) -> T

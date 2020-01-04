@@ -1,7 +1,5 @@
 use crate::utility::{Point, Pose};
 use std::f64::consts::{FRAC_PI_2, PI};
-use vitruvia::graphics_2d::{Color, Content, Transform};
-use vitruvia::path::{Primitive, Segment};
 
 // TODO: this file is lazy
 
@@ -189,8 +187,7 @@ impl Map2D {
         for point in &self.points {
             let point = self.get_vertex(*point);
             // TODO: tune? fuzzy comparison for slope comparison
-            if (start.position.angle(point) - start.angle).abs() < 0.01
-            {
+            if (start.position.angle(point) - start.angle).abs() < 0.01 {
                 let dist = point.dist(start.position);
                 if closest_intersection == None || closest_intersection_dist > dist {
                     closest_intersection = Some(point);
@@ -218,29 +215,5 @@ impl Map2D {
             }
         }
         sensed_objects
-    }
-
-    pub fn make_visual(&self, scale: f64) -> Vec<Content> {
-        let mut segments = Vec::new();
-        for line in &self.lines {
-            let v1 = self.get_vertex(line.0);
-            let v2 = self.get_vertex(line.1);
-            segments.push(Segment::MoveTo((v1 * scale).into()));
-            segments.push(Segment::LineTo((v2 * scale).into()));
-        }
-        let mut visuals = vec![vitruvia::path::StyleHelper::new(segments)
-            .stroke(vitruvia::path::Stroke::default())
-            .finalize()
-            .into()];
-        for point in &self.points {
-            visuals.push(
-                Primitive::circle(scale / 10.)
-                    .fill(Color::rgb(0, 255, 0).into())
-                    .finalize()
-                    .with_origin(self.get_vertex(*point) * -scale)
-                    .into(),
-            );
-        }
-        visuals
     }
 }
