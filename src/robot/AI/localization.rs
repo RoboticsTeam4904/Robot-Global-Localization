@@ -53,8 +53,10 @@ impl PoseBelief {
 /// Uses Unscented Kalman Filter to approximate robot pose
 pub struct DistanceKalmanFilter {
     pub map: Arc<Map2D>,
-    pub sigma_matrix: Matrix<f64, U11, U5, ArrayStorage<f64, U11, U5>>,
     pub covariance_matrix: Matrix5<f64>,
+    known_state: RowVector5<f64>,
+    sigma_matrix: Matrix11x5,
+    sensor_sigma_matrix: Matrix11x5,
     beta: f64,
     alpha: f64,
     kappa: f64,
@@ -71,13 +73,14 @@ impl DistanceKalmanFilter {
     ) -> Self {
         Self {
             map,
+            known_state: init_state,
             sigma_matrix: DistanceKalmanFilter::gen_sigma_matrix(
                 &covariance_matrix,
                 alpha,
-                beta,
                 kappa,
                 init_state,
             ),
+            sensor_sigma_matrix: Matrix11x5::from_element(0.),
             covariance_matrix,
             beta,
             alpha,
@@ -88,29 +91,92 @@ impl DistanceKalmanFilter {
     fn gen_sigma_matrix(
         cov_matrix: &Matrix5<f64>,
         alpha: f64,
-        beta: f64,
         kappa: f64,
         init_state: RowVector5<f64>,
     ) -> Matrix11x5 {
         let mut rows: Vec<RowVector5<f64>> = Vec::new();
         rows.push(init_state);
         let lambda = (alpha.powi(2)) * (5. + kappa) - 5.;
-        let eigendecomp = (cov_matrix * (5. + lambda)).symmetric_eigen();
+        let eigendecomp =
+            (cov_matrix.map(|e| (e * 100000.).round() / 100000.) * (5. + lambda)).symmetric_eigen();
         let mut diagonalization = eigendecomp.eigenvalues;
         diagonalization.data.iter_mut().for_each(|e| {
-            e.sqrt();
+            *e = e.max(0.).sqrt();
         });
-        let square_root_cov = eigendecomp.eigenvectors.try_inverse().unwrap()
+        let square_root_cov = eigendecomp.eigenvectors
             * Matrix5::from_diagonal(&diagonalization)
-            * eigendecomp.eigenvectors;
-        for i in 1..6 {
+            * eigendecomp.eigenvectors.try_inverse().unwrap();
+        for i in 1..(5 + 1) {
             rows.push(init_state + square_root_cov.row(i));
         }
-        for i in 1..6 {
+        for i in 1..(5 + 1) {
             rows.push(init_state - square_root_cov.row(i));
         }
 
         Matrix11x5::from_rows(rows.as_slice())
+    }
+    /// running the function f, which takes the control update and alters the sigma point matrix
+    fn control_fn(&mut self, control_update: Point) {}
+
+    fn prediction_update(&mut self, q: Matrix5<f64>) {
+        let lambda = (self.alpha.powi(2)) * (5. + self.kappa) - 5.;
+        self.known_state = RowVector5::from_element(0.);
+        for i in 0..(2 * 5 + 1) {
+            self.known_state += self.sigma_matrix.row(i) * lambda / (5. + lambda)
+                * if i != 0 { 1. / 2. } else { lambda };
+        }
+        let temp_sigma_matrix =
+            self.sigma_matrix - Matrix11x5::from_rows(&vec![self.known_state; 11]);
+        self.covariance_matrix = Matrix5::from_element(0.);
+        for i in 0..(2 * 5 + 1) {
+            self.covariance_matrix += temp_sigma_matrix.row(i).transpose()
+                * temp_sigma_matrix.row(i)
+                * if i == 0 {
+                    lambda / (5. + lambda) + (1. - self.alpha.powi(2) + self.beta)
+                } else {
+                    1. / (2. * (5. + lambda))
+                };
+        }
+        self.covariance_matrix += q;
+    }
+    fn measurement_fn(&mut self) {}
+
+    fn measurement_update(&mut self, sensor_update: RowVector5<f64>, r: Matrix5<f64>) {
+        let lambda = (self.alpha.powi(2)) * (5. + self.kappa) - 5.;
+        let mut sensor_predicted = RowVector5::from_element(0.);
+        for i in 0..(2 * 5 + 1) {
+            sensor_predicted += self.sigma_matrix.row(i) * lambda / (5. + lambda)
+                * if i != 0 { 1. / 2. } else { lambda };
+        }
+        let mut cov_zz = Matrix5::from_element(0.);
+        let temp_sensor_sigma_matrix =
+            self.sensor_sigma_matrix - Matrix11x5::from_rows(&vec![sensor_update; 11]);
+        for i in 0..(2 * 5 + 1) {
+            cov_zz += temp_sensor_sigma_matrix.row(i).transpose()
+                * temp_sensor_sigma_matrix.row(i)
+                * if i == 0 {
+                    lambda / (5. + lambda) + (1. - self.alpha.powi(2) + self.beta)
+                } else {
+                    1. / (2. * (5. + lambda))
+                };
+        }
+        cov_zz += r;
+
+        let mut cov_xz = Matrix5::from_element(0.);
+        let temp_sigma_matrix =
+            self.sigma_matrix - Matrix11x5::from_rows(&vec![self.known_state; 11]);
+        for i in 0..(2 * 5 + 1) {
+            cov_xz += temp_sigma_matrix.row(i).transpose()
+                * temp_sigma_matrix.row(i)
+                * if i == 0 {
+                    lambda / (5. + lambda) + (1. - self.alpha.powi(2) + self.beta)
+                } else {
+                    1. / (2. * (5. + lambda))
+                };
+        }
+        let k = cov_xz * cov_zz.try_inverse().unwrap();
+        self.known_state += (k * (sensor_update - sensor_predicted).transpose()).transpose();
+        self.covariance_matrix -= k * cov_zz * k.transpose();
     }
 }
 
