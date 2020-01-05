@@ -1,3 +1,4 @@
+use nalgebra::Vector5;
 use rand::prelude::*;
 use std::f64::consts::{FRAC_PI_2, PI};
 use std::ops::Range;
@@ -164,6 +165,160 @@ impl std::ops::Div<f64> for Point {
         Point {
             x: self.x / other,
             y: self.y / other,
+        }
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct NewPose {
+    pub angle: f64,
+    pub position: Point,
+    pub velocity: Point,
+}
+
+impl NewPose {
+    /// Creates a random pose from uniform distribitions for each range
+    pub fn random(
+        angle_range: Range<f64>,
+        x_range: Range<f64>,
+        y_range: Range<f64>,
+        x_vel_range: Range<f64>,
+        y_vel_range: Range<f64>,
+    ) -> NewPose {
+        let mut rng = thread_rng();
+        NewPose {
+            angle: rng.gen_range(angle_range.start, angle_range.end),
+            position: Point {
+                x: rng.gen_range(x_range.start, x_range.end),
+                y: rng.gen_range(y_range.start, y_range.end),
+            },
+            velocity: Point {
+                x: rng.gen_range(x_vel_range.start, x_vel_range.end),
+                y: rng.gen_range(y_vel_range.start, y_vel_range.end),
+            },
+        }
+    }
+
+    pub fn random_from_range(range: NewPose) -> NewPose {
+        NewPose::random(
+            -range.angle..range.angle,
+            -range.position.x..range.position.x,
+            -range.position.y..range.position.y,
+            -range.velocity.x..range.velocity.x,
+            -range.velocity.y..range.velocity.y,
+        )
+    }
+
+    /// Mod `angle` by 2π
+    pub fn normalize(mut self) -> NewPose {
+        self.angle %= 2. * PI;
+        self
+    }
+
+    pub fn clamp(self, lower: NewPose, upper: NewPose) -> NewPose {
+        NewPose {
+            angle: if self.angle > upper.angle {
+                upper.angle
+            } else if self.angle < lower.angle {
+                lower.angle
+            } else {
+                self.angle
+            },
+            position: self.position.clamp(lower.position, upper.position),
+            velocity: self.velocity.clamp(lower.velocity, upper.velocity),
+        }
+    }
+
+    pub fn with_angle(mut self, angle: f64) -> NewPose {
+        self.angle = angle;
+        self
+    }
+
+    pub fn with_position(mut self, position: Point) -> NewPose {
+        self.position = position;
+        self
+    }
+
+    pub fn with_velocity(mut self, velocity: Point) -> NewPose {
+        self.velocity = velocity;
+        self
+    }
+}
+
+impl From<Vector5<f64>> for NewPose {
+    fn from(vector: Vector5<f64>) -> NewPose {
+        NewPose {
+            angle: *vector.index(0),
+            position: Point {
+                x: *vector.index(1),
+                y: *vector.index(2),
+            },
+            velocity: Point {
+                x: *vector.index(3),
+                y: *vector.index(4),
+            },
+        }
+    }
+}
+
+impl Into<Vector5<f64>> for NewPose {
+    fn into(self) -> Vector5<f64> {
+        Vector5::new(
+            self.angle,
+            self.position.x,
+            self.position.y,
+            self.velocity.x,
+            self.velocity.y,
+        )
+    }
+}
+
+impl std::ops::Add for NewPose {
+    type Output = NewPose;
+
+    /// Does normalize angle
+    fn add(self, other: NewPose) -> NewPose {
+        NewPose {
+            angle: (self.angle + other.angle) % (2. * PI),
+            position: self.position + other.position,
+            velocity: self.velocity + other.velocity,
+        }
+    }
+}
+
+impl std::ops::Sub for NewPose {
+    type Output = NewPose;
+
+    /// Does normalize angle
+    fn sub(self, other: NewPose) -> NewPose {
+        NewPose {
+            angle: (self.angle - other.angle) % (2. * PI),
+            position: self.position - other.position,
+            velocity: self.velocity - other.velocity,
+        }
+    }
+}
+
+impl std::ops::Div<f64> for NewPose {
+    type Output = NewPose;
+
+    /// Does normalize angle
+    fn div(self, other: f64) -> NewPose {
+        NewPose {
+            angle: (self.angle / other) % (2. * PI),
+            position: self.position * (1. / other),
+            velocity: self.velocity * (1. / other),
+        }
+    }
+}
+
+impl std::ops::AddAssign for NewPose {
+    /// Does not normalize angle
+    fn add_assign(&mut self, other: NewPose) {
+        *self = NewPose {
+            angle: self.angle + other.angle,
+            position: self.position + other.position,
+            velocity: self.velocity + other.velocity,
         }
     }
 }
