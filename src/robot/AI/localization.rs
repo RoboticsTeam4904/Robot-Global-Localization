@@ -2,13 +2,14 @@ use crate::robot::map::Map2D;
 use crate::robot::sensors::LimitedSensor;
 use crate::robot::sensors::Sensor;
 use crate::utility::{Point, Pose};
+use nalgebra::{ArrayStorage, ComplexField, Matrix, Matrix5, RowVector5, SymmetricEigen, U11, U5};
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
 use std::f64::consts::PI;
 use std::sync::Arc;
 
 // TODO: c o d e d u p l i c a t i o n
-
+type Matrix11x5 = Matrix<f64, U11, U5, ArrayStorage<f64, U11, U5>>;
 struct PoseBelief {}
 
 impl PoseBelief {
@@ -46,6 +47,70 @@ impl PoseBelief {
             });
         }
         belief
+    }
+}
+
+/// Uses Unscented Kalman Filter to approximate robot pose
+pub struct DistanceKalmanFilter {
+    pub map: Arc<Map2D>,
+    pub sigma_matrix: Matrix<f64, U11, U5, ArrayStorage<f64, U11, U5>>,
+    pub covariance_matrix: Matrix5<f64>,
+    beta: f64,
+    alpha: f64,
+    kappa: f64,
+}
+
+impl DistanceKalmanFilter {
+    pub fn new(
+        covariance_matrix: Matrix5<f64>,
+        init_state: RowVector5<f64>, // the components of this vector are x-pos, y-pos, theta, x-acceleration, y-acceleration
+        alpha: f64,
+        kappa: f64,
+        beta: f64,
+        map: Arc<Map2D>,
+    ) -> Self {
+        Self {
+            map,
+            sigma_matrix: DistanceKalmanFilter::gen_sigma_matrix(
+                &covariance_matrix,
+                alpha,
+                beta,
+                kappa,
+                init_state,
+            ),
+            covariance_matrix,
+            beta,
+            alpha,
+            kappa,
+        }
+    }
+
+    fn gen_sigma_matrix(
+        cov_matrix: &Matrix5<f64>,
+        alpha: f64,
+        beta: f64,
+        kappa: f64,
+        init_state: RowVector5<f64>,
+    ) -> Matrix11x5 {
+        let mut rows: Vec<RowVector5<f64>> = Vec::new();
+        rows.push(init_state);
+        let lambda = (alpha.powi(2)) * (5. + kappa) - 5.;
+        let eigendecomp = (cov_matrix * (5. + lambda)).symmetric_eigen();
+        let mut diagonalization = eigendecomp.eigenvalues;
+        diagonalization.data.iter_mut().for_each(|e| {
+            e.sqrt();
+        });
+        let square_root_cov = eigendecomp.eigenvectors.try_inverse().unwrap()
+            * Matrix5::from_diagonal(&diagonalization)
+            * eigendecomp.eigenvectors;
+        for i in 1..6 {
+            rows.push(init_state + square_root_cov.row(i));
+        }
+        for i in 1..6 {
+            rows.push(init_state - square_root_cov.row(i));
+        }
+
+        Matrix11x5::from_rows(rows.as_slice())
     }
 }
 

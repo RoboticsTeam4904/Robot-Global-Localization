@@ -8,6 +8,10 @@ use robot::sensors::dummy::{DummyDistanceSensor, DummyMotionSensor, DummyObjectS
 use std::f64::consts::{FRAC_PI_8, PI};
 use std::sync::Arc;
 
-fn main() {
-    loop {}
+struct DistanceSensorRobot {
+    kf: DistanceFinderMCL,
+    motion_sensor: DummyMotionSensor,
+    distance_sensors: Vec<DummyDistanceSensor>,
 }
+
+fn main() {}
