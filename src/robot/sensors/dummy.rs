@@ -39,12 +39,14 @@ impl DummyObjectSensor {
     }
 }
 
-impl Sensor<Vec<Point>> for DummyObjectSensor {
+impl Sensor for DummyObjectSensor {
+    type Output = Vec<Point>;
+
     fn relative_pose(&self) -> Pose {
         self.relative_pose
     }
 
-    fn sense(&self) -> Vec<Point> {
+    fn sense(&self) -> Self::Output {
         let sensor_pose = self.robot_pose + self.relative_pose();
         self.map
             .cull_points(sensor_pose, self.fov)
@@ -59,7 +61,7 @@ impl Sensor<Vec<Point>> for DummyObjectSensor {
     }
 }
 
-impl LimitedSensor<f64, Vec<Point>> for DummyObjectSensor {
+impl LimitedSensor<f64> for DummyObjectSensor {
     fn range(&self) -> Option<f64> {
         Some(self.fov)
     }
@@ -97,8 +99,10 @@ impl DummyDistanceSensor {
     }
 }
 
-impl Sensor<Option<f64>> for DummyDistanceSensor {
-    fn sense(&self) -> Option<f64> {
+impl Sensor for DummyDistanceSensor {
+    type Output = Option<f64>;
+
+    fn sense(&self) -> Self::Output {
         let sensor_pose = self.relative_pose + self.robot_pose;
         let dist = self.map.raycast(sensor_pose)?.dist(sensor_pose.position);
         if let Some(max_dist) = self.max_dist {
@@ -117,7 +121,7 @@ impl Sensor<Option<f64>> for DummyDistanceSensor {
     }
 }
 
-impl LimitedSensor<f64, Option<f64>> for DummyDistanceSensor {}
+impl LimitedSensor<f64> for DummyDistanceSensor {}
 
 pub struct DummyPositionSensor {
     angle_noise_distr: Normal,
@@ -145,8 +149,10 @@ impl DummyPositionSensor {
     }
 }
 
-impl Sensor<Pose> for DummyPositionSensor {
-    fn sense(&self) -> Pose {
+impl Sensor for DummyPositionSensor {
+    type Output = Pose;
+
+    fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
         self.robot_pose - self.prev_robot_pose
             + Pose {
@@ -167,12 +173,14 @@ pub struct DummyMotionSensor {
     pub robot_vel: Point,
 }
 
-impl Sensor<Point> for DummyMotionSensor {
+impl Sensor for DummyMotionSensor {
+    type Output = Point;
+
     fn update(&mut self) {
         self.prev_measurement_timestep = Instant::now();
     }
 
-    fn sense(&self) -> Point {
+    fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
         (self.robot_vel - self.prev_robot_vel)
             / self

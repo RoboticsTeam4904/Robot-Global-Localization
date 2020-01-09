@@ -54,7 +54,9 @@ impl RplidarSensor {
     }
 }
 
-impl Sensor<Vec<Point>> for RplidarSensor {
+impl Sensor for RplidarSensor {
+    type Output = Vec<Point>;
+
     fn update(&mut self) {
         self.latest_scan = self.device.grab_scan().unwrap(); // TODO: pass error upward
     }
@@ -76,7 +78,7 @@ impl Sensor<Vec<Point>> for RplidarSensor {
     }
 }
 
-impl LimitedSensor<f64, Vec<Point>> for RplidarSensor {
+impl LimitedSensor<f64> for RplidarSensor {
     fn range(&self) -> Option<f64> {
         self.max_range
     }
