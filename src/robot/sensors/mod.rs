@@ -2,6 +2,7 @@ use crate::utility::Pose;
 
 // pub mod gpio;
 pub mod dummy;
+pub mod rplidar;
 
 /// The generic trait for any sensor.
 /// Only `sense` is required.

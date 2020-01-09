@@ -6,6 +6,9 @@ edition = "2018"
 
 [dependencies]
 rand = "0.6.5"
+rplidar_drv = "0.6.0"
+serialport = { version = "3.3.0", default-features = false, features = [] }
+rpos_drv = "0.2.0"
 
 [dependencies.vitruvia]
 git = "https://gitlab.com/vessels/vessels.git"
