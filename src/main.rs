@@ -87,7 +87,7 @@ fn main() {
     );
     use piston_window::*;
     let map_visual_margins: Point = (25., 25.).into();
-    let mut window: PistonWindow = WindowSettings::new("Hello Piston!", [1000, 1000])
+    let mut window: PistonWindow = WindowSettings::new("😎", [1000, 1000])
         .exit_on_esc(true)
         .build()
         .unwrap();
