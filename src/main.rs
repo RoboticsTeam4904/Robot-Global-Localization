@@ -85,13 +85,39 @@ fn main() {
         distance_sensor.clone(),
         motion_sensor,
     );
-    for tick in 0.. {
-        filter.prediction_update(time_scale);
+    use piston_window::*;
+    let map_visual_margins: Point = (25., 25.).into();
+    let mut window: PistonWindow = WindowSettings::new("Hello Piston!", [1000, 1000])
+        .exit_on_esc(true)
+        .build()
+        .unwrap();
+    let mut tick = 0;
+    while let Some(e) = window.next() {
+        window.draw_2d(&e, |c, g, _device| {
+            clear([1.0; 4], g);
+            for line in map.lines.clone() {
+                line_from_to(
+                    [0., 0., 0., 1.],
+                    1.,
+                    map.vertices[line.0] * 100. + map_visual_margins,
+                    map.vertices[line.1] * 100. + map_visual_margins,
+                    c.transform,
+                    g,
+                );
+            }
+            for point in map.points.clone() {
+                let v: Point = map.vertices[point] * 100. + map_visual_margins;
+                let size: Point = (5., 5.).into();
+                ellipse_from_to([0.3, 0.3, 0.3, 1.], v + size, v - size, c.transform, g);
+            }
+        });
         distance_sensor.update_pose(filter.known_state.into());
+        filter.prediction_update(time_scale);
         filter.measurement_update(RowVector1::new(distance_sensor.sense()));
         if tick % 1000 == 0 {
             let diff: NewPose = (filter.known_state - filter.real_state).into();
             println!("{:?}", diff);
         }
+        tick += 1;
     }
 }

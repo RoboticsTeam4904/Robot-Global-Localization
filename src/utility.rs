@@ -74,6 +74,12 @@ impl Into<Point> for (f64, f64) {
     }
 }
 
+impl Into<[f64; 2]> for Point {
+    fn into(self) -> [f64; 2] {
+        [self.x, self.y]
+    }
+}
+
 impl std::ops::Add for Point {
     type Output = Point;
 
