@@ -1,4 +1,4 @@
-use nalgebra::Vector5;
+use nalgebra::RowVector6;
 use rand::prelude::*;
 use std::f64::consts::{FRAC_PI_2, PI};
 use std::ops::Range;
@@ -173,6 +173,7 @@ impl std::ops::Div<f64> for Point {
 pub struct NewPose {
     pub angle: f64,
     pub position: Point,
+    pub vel_angle: f64,
     pub velocity: Point,
 }
 
@@ -182,6 +183,7 @@ impl NewPose {
         angle_range: Range<f64>,
         x_range: Range<f64>,
         y_range: Range<f64>,
+        angle_vel_range: Range<f64>,
         x_vel_range: Range<f64>,
         y_vel_range: Range<f64>,
     ) -> NewPose {
@@ -192,6 +194,7 @@ impl NewPose {
                 x: rng.gen_range(x_range.start, x_range.end),
                 y: rng.gen_range(y_range.start, y_range.end),
             },
+            vel_angle: rng.gen_range(angle_vel_range.start, angle_vel_range.end),
             velocity: Point {
                 x: rng.gen_range(x_vel_range.start, x_vel_range.end),
                 y: rng.gen_range(y_vel_range.start, y_vel_range.end),
@@ -204,6 +207,7 @@ impl NewPose {
             -range.angle..range.angle,
             -range.position.x..range.position.x,
             -range.position.y..range.position.y,
+            -range.vel_angle..range.vel_angle,
             -range.velocity.x..range.velocity.x,
             -range.velocity.y..range.velocity.y,
         )
@@ -225,6 +229,13 @@ impl NewPose {
                 self.angle
             },
             position: self.position.clamp(lower.position, upper.position),
+            vel_angle: if self.vel_angle > upper.vel_angle {
+                upper.vel_angle
+            } else if self.vel_angle < lower.vel_angle {
+                lower.vel_angle
+            } else {
+                self.vel_angle
+            },
             velocity: self.velocity.clamp(lower.velocity, upper.velocity),
         }
     }
@@ -245,28 +256,30 @@ impl NewPose {
     }
 }
 
-impl From<Vector5<f64>> for NewPose {
-    fn from(vector: Vector5<f64>) -> NewPose {
+impl From<RowVector6<f64>> for NewPose {
+    fn from(vector: RowVector6<f64>) -> NewPose {
         NewPose {
             angle: *vector.index(0),
             position: Point {
                 x: *vector.index(1),
                 y: *vector.index(2),
             },
+            vel_angle: *vector.index(3),
             velocity: Point {
-                x: *vector.index(3),
-                y: *vector.index(4),
+                x: *vector.index(4),
+                y: *vector.index(5),
             },
         }
     }
 }
 
-impl Into<Vector5<f64>> for NewPose {
-    fn into(self) -> Vector5<f64> {
-        Vector5::new(
+impl Into<RowVector6<f64>> for NewPose {
+    fn into(self) -> RowVector6<f64> {
+        RowVector6::new(
             self.angle,
             self.position.x,
             self.position.y,
+            self.vel_angle,
             self.velocity.x,
             self.velocity.y,
         )
@@ -281,6 +294,7 @@ impl std::ops::Add for NewPose {
         NewPose {
             angle: (self.angle + other.angle) % (2. * PI),
             position: self.position + other.position,
+            vel_angle: self.vel_angle + other.vel_angle,
             velocity: self.velocity + other.velocity,
         }
     }
@@ -294,6 +308,7 @@ impl std::ops::Sub for NewPose {
         NewPose {
             angle: (self.angle - other.angle) % (2. * PI),
             position: self.position - other.position,
+            vel_angle: self.vel_angle - other.vel_angle,
             velocity: self.velocity - other.velocity,
         }
     }
@@ -307,6 +322,7 @@ impl std::ops::Div<f64> for NewPose {
         NewPose {
             angle: (self.angle / other) % (2. * PI),
             position: self.position * (1. / other),
+            vel_angle: (self.vel_angle / other),
             velocity: self.velocity * (1. / other),
         }
     }
@@ -318,6 +334,7 @@ impl std::ops::AddAssign for NewPose {
         *self = NewPose {
             angle: self.angle + other.angle,
             position: self.position + other.position,
+            vel_angle: self.vel_angle + other.vel_angle,
             velocity: self.velocity + other.velocity,
         }
     }

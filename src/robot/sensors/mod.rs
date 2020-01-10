@@ -1,8 +1,7 @@
-use crate::utility::Pose;
+use crate::utility::NewPose;
 
 // pub mod gpio;
 pub mod dummy;
-
 /// The generic trait for any sensor.
 /// Only `sense` is required.
 ///
@@ -12,9 +11,11 @@ pub trait Sensor<T> {
     fn update(&mut self) {}
     /// Gets the value that the sensor is currently sensing
     fn sense(&self) -> T;
+    /// Gets the value that the sensor would sense at a given pose
+    fn sense_from_pose(&self, pose: NewPose) -> T;
     /// Get the pose of the sensor relative to the pose of the robot
-    fn relative_pose(&self) -> Pose {
-        Pose::default()
+    fn relative_pose(&self) -> NewPose {
+        NewPose::default()
     }
 }
 
