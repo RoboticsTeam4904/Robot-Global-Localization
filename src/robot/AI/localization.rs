@@ -164,12 +164,13 @@ where
             })
             .into();
         self.sigma_matrix.row_iter_mut().for_each(|mut e| {
-            e[0] = e[3] * time;
+            e[0] += e[3] * time;
             e[1] += e[4] * time;
             e[2] += e[5] * time;
             e[3] += control.1.angle * time;
             e[4] += control.1.position.x * time;
             e[5] += control.1.position.y * time;
+
             let temp_point = (Point { x: e[1], y: e[2] })
                 .clamp(Point { x: 0., y: 0. }, Point { x: 200., y: 200. });
             if temp_point.x != e[1] {
@@ -210,17 +211,12 @@ where
                 .row_iter()
                 .map(|e| {
                     sensor_data = vec![self.distance_sensor.sense_from_pose(NewPose {
-                        angle: *e.index(0),
-                        position: Point {
-                            x: *e.index(1),
-                            y: *e.index(2),
-                        },
-                        vel_angle: *e.index(3),
-                        velocity: Point {
-                            x: *e.index(4),
-                            y: *e.index(5),
-                        },
+                        angle: e[0],
+                        position: Point { x: e[1], y: e[2] },
+                        vel_angle: e[3],
+                        velocity: Point { x: e[4], y: e[5] },
                     })];
+
                     RowVector1::from_vec(sensor_data.clone())
                 })
                 .collect::<Vec<_>>()
@@ -229,12 +225,13 @@ where
         let lambda = (self.alpha.powi(2)) * (6. + self.kappa) - 6.;
         let mut sensor_predicted = RowVector1::from_element(0.);
         for i in 0..=(2 * 6) {
-            sensor_predicted += self.sensor_sigma_matrix.row(i) * lambda / (6. + lambda)
+            sensor_predicted += self.sensor_sigma_matrix.row(i) / (6. + lambda)
                 * if i != 0 { 1. / 2. } else { lambda };
         }
+
         let mut cov_zz = Matrix1::from_element(0.);
         let temp_sensor_sigma_matrix =
-            self.sensor_sigma_matrix - Matrix13x1::from_rows(&vec![sensor_update; 13]);
+            self.sensor_sigma_matrix - Matrix13x1::from_rows(&vec![sensor_predicted; 13]);
         for i in 0..=(2 * 6) {
             cov_zz += temp_sensor_sigma_matrix.row(i).transpose()
                 * temp_sensor_sigma_matrix.row(i)

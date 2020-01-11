@@ -11,23 +11,23 @@ use robot::sensors::dummy::{
     DummyAccelerationSensor, DummyDistanceSensor, DummyMotionSensor, DummyObjectSensor,
 };
 use robot::sensors::Sensor;
-use std::f64::consts::{FRAC_PI_8, PI};
+use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI};
 use std::sync::Arc;
 use utility::{NewPose, Point, Pose};
 
 fn main() {
-    let time_scale = 1. / 1000.;
+    let time_scale = 400;
     let q: Matrix6<f64> = Matrix6::from_diagonal(&Vector6::new(
         0.,
         0.,
         0.,
-        (0.1f64 * time_scale).powi(2),
-        (0.2f64 * time_scale).powi(2),
-        (0.2f64 * time_scale).powi(2),
+        (0.1f64 / time_scale as f64).powi(2),
+        (0.2f64 / time_scale as f64).powi(2),
+        (0.2f64 / time_scale as f64).powi(2),
     ));
-    let r: Matrix1<f64> = Matrix1::from_vec(vec![9.]);
+    let r: Matrix1<f64> = Matrix1::from_vec(vec![0.]);
     let mut rng = thread_rng();
-    let noise = Normal::new(0., 2.);
+    let noise = Normal::new(0., 0.5);
     let map = Arc::new(Map2D::new(
         200.,
         200.,
@@ -51,7 +51,7 @@ fn main() {
         }),
     ));
     let init_pose = NewPose {
-        angle: PI,
+        angle: FRAC_PI_2,
         position: Point {
             x: 8. + noise.sample(&mut rng),
             y: 8. + noise.sample(&mut rng),
@@ -60,13 +60,13 @@ fn main() {
         velocity: Point { x: 0., y: 0. },
     };
     let robot_pose = NewPose {
-        angle: PI,
+        angle: FRAC_PI_2,
         position: Point { x: 8., y: 8. },
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
     let mut distance_sensor =
-        DummyDistanceSensor::new(9., NewPose::default(), map.clone(), robot_pose, None);
+        DummyDistanceSensor::new(0., NewPose::default(), map.clone(), robot_pose, None);
 
     let motion_sensor = DummyAccelerationSensor::new(Pose {
         angle: 0.1,
@@ -111,13 +111,17 @@ fn main() {
                 ellipse_from_to([0.3, 0.3, 0.3, 1.], v + size, v - size, c.transform, g);
             }
         });
-        distance_sensor.update_pose(filter.known_state.into());
-        filter.prediction_update(time_scale);
+        distance_sensor.update_pose(filter.real_state.into());
+        filter.prediction_update(1. / time_scale as f64);
         filter.measurement_update(RowVector1::new(distance_sensor.sense()));
-        if tick % 1000 == 0 {
-            let diff: NewPose = (filter.known_state - filter.real_state).into();
-            println!("{:?}", diff);
-        }
         tick += 1;
+        if tick % time_scale == 0 {
+            let diff: NewPose = (filter.real_state - filter.known_state).into();
+            println!(
+                "The difference between predicted pose and real pose is {:?} at time {}.",
+                diff,
+                tick as f64 / time_scale as f64
+            )
+        }
     }
 }
