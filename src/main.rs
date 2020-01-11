@@ -2,7 +2,7 @@
 mod robot;
 mod utility;
 
-use nalgebra::{Matrix1, Matrix6, RowVector1, Vector1, Vector6};
+use nalgebra::{Matrix4, Matrix6, RowVector4, Vector4, Vector6};
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 use robot::ai::localization::{KalmanFilter, ObjectDetectorMCL};
@@ -11,7 +11,7 @@ use robot::sensors::dummy::{
     DummyAccelerationSensor, DummyDistanceSensor, DummyMotionSensor, DummyObjectSensor,
 };
 use robot::sensors::Sensor;
-use std::f64::consts::{FRAC_PI_2, FRAC_PI_4, PI};
+use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, PI};
 use std::sync::Arc;
 use utility::{NewPose, Point, Pose};
 
@@ -25,9 +25,9 @@ fn main() {
         (0.2f64 / time_scale as f64).powi(2),
         (0.2f64 / time_scale as f64).powi(2),
     ));
-    let r: Matrix1<f64> = Matrix1::from_vec(vec![0.]);
+    let r: Matrix4<f64> = Matrix4::from_diagonal(&Vector4::from_vec(vec![0.04; 4]));
     let mut rng = thread_rng();
-    let noise = Normal::new(0., 0.5);
+    let noise = Normal::new(0., 1.);
     let map = Arc::new(Map2D::new(
         200.,
         200.,
@@ -65,8 +65,50 @@ fn main() {
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
-    let mut distance_sensor =
-        DummyDistanceSensor::new(0., NewPose::default(), map.clone(), robot_pose, None);
+    let distance_points = vec![
+        Pose {
+            angle: FRAC_PI_2,
+            position: Point { x: 0., y: 10. / 3. },
+        },
+        Pose {
+            angle: -FRAC_PI_2,
+            position: Point {
+                x: 0.,
+                y: -10. / 3.,
+            },
+        },
+        Pose {
+            angle: 0.,
+            position: Point {
+                x: 10. / 3. / ((3 as f64).sqrt()),
+                y: 0.,
+            },
+        },
+        Pose {
+            angle: PI,
+            position: Point {
+                x: -10. / 3. / ((3 as f64).sqrt()),
+                y: 0.,
+            },
+        },
+    ];
+    let mut distance_sensors: Vec<DummyDistanceSensor> = distance_points
+        .iter()
+        .map(|e| {
+            DummyDistanceSensor::new(
+                0.6,
+                NewPose {
+                    angle: e.angle,
+                    position: e.position,
+                    vel_angle: 0.,
+                    velocity: Point { x: 0., y: 0. },
+                },
+                map.clone(),
+                robot_pose.clone(),
+                Some(100.),
+            )
+        })
+        .collect();
 
     let motion_sensor = DummyAccelerationSensor::new(Pose {
         angle: 0.1,
@@ -74,7 +116,7 @@ fn main() {
     });
 
     let mut filter = KalmanFilter::new(
-        Matrix6::from_diagonal(&Vector6::new(0., 4., 4., 0., 0., 0.)),
+        Matrix6::from_diagonal(&Vector6::new(0., 9., 9., 0., 0., 0.)),
         init_pose.into(),
         robot_pose.into(),
         1e-3,
@@ -82,7 +124,7 @@ fn main() {
         2.,
         q,
         r,
-        distance_sensor.clone(),
+        distance_sensors.clone(),
         motion_sensor,
     );
     use piston_window::*;
@@ -92,6 +134,8 @@ fn main() {
         .build()
         .unwrap();
     let mut tick: u32 = 0;
+    let scaler = 10.;
+
     while let Some(e) = window.next() {
         window.draw_2d(&e, |c, g, _device| {
             clear([1.0; 4], g);
@@ -99,22 +143,80 @@ fn main() {
                 line_from_to(
                     [0., 0., 0., 1.],
                     1.,
-                    map.vertices[line.0] * 100. + map_visual_margins,
-                    map.vertices[line.1] * 100. + map_visual_margins,
+                    map.vertices[line.0] * 3. + map_visual_margins,
+                    map.vertices[line.1] * 3. + map_visual_margins,
                     c.transform,
                     g,
                 );
             }
             for point in map.points.clone() {
-                let v: Point = map.vertices[point] * 100. + map_visual_margins;
+                let v: Point = map.vertices[point] * 3. + map_visual_margins;
                 let size: Point = (5., 5.).into();
-                ellipse_from_to([0.3, 0.3, 0.3, 1.], v + size, v - size, c.transform, g);
+                ellipse_from_to([0.7, 0.3, 0.3, 1.], v + size, v - size, c.transform, g);
             }
+            polygon(
+                [0., 0., 0., 1.],
+                &[
+                    [
+                        filter.real_state[1] * 3.
+                            + map_visual_margins.x
+                            + scaler * filter.real_state[0].cos(),
+                        filter.real_state[2] * 3.
+                            + map_visual_margins.y
+                            + scaler * filter.real_state[0].sin(),
+                    ],
+                    [
+                        filter.real_state[1] * 3.
+                            + map_visual_margins.x
+                            + scaler * (filter.real_state[0] + 2. * FRAC_PI_3).cos(),
+                        filter.real_state[2] * 3.
+                            + map_visual_margins.y
+                            + scaler * (filter.real_state[0] + 2. * FRAC_PI_3).sin(),
+                    ],
+                    [
+                        filter.real_state[1] * 3.
+                            + map_visual_margins.x
+                            + scaler * (filter.real_state[0] + 4. * FRAC_PI_3).cos(),
+                        filter.real_state[2] * 3.
+                            + map_visual_margins.y
+                            + scaler * (filter.real_state[0] + 4. * FRAC_PI_3).sin(),
+                    ],
+                ],
+                c.transform,
+                g,
+            );
+            polygon(
+                [0.3, 0.3, 0.3, 1.],
+                &[
+                    [
+                        filter.known_state[1] * 3.
+                            + map_visual_margins.x
+                            + scaler * filter.known_state[0].cos(),
+                        filter.known_state[2] * 3.
+                            + map_visual_margins.y
+                            + scaler * filter.known_state[0].sin(),
+                    ],
+                    [
+                        filter.known_state[1] * 3.
+                            + map_visual_margins.x
+                            + scaler * (filter.known_state[0] + 2. * FRAC_PI_3).cos(),
+                        filter.known_state[2] * 3.
+                            + map_visual_margins.y
+                            + scaler * (filter.known_state[0] + 2. * FRAC_PI_3).sin(),
+                    ],
+                    [
+                        filter.known_state[1] * 3.
+                            + map_visual_margins.x
+                            + scaler * (filter.known_state[0] + 4. * FRAC_PI_3).cos(),
+                        filter.known_state[2] * 3.
+                            + map_visual_margins.y
+                            + scaler * (filter.known_state[0] + 4. * FRAC_PI_3).sin(),
+                    ],
+                ],
+                c.transform,
+                g,
+            );
         });
-        distance_sensor.update_pose(filter.real_state.into());
-        filter.prediction_update(1. / time_scale as f64);
-        filter.measurement_update(RowVector1::new(distance_sensor.sense()));
-        tick += 1;
         if tick % time_scale == 0 {
             let diff: NewPose = (filter.real_state - filter.known_state).into();
             println!(
@@ -123,5 +225,16 @@ fn main() {
                 tick as f64 / time_scale as f64
             )
         }
+        distance_sensors.iter_mut().for_each(|distance_sensor| {
+            distance_sensor.update_pose(filter.real_state.into());
+        });
+        filter.prediction_update(1. / time_scale as f64);
+        filter.measurement_update(RowVector4::from_vec(
+            distance_sensors
+                .iter()
+                .map(|distance_sensor| distance_sensor.sense())
+                .collect(),
+        ));
+        tick += 1;
     }
 }
