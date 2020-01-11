@@ -5,16 +5,17 @@ use crate::robot::sensors::Sensor;
 use crate::utility::{NewPose, Point, Pose};
 use nalgebra::{
     ArrayStorage, ComplexField, Matrix, Matrix1, Matrix1x6, Matrix6, Matrix6x1, RowVector1,
-    RowVector6, SymmetricEigen, Vector6, U1, U11, U6,
+    RowVector6, SymmetricEigen, Vector6, U1, U13, U6,
 };
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
 use std::f64::consts::PI;
+use std::ops::Range;
 use std::sync::Arc;
 
 // TODO: c o d e d u p l i c a t i o n
-type Matrix11x6 = Matrix<f64, U11, U6, ArrayStorage<f64, U11, U6>>;
-type Matrix11x1 = Matrix<f64, U11, U1, ArrayStorage<f64, U11, U1>>;
+type Matrix13x6 = Matrix<f64, U13, U6, ArrayStorage<f64, U13, U6>>;
+type Matrix13x1 = Matrix<f64, U13, U1, ArrayStorage<f64, U13, U1>>;
 struct NewPoseBelief {}
 
 impl NewPoseBelief {
@@ -77,10 +78,10 @@ where
     motion_sensor: U,
     pub known_state: RowVector6<f64>,
     pub real_state: RowVector6<f64>,
-    sigma_matrix: Matrix11x6,
+    sigma_matrix: Matrix13x6,
     q: Matrix6<f64>,
     r: Matrix1<f64>,
-    sensor_sigma_matrix: Matrix11x1,
+    sensor_sigma_matrix: Matrix13x1,
     beta: f64,
     alpha: f64,
     kappa: f64,
@@ -109,10 +110,10 @@ where
             motion_sensor,
             known_state: init_state,
             real_state,
-            sigma_matrix: Matrix11x6::from_element(0.),
+            sigma_matrix: Matrix13x6::from_element(0.),
             q,
             r,
-            sensor_sigma_matrix: Matrix11x1::from_element(0.),
+            sensor_sigma_matrix: Matrix13x1::from_element(0.),
             beta,
             alpha,
             kappa,
@@ -135,25 +136,33 @@ where
         let square_root_cov = eigendecomp.eigenvectors
             * Matrix6::from_diagonal(&diagonalization)
             * eigendecomp.eigenvectors.try_inverse().unwrap();
-        for i in 1..=6 {
+        for i in 0..=(6 - 1) {
             rows.push(self.known_state + square_root_cov.row(i));
         }
-        for i in 1..=6 {
+        for i in 0..=(6 - 1) {
             rows.push(self.known_state - square_root_cov.row(i));
         }
 
-        self.sigma_matrix = Matrix11x6::from_rows(rows.as_slice());
+        self.sigma_matrix = Matrix13x6::from_rows(rows.as_slice());
     }
 
     pub fn prediction_update(&mut self, time: f64) {
         self.gen_sigma_matrix();
         let control = self.motion_sensor.sense();
-        self.real_state[0] += self.real_state[3] * time;
-        self.real_state[1] += self.real_state[4] * time;
-        self.real_state[2] += self.real_state[5] * time;
+        let temp: NewPose;
+        self.real_state[0] = (self.real_state[0] + self.real_state[3] * time) % (2. * PI);
+        self.real_state[1] = self.real_state[1] + self.real_state[4] * time;
+        self.real_state[2] = self.real_state[2] + self.real_state[5] * time;
         self.real_state[3] += control.0.angle * time;
         self.real_state[4] += control.0.position.x * time;
         self.real_state[5] += control.0.position.y * time;
+        temp = self.real_state.clone().into();
+        self.real_state = temp
+            .clamp_control_update(Range {
+                start: Point { x: 0., y: 0. },
+                end: Point { x: 200., y: 200. },
+            })
+            .into();
         self.sigma_matrix.row_iter_mut().for_each(|mut e| {
             e[0] = e[3] * time;
             e[1] += e[4] * time;
@@ -161,15 +170,26 @@ where
             e[3] += control.1.angle * time;
             e[4] += control.1.position.x * time;
             e[5] += control.1.position.y * time;
+            let temp_point = (Point { x: e[1], y: e[2] })
+                .clamp(Point { x: 0., y: 0. }, Point { x: 200., y: 200. });
+            if temp_point.x != e[1] {
+                e[1] = temp_point.x;
+                e[4] = 0.;
+            }
+
+            if temp_point.y != e[2] {
+                e[2] = temp_point.y;
+                e[5] = 0.;
+            }
         });
         let lambda = (self.alpha.powi(2)) * (6. + self.kappa) - 6.;
         self.known_state = RowVector6::from_element(0.);
         for i in 0..=(2 * 6) {
-            self.known_state += self.sigma_matrix.row(i) * lambda / (6. + lambda)
-                * if i != 0 { 1. / 2. } else { lambda };
+            self.known_state +=
+                self.sigma_matrix.row(i) / (6. + lambda) * if i != 0 { 1. / 2. } else { lambda };
         }
         let temp_sigma_matrix =
-            self.sigma_matrix - Matrix11x6::from_rows(&vec![self.known_state; 11]);
+            self.sigma_matrix - Matrix13x6::from_rows(&vec![self.known_state; 13]);
         self.covariance_matrix = Matrix6::from_element(0.);
         for i in 0..=(2 * 6) {
             self.covariance_matrix += temp_sigma_matrix.row(i).transpose()
@@ -185,7 +205,7 @@ where
 
     pub fn measurement_update(&mut self, sensor_update: RowVector1<f64>) {
         let mut sensor_data: Vec<f64> = Vec::new();
-        self.sensor_sigma_matrix = Matrix11x1::from_rows(
+        self.sensor_sigma_matrix = Matrix13x1::from_rows(
             self.sigma_matrix
                 .row_iter()
                 .map(|e| {
@@ -214,7 +234,7 @@ where
         }
         let mut cov_zz = Matrix1::from_element(0.);
         let temp_sensor_sigma_matrix =
-            self.sensor_sigma_matrix - Matrix11x1::from_rows(&vec![sensor_update; 11]);
+            self.sensor_sigma_matrix - Matrix13x1::from_rows(&vec![sensor_update; 13]);
         for i in 0..=(2 * 6) {
             cov_zz += temp_sensor_sigma_matrix.row(i).transpose()
                 * temp_sensor_sigma_matrix.row(i)
@@ -228,7 +248,7 @@ where
 
         let mut cov_xz = Matrix6x1::from_element(0.);
         let temp_sigma_matrix =
-            self.sigma_matrix - Matrix11x6::from_rows(&vec![self.known_state; 11]);
+            self.sigma_matrix - Matrix13x6::from_rows(&vec![self.known_state; 13]);
         for i in 0..=(2 * 6) {
             cov_xz += temp_sigma_matrix.row(i).transpose()
                 * temp_sensor_sigma_matrix.row(i)

@@ -225,24 +225,32 @@ impl NewPose {
         self
     }
 
-    pub fn clamp(self, lower: NewPose, upper: NewPose) -> NewPose {
+    pub fn clamp_control_update(self, range: Range<Point>) -> NewPose {
+        let clamped_position = self.position.clamp(range.start, range.end);
         NewPose {
-            angle: if self.angle > upper.angle {
-                upper.angle
-            } else if self.angle < lower.angle {
-                lower.angle
+            angle: self.angle,
+            position: clamped_position,
+            vel_angle: self.vel_angle,
+            velocity: if clamped_position.x != self.position.x
+                && clamped_position.y != self.position.y
+            {
+                Point { x: 0., y: 0. }
+            } else if clamped_position.x != self.position.x {
+                Point {
+                    x: 0.,
+                    y: self.velocity.y,
+                }
+            } else if clamped_position.y != self.position.y {
+                Point {
+                    x: self.velocity.x,
+                    y: 0.,
+                }
             } else {
-                self.angle
+                Point {
+                    x: self.velocity.x,
+                    y: self.velocity.y,
+                }
             },
-            position: self.position.clamp(lower.position, upper.position),
-            vel_angle: if self.vel_angle > upper.vel_angle {
-                upper.vel_angle
-            } else if self.vel_angle < lower.vel_angle {
-                lower.vel_angle
-            } else {
-                self.vel_angle
-            },
-            velocity: self.velocity.clamp(lower.velocity, upper.velocity),
         }
     }
 

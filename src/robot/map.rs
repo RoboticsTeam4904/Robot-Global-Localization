@@ -11,6 +11,7 @@ pub enum Object2D {
 }
 
 /// A Simple 2D map of line segments
+#[derive(Debug)]
 pub struct Map2D {
     pub width: f64,
     pub height: f64,

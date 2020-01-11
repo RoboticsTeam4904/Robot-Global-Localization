@@ -27,10 +27,10 @@ fn main() {
     ));
     let r: Matrix1<f64> = Matrix1::from_vec(vec![9.]);
     let mut rng = thread_rng();
-    let noise = Normal::new(0., 3.);
+    let noise = Normal::new(0., 2.);
     let map = Arc::new(Map2D::new(
-        10.,
-        10.,
+        200.,
+        200.,
         vec![
             Object2D::Point((0., 200.).into()),
             Object2D::Point((200., 200.).into()),
@@ -44,8 +44,8 @@ fn main() {
         .iter()
         .map(|o| match o {
             // temp
-            Object2D::Point(p) => Object2D::Point(*p / 50.),
-            Object2D::Line((p1, p2)) => Object2D::Line((*p1 / 50., *p2 / 50.)),
+            Object2D::Point(p) => Object2D::Point(*p),
+            Object2D::Line((p1, p2)) => Object2D::Line((*p1, *p2)),
             Object2D::Rectangle(r) => Object2D::Rectangle(*r),
             Object2D::Triangle(t) => Object2D::Triangle(*t),
         }),
@@ -74,7 +74,7 @@ fn main() {
     });
 
     let mut filter = KalmanFilter::new(
-        Matrix6::from_diagonal(&Vector6::new(9., 9., 0., 0., 0., 0.)),
+        Matrix6::from_diagonal(&Vector6::new(0., 4., 4., 0., 0., 0.)),
         init_pose.into(),
         robot_pose.into(),
         1e-3,
@@ -91,7 +91,7 @@ fn main() {
         .exit_on_esc(true)
         .build()
         .unwrap();
-    let mut tick = 0;
+    let mut tick: u32 = 0;
     while let Some(e) = window.next() {
         window.draw_2d(&e, |c, g, _device| {
             clear([1.0; 4], g);
