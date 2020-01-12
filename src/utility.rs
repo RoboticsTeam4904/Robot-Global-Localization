@@ -230,7 +230,11 @@ impl KinematicState {
         KinematicState {
             angle: self.angle,
             position: clamped_position,
-            vel_angle: self.vel_angle,
+            vel_angle: if clamped_position != self.position {
+                0.
+            } else {
+                self.vel_angle
+            },
             velocity: if clamped_position.x != self.position.x
                 && clamped_position.y != self.position.y
             {

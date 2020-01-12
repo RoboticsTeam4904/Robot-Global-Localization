@@ -18,9 +18,9 @@ fn main() {
         0.,
         0.,
         0.,
-        (0f64 / TIME_SCALE as f64).powi(2),
-        (0f64 / TIME_SCALE as f64).powi(2),
-        (0f64 / TIME_SCALE as f64).powi(2),
+        (0.01f64).powi(2),
+        (0.01f64).powi(2),
+        (0.01f64).powi(2),
     ));
     let r: Matrix4<f64> = Matrix4::from_diagonal(&Vector4::from_vec(vec![0.04; 4]));
     let mut rng = thread_rng();
@@ -105,8 +105,11 @@ fn main() {
         .collect();
 
     let motion_sensor = DummyAccelerationSensor::new(Pose {
-        angle: 0.,
-        position: Point { x: 0., y: 0. },
+        angle: 0.1 * TIME_SCALE as f64,
+        position: Point {
+            x: 0.1 * TIME_SCALE as f64,
+            y: 0.1 * TIME_SCALE as f64,
+        },
     });
 
     let mut filter = KalmanFilter::new(
@@ -150,11 +153,7 @@ fn main() {
                 }
                 keyboard::Key::A => control_update.angle -= ROBOT_ANGLE_ACCEL,
                 keyboard::Key::D => control_update.angle += ROBOT_ANGLE_ACCEL,
-                keyboard::Key::Space => {
-                    control_update.position.x = 0.;
-                    control_update.position.y = 0.;
-                    control_update.angle = 0.;
-                }
+
                 _ => (),
             }
         }

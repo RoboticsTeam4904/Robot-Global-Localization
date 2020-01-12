@@ -3,7 +3,7 @@ use crate::robot::sensors::LimitedSensor;
 use crate::robot::sensors::Sensor;
 use crate::utility::{KinematicState, Point, Pose};
 use nalgebra::{
-    ArrayStorage, Matrix, Matrix4, Matrix6, Matrix6x4, RowVector4, RowVector6, U13, U4, U6,
+    ArrayStorage, Matrix, Matrix4, Matrix6, Matrix6x4, RowVector4, RowVector6, U1, U13, U4, U6,
 };
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
@@ -13,6 +13,7 @@ use std::sync::Arc;
 
 // TODO: c o d e d u p l i c a t i o n
 type Matrix13x6 = Matrix<f64, U13, U6, ArrayStorage<f64, U13, U6>>;
+type Vector13 = Matrix<f64, U13, U1, ArrayStorage<f64, U13, U1>>;
 type Matrix13x4 = Matrix<f64, U13, U4, ArrayStorage<f64, U13, U4>>;
 struct KinematicBelief;
 
@@ -149,8 +150,8 @@ where
         let control_noise = self.motion_sensor.sense();
         let temp: KinematicState;
         self.real_state[0] = (self.real_state[0] + self.real_state[3] * time) % (2. * PI);
-        self.real_state[1] = self.real_state[1] + self.real_state[4] * time;
-        self.real_state[2] = self.real_state[2] + self.real_state[5] * time;
+        self.real_state[1] += self.real_state[4] * time;
+        self.real_state[2] += self.real_state[5] * time;
         self.real_state[3] += control.angle * time;
         self.real_state[4] += control.position.x * time;
         self.real_state[5] += control.position.y * time;
@@ -161,7 +162,11 @@ where
                 end: Point { x: 200., y: 200. },
             })
             .into();
-        let noisy_control = control + control_noise;
+        let mut noisy_control = control + control_noise;
+        noisy_control.angle += (self.real_state[3] - temp.vel_angle) / time;
+        noisy_control.position.x += (self.real_state[4] - temp.velocity.x) / time;
+        noisy_control.position.y += (self.real_state[5] - temp.velocity.y) / time;
+
         self.sigma_matrix.row_iter_mut().for_each(|mut e| {
             e[0] = (e[0] + e[3] * time) % (2. * PI);
             e[1] += e[4] * time;
@@ -169,19 +174,8 @@ where
             e[3] += noisy_control.angle * time;
             e[4] += noisy_control.position.x * time;
             e[5] += noisy_control.position.y * time;
-
-            let temp_point = (Point { x: e[1], y: e[2] })
-                .clamp(Point { x: 0., y: 0. }, Point { x: 200., y: 200. });
-            if temp_point.x != e[1] {
-                e[1] = temp_point.x;
-                e[4] = 0.;
-            }
-
-            if temp_point.y != e[2] {
-                e[2] = temp_point.y;
-                e[5] = 0.;
-            }
         });
+        // self.sigma_matrix.column(4) = Vector13::from_element(mult_pose.position.x);
         let lambda = (self.alpha.powi(2)) * (6. + self.kappa) - 6.;
         self.known_state = RowVector6::from_element(0.);
         for i in 0..=(2 * 6) {
