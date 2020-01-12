@@ -27,3 +27,22 @@ pub trait LimitedSensor<T, U>: Sensor<U> {
         None
     }
 }
+
+impl<T, U: Sensor<T>> Sensor<Vec<T>> for Vec<U> {
+    fn update(&mut self) {
+        self.iter_mut().for_each(|s| s.update());
+    }
+    fn sense(&self) -> Vec<T> {
+        self.iter().map(|s| s.sense()).collect()
+    }
+    fn sense_from_pose(&self, pose: NewPose) -> Vec<T> {
+        self.iter().map(|s| s.sense_from_pose(pose)).collect()
+    }
+    fn relative_pose(&self) -> NewPose {
+        if let Some(s) = self.first() {
+            s.relative_pose()
+        } else {
+            NewPose::default()
+        }
+    }
+}
