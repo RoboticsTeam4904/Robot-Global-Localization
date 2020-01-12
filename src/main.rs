@@ -127,6 +127,8 @@ fn main() {
         distance_sensors.clone(),
         motion_sensor,
     );
+
+    const MAP_SCALE: f64 = 2.;
     use piston_window::*;
     let map_visual_margins: Point = (25., 25.).into();
     let mut window: PistonWindow = WindowSettings::new("😎", [1000, 1000])
@@ -143,14 +145,14 @@ fn main() {
                 line_from_to(
                     [0., 0., 0., 1.],
                     1.,
-                    map.vertices[line.0] * 3. + map_visual_margins,
-                    map.vertices[line.1] * 3. + map_visual_margins,
+                    map.vertices[line.0] * MAP_SCALE + map_visual_margins,
+                    map.vertices[line.1] * MAP_SCALE + map_visual_margins,
                     c.transform,
                     g,
                 );
             }
             for point in map.points.clone() {
-                let v: Point = map.vertices[point] * 3. + map_visual_margins;
+                let v: Point = map.vertices[point] * MAP_SCALE + map_visual_margins;
                 let size: Point = (5., 5.).into();
                 ellipse_from_to([0.7, 0.3, 0.3, 1.], v + size, v - size, c.transform, g);
             }
@@ -158,26 +160,26 @@ fn main() {
                 [0., 0., 0., 1.],
                 &[
                     [
-                        filter.real_state[1] * 3.
+                        filter.real_state[1] * MAP_SCALE
                             + map_visual_margins.x
                             + scaler * filter.real_state[0].cos(),
-                        filter.real_state[2] * 3.
+                        filter.real_state[2] * MAP_SCALE
                             + map_visual_margins.y
                             + scaler * filter.real_state[0].sin(),
                     ],
                     [
-                        filter.real_state[1] * 3.
+                        filter.real_state[1] * MAP_SCALE
                             + map_visual_margins.x
                             + scaler * (filter.real_state[0] + 2. * FRAC_PI_3).cos(),
-                        filter.real_state[2] * 3.
+                        filter.real_state[2] * MAP_SCALE
                             + map_visual_margins.y
                             + scaler * (filter.real_state[0] + 2. * FRAC_PI_3).sin(),
                     ],
                     [
-                        filter.real_state[1] * 3.
+                        filter.real_state[1] * MAP_SCALE
                             + map_visual_margins.x
                             + scaler * (filter.real_state[0] + 4. * FRAC_PI_3).cos(),
-                        filter.real_state[2] * 3.
+                        filter.real_state[2] * MAP_SCALE
                             + map_visual_margins.y
                             + scaler * (filter.real_state[0] + 4. * FRAC_PI_3).sin(),
                     ],
@@ -189,26 +191,26 @@ fn main() {
                 [0.3, 0.3, 0.3, 1.],
                 &[
                     [
-                        filter.known_state[1] * 3.
+                        filter.known_state[1] * MAP_SCALE
                             + map_visual_margins.x
                             + scaler * filter.known_state[0].cos(),
-                        filter.known_state[2] * 3.
+                        filter.known_state[2] * MAP_SCALE
                             + map_visual_margins.y
                             + scaler * filter.known_state[0].sin(),
                     ],
                     [
-                        filter.known_state[1] * 3.
+                        filter.known_state[1] * MAP_SCALE
                             + map_visual_margins.x
                             + scaler * (filter.known_state[0] + 2. * FRAC_PI_3).cos(),
-                        filter.known_state[2] * 3.
+                        filter.known_state[2] * MAP_SCALE
                             + map_visual_margins.y
                             + scaler * (filter.known_state[0] + 2. * FRAC_PI_3).sin(),
                     ],
                     [
-                        filter.known_state[1] * 3.
+                        filter.known_state[1] * MAP_SCALE
                             + map_visual_margins.x
                             + scaler * (filter.known_state[0] + 4. * FRAC_PI_3).cos(),
-                        filter.known_state[2] * 3.
+                        filter.known_state[2] * MAP_SCALE
                             + map_visual_margins.y
                             + scaler * (filter.known_state[0] + 4. * FRAC_PI_3).sin(),
                     ],
