@@ -14,17 +14,12 @@ use std::sync::Arc;
 use utility::{KinematicState, Point, Pose};
 
 fn main() {
-    let q: Matrix6<f64> = Matrix6::from_diagonal(&Vector6::new(
-        0.,
-        0.,
-        0.,
-        (0.01f64).powi(2),
-        (0.01f64).powi(2),
-        (0.01f64).powi(2),
-    ));
+    let scale = 1.;
+    let q: Matrix6<f64> =
+        Matrix6::from_diagonal(&Vector6::new(0., 0., 0., 0.000004, 0.0036, 0.0036));
     let r: Matrix4<f64> = Matrix4::from_diagonal(&Vector4::from_vec(vec![0.04; 4]));
     let mut rng = thread_rng();
-    let noise = Normal::new(0., 1.);
+    let noise = Normal::new(0., 3.);
     let map = Arc::new(Map2D::new(
         200.,
         200.,
@@ -105,10 +100,10 @@ fn main() {
         .collect();
 
     let motion_sensor = DummyAccelerationSensor::new(Pose {
-        angle: 0.1 * TIME_SCALE as f64,
+        angle: 0.002 * TIME_SCALE as f64,
         position: Point {
-            x: 0.1 * TIME_SCALE as f64,
-            y: 0.1 * TIME_SCALE as f64,
+            x: 0.06 * TIME_SCALE as f64,
+            y: 0.06 * TIME_SCALE as f64,
         },
     });
 
@@ -116,7 +111,7 @@ fn main() {
         Matrix6::from_diagonal(&Vector6::new(0., 9., 9., 0., 0., 0.)),
         init_pose.into(),
         robot_pose.into(),
-        1e-3,
+        1e-5,
         0.,
         2.,
         q,
