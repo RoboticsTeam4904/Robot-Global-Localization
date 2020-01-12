@@ -3,8 +3,7 @@ use crate::robot::sensors::LimitedSensor;
 use crate::robot::sensors::Sensor;
 use crate::utility::{KinematicState, Point, Pose};
 use nalgebra::{
-    ArrayStorage, Matrix, Matrix4, Matrix6, Matrix6x4, RowVector4,
-    RowVector6, U13, U4, U6,
+    ArrayStorage, Matrix, Matrix4, Matrix6, Matrix6x4, RowVector4, RowVector6, U13, U4, U6,
 };
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
@@ -163,7 +162,7 @@ where
             })
             .into();
         self.sigma_matrix.row_iter_mut().for_each(|mut e| {
-            e[0] += e[3] * time;
+            e[0] = (e[0] + e[3] * time) % (2. * PI);
             e[1] += e[4] * time;
             e[2] += e[5] * time;
             e[3] += control.1.angle * time;
