@@ -1,5 +1,5 @@
 use super::{LimitedSensor, Sensor};
-use crate::utility::{Point, NewPose};
+use crate::utility::{Point, KinematicState};
 use rplidar_drv::{RplidarDevice, RplidarHostProtocol, ScanPoint};
 use rpos_drv::Channel;
 use serialport::prelude::*;
@@ -14,12 +14,12 @@ const DEFAULT_BUAD_RATE: u32 = 115200;
 struct RplidarSensor {
     pub device: RplidarDevice<dyn serialport::SerialPort>,
     pub latest_scan: Vec<ScanPoint>,
-    pub relative_pose: NewPose,
+    pub relative_pose: KinematicState,
     pub max_range: Option<f64>,
 }
 
 impl RplidarSensor {
-    pub fn new(serial_port: &str, relative_pose: NewPose, baud_rate: Option<u32>) -> Self {
+    pub fn new(serial_port: &str, relative_pose: KinematicState, baud_rate: Option<u32>) -> Self {
         let s = SerialPortSettings {
             baud_rate: baud_rate.unwrap_or(DEFAULT_BUAD_RATE),
             data_bits: DataBits::Eight,
@@ -73,11 +73,11 @@ impl Sensor for RplidarSensor {
             .collect()
     }
 
-    fn sense_from_pose(&self, pose: NewPose) -> Self::Output {
+    fn sense_from_pose(&self, pose: KinematicState) -> Self::Output {
         unimplemented!()
     }
 
-    fn relative_pose(&self) -> NewPose {
+    fn relative_pose(&self) -> KinematicState {
         self.relative_pose
     }
 }

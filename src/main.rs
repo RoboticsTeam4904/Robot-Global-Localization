@@ -5,15 +5,15 @@ mod utility;
 use nalgebra::{Matrix4, Matrix6, RowVector4, Vector4, Vector6};
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
-use robot::ai::localization::{KalmanFilter, ObjectDetectorMCL};
+use robot::ai::localization::KalmanFilter;
 use robot::map::{Map2D, Object2D};
 use robot::sensors::dummy::{
-    DummyAccelerationSensor, DummyDistanceSensor, DummyMotionSensor, DummyObjectSensor,
+    DummyAccelerationSensor, DummyDistanceSensor,
 };
 use robot::sensors::Sensor;
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, PI};
 use std::sync::Arc;
-use utility::{NewPose, Point, Pose};
+use utility::{KinematicState, Point, Pose};
 
 fn main() {
     let time_scale = 400;
@@ -50,7 +50,7 @@ fn main() {
             Object2D::Triangle(t) => Object2D::Triangle(*t),
         }),
     ));
-    let init_pose = NewPose {
+    let init_pose = KinematicState {
         angle: FRAC_PI_2,
         position: Point {
             x: 8. + noise.sample(&mut rng),
@@ -59,7 +59,7 @@ fn main() {
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
-    let robot_pose = NewPose {
+    let robot_pose = KinematicState {
         angle: FRAC_PI_2,
         position: Point { x: 8., y: 8. },
         vel_angle: 0.,
@@ -94,7 +94,7 @@ fn main() {
         .map(|e| {
             DummyDistanceSensor::new(
                 0.6,
-                NewPose {
+                KinematicState {
                     angle: e.angle,
                     position: e.position,
                     vel_angle: 0.,
@@ -243,7 +243,7 @@ fn main() {
             );
         });
         if tick % time_scale == 0 {
-            let diff: NewPose = (filter.real_state - filter.known_state).into();
+            let diff: KinematicState = (filter.real_state - filter.known_state).into();
             println!(
                 "The difference between predicted pose and real pose is {:?} at time {}.",
                 diff,

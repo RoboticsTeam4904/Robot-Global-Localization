@@ -1,5 +1,5 @@
-use crate::utility::{NewPose, Point};
-use std::f64::consts::{FRAC_PI_2, PI};
+use crate::utility::{KinematicState, Point};
+use std::f64::consts::PI;
 
 // TODO: this file is lazy
 
@@ -154,7 +154,7 @@ impl Map2D {
         self.vertices[idx]
     }
 
-    pub fn raycast(&self, start: NewPose) -> Option<Point> {
+    pub fn raycast(&self, start: KinematicState) -> Option<Point> {
         let ray = Point {
             x: start.angle.cos(),
             y: start.angle.sin(),
@@ -200,7 +200,7 @@ impl Map2D {
     }
 
     // TODO: name this wtf
-    pub fn cull_points(&self, start: NewPose, fov: f64) -> Vec<Point> {
+    pub fn cull_points(&self, start: KinematicState, fov: f64) -> Vec<Point> {
         let mut sensed_objects = Vec::new();
         for object in &self.points {
             let object = self.get_vertex(*object);

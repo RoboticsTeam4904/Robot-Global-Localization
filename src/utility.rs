@@ -176,14 +176,14 @@ impl std::ops::Div<f64> for Point {
 }
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
-pub struct NewPose {
+pub struct KinematicState {
     pub angle: f64,
     pub position: Point,
     pub vel_angle: f64,
     pub velocity: Point,
 }
 
-impl NewPose {
+impl KinematicState {
     /// Creates a random pose from uniform distribitions for each range
     pub fn random(
         angle_range: Range<f64>,
@@ -192,9 +192,9 @@ impl NewPose {
         angle_vel_range: Range<f64>,
         x_vel_range: Range<f64>,
         y_vel_range: Range<f64>,
-    ) -> NewPose {
+    ) -> KinematicState {
         let mut rng = thread_rng();
-        NewPose {
+        KinematicState {
             angle: rng.gen_range(angle_range.start, angle_range.end),
             position: Point {
                 x: rng.gen_range(x_range.start, x_range.end),
@@ -208,8 +208,8 @@ impl NewPose {
         }
     }
 
-    pub fn random_from_range(range: NewPose) -> NewPose {
-        NewPose::random(
+    pub fn random_from_range(range: KinematicState) -> KinematicState {
+        KinematicState::random(
             -range.angle..range.angle,
             -range.position.x..range.position.x,
             -range.position.y..range.position.y,
@@ -220,14 +220,14 @@ impl NewPose {
     }
 
     /// Mod `angle` by 2π
-    pub fn normalize(mut self) -> NewPose {
+    pub fn normalize(mut self) -> KinematicState {
         self.angle %= 2. * PI;
         self
     }
 
-    pub fn clamp_control_update(self, range: Range<Point>) -> NewPose {
+    pub fn clamp_control_update(self, range: Range<Point>) -> KinematicState {
         let clamped_position = self.position.clamp(range.start, range.end);
-        NewPose {
+        KinematicState {
             angle: self.angle,
             position: clamped_position,
             vel_angle: self.vel_angle,
@@ -254,25 +254,25 @@ impl NewPose {
         }
     }
 
-    pub fn with_angle(mut self, angle: f64) -> NewPose {
+    pub fn with_angle(mut self, angle: f64) -> KinematicState {
         self.angle = angle;
         self
     }
 
-    pub fn with_position(mut self, position: Point) -> NewPose {
+    pub fn with_position(mut self, position: Point) -> KinematicState {
         self.position = position;
         self
     }
 
-    pub fn with_velocity(mut self, velocity: Point) -> NewPose {
+    pub fn with_velocity(mut self, velocity: Point) -> KinematicState {
         self.velocity = velocity;
         self
     }
 }
 
-impl From<RowVector6<f64>> for NewPose {
-    fn from(vector: RowVector6<f64>) -> NewPose {
-        NewPose {
+impl From<RowVector6<f64>> for KinematicState {
+    fn from(vector: RowVector6<f64>) -> KinematicState {
+        KinematicState {
             angle: *vector.index(0),
             position: Point {
                 x: *vector.index(1),
@@ -287,7 +287,7 @@ impl From<RowVector6<f64>> for NewPose {
     }
 }
 
-impl Into<RowVector6<f64>> for NewPose {
+impl Into<RowVector6<f64>> for KinematicState {
     fn into(self) -> RowVector6<f64> {
         RowVector6::new(
             self.angle,
@@ -300,12 +300,12 @@ impl Into<RowVector6<f64>> for NewPose {
     }
 }
 
-impl std::ops::Add for NewPose {
-    type Output = NewPose;
+impl std::ops::Add for KinematicState {
+    type Output = KinematicState;
 
     /// Does normalize angle
-    fn add(self, other: NewPose) -> NewPose {
-        NewPose {
+    fn add(self, other: KinematicState) -> KinematicState {
+        KinematicState {
             angle: (self.angle + other.angle) % (2. * PI),
             position: self.position + other.position,
             vel_angle: self.vel_angle + other.vel_angle,
@@ -314,12 +314,12 @@ impl std::ops::Add for NewPose {
     }
 }
 
-impl std::ops::Sub for NewPose {
-    type Output = NewPose;
+impl std::ops::Sub for KinematicState {
+    type Output = KinematicState;
 
     /// Does normalize angle
-    fn sub(self, other: NewPose) -> NewPose {
-        NewPose {
+    fn sub(self, other: KinematicState) -> KinematicState {
+        KinematicState {
             angle: (self.angle - other.angle) % (2. * PI),
             position: self.position - other.position,
             vel_angle: self.vel_angle - other.vel_angle,
@@ -328,12 +328,12 @@ impl std::ops::Sub for NewPose {
     }
 }
 
-impl std::ops::Div<f64> for NewPose {
-    type Output = NewPose;
+impl std::ops::Div<f64> for KinematicState {
+    type Output = KinematicState;
 
     /// Does normalize angle
-    fn div(self, other: f64) -> NewPose {
-        NewPose {
+    fn div(self, other: f64) -> KinematicState {
+        KinematicState {
             angle: (self.angle / other) % (2. * PI),
             position: self.position * (1. / other),
             vel_angle: (self.vel_angle / other),
@@ -342,10 +342,10 @@ impl std::ops::Div<f64> for NewPose {
     }
 }
 
-impl std::ops::AddAssign for NewPose {
+impl std::ops::AddAssign for KinematicState {
     /// Does not normalize angle
-    fn add_assign(&mut self, other: NewPose) {
-        *self = NewPose {
+    fn add_assign(&mut self, other: KinematicState) {
+        *self = KinematicState {
             angle: self.angle + other.angle,
             position: self.position + other.position,
             vel_angle: self.vel_angle + other.vel_angle,

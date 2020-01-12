@@ -1,8 +1,7 @@
 use crate::robot::map::Map2D;
-use crate::robot::sensors::dummy::DummyMotionSensor;
 use crate::robot::sensors::LimitedSensor;
 use crate::robot::sensors::Sensor;
-use crate::utility::{NewPose, Point, Pose};
+use crate::utility::{KinematicState, Point, Pose};
 use nalgebra::{
     ArrayStorage, ComplexField, Matrix, Matrix1x6, Matrix4, Matrix6, Matrix6x4, RowVector4,
     RowVector6, SymmetricEigen, Vector6, U13, U4, U6,
@@ -16,13 +15,13 @@ use std::sync::Arc;
 // TODO: c o d e d u p l i c a t i o n
 type Matrix13x6 = Matrix<f64, U13, U6, ArrayStorage<f64, U13, U6>>;
 type Matrix13x4 = Matrix<f64, U13, U4, ArrayStorage<f64, U13, U4>>;
-struct NewPoseBelief {}
+struct KinematicBelief {}
 
-impl NewPoseBelief {
-    fn new(max_particle_count: usize, max_position: Point) -> Vec<NewPose> {
+impl KinematicBelief {
+    fn new(max_particle_count: usize, max_position: Point) -> Vec<KinematicState> {
         let mut belief = Vec::with_capacity(max_particle_count);
         for _ in 0..max_particle_count {
-            belief.push(NewPose::random(
+            belief.push(KinematicState::random(
                 0.0..2. * PI,
                 0.0..max_position.x,
                 0.0..max_position.y,
@@ -36,13 +35,13 @@ impl NewPoseBelief {
 
     fn from_distributions<T, U: Clone>(
         max_particle_count: usize,
-        NewPose_distr: (T, (T, T)),
-    ) -> Vec<NewPose>
+        distr: (T, (T, T)),
+    ) -> Vec<KinematicState>
     where
         T: Distribution<U>,
         U: Into<f64>,
     {
-        let (angle_distr, (x_distr, y_distr)) = NewPose_distr;
+        let (angle_distr, (x_distr, y_distr)) = distr;
         let mut belief = Vec::with_capacity(max_particle_count);
         for ((x, y), angle) in x_distr
             .sample_iter(&mut thread_rng())
@@ -50,7 +49,7 @@ impl NewPoseBelief {
             .zip(angle_distr.sample_iter(&mut thread_rng()))
             .take(max_particle_count)
         {
-            belief.push(NewPose {
+            belief.push(KinematicState {
                 angle: angle.clone().into(),
                 position: Point {
                     x: x.clone().into(),
@@ -67,7 +66,7 @@ impl NewPoseBelief {
     }
 }
 
-/// Uses Unscented Kalman Filter to approximate robot NewPose
+/// Uses Unscented Kalman Filter to approximate robot state
 pub struct KalmanFilter<T, U>
 where
     T: Sensor<Output = f64>,
@@ -149,7 +148,7 @@ where
     pub fn prediction_update(&mut self, time: f64) {
         self.gen_sigma_matrix();
         let control = self.motion_sensor.sense();
-        let temp: NewPose;
+        let temp: KinematicState;
         self.real_state[0] = (self.real_state[0] + self.real_state[3] * time) % (2. * PI);
         self.real_state[1] = self.real_state[1] + self.real_state[4] * time;
         self.real_state[2] = self.real_state[2] + self.real_state[5] * time;
@@ -214,7 +213,7 @@ where
                         .distance_sensors
                         .iter()
                         .map(|distance_sensor| {
-                            distance_sensor.sense_from_pose(NewPose {
+                            distance_sensor.sense_from_pose(KinematicState {
                                 angle: e[0],
                                 position: Point { x: e[1], y: e[2] },
                                 vel_angle: e[3],
@@ -266,15 +265,15 @@ where
     }
 }
 
-/// A NewPose localizer that uses likelyhood-based Monte Carlo Localization
+/// A localizer that uses likelyhood-based Monte Carlo Localization
 /// and takes in motion and range finder sensor data
 pub struct DistanceFinderMCL {
     pub map: Arc<Map2D>,
-    pub belief: Vec<NewPose>,
+    pub belief: Vec<KinematicState>,
     max_particle_count: usize,
     weight_sum_threshold: f64,
     weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-    resampling_noise: NewPose,
+    resampling_noise: KinematicState,
 }
 
 impl DistanceFinderMCL {
@@ -284,10 +283,10 @@ impl DistanceFinderMCL {
         max_particle_count: usize,
         map: Arc<Map2D>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-        resampling_noise: NewPose,
+        resampling_noise: KinematicState,
     ) -> Self {
         let max_position = (map.width, map.height);
-        let belief = NewPoseBelief::new(max_particle_count, max_position.into());
+        let belief = KinematicBelief::new(max_particle_count, max_position.into());
         Self {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 60., // TODO: fixed parameter
@@ -301,17 +300,17 @@ impl DistanceFinderMCL {
     /// Similar to new, but instead of generating `belief` based on a uniform distribution,
     /// generates it based on the given `pose_distr` which is in the form (angle distribution, (x distribution, y distribution))
     pub fn from_distributions<T, U: Clone>(
-        NewPose_distr: (T, (T, T)),
+        distr: (T, (T, T)),
         max_particle_count: usize,
         map: Arc<Map2D>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-        resampling_noise: NewPose,
+        resampling_noise: KinematicState,
     ) -> Self
     where
         T: Distribution<U>,
         U: Into<f64>,
     {
-        let belief = NewPoseBelief::from_distributions(max_particle_count, NewPose_distr);
+        let belief = KinematicBelief::from_distributions(max_particle_count, distr);
         Self {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 60., // TODO: fixed parameter
@@ -323,7 +322,7 @@ impl DistanceFinderMCL {
     }
 
     /// Takes in a sensor which senses the total change in pose sensed since the last update
-    pub fn control_update<U: Sensor<Output = NewPose>>(&mut self, u: &U) {
+    pub fn control_update<U: Sensor<Output = KinematicState>>(&mut self, u: &U) {
         let update = u.sense();
         self.belief.iter_mut().for_each(|p| *p += update);
     }
@@ -383,13 +382,13 @@ impl DistanceFinderMCL {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
             new_particles
-                .push(self.belief[idx] + NewPose::random_from_range(self.resampling_noise));
+                .push(self.belief[idx] + KinematicState::random_from_range(self.resampling_noise));
         }
         self.belief = new_particles;
     }
 
-    pub fn get_prediction(&self) -> NewPose {
-        let mut average_pose = NewPose::default();
+    pub fn get_prediction(&self) -> KinematicState {
+        let mut average_pose = KinematicState::default();
         for sample in &self.belief {
             average_pose += *sample;
         }
@@ -397,15 +396,15 @@ impl DistanceFinderMCL {
     }
 }
 
-/// A NewPose localizer that uses likelyhood-based Monte Carlo Localization
+/// A localizer that uses likelyhood-based Monte Carlo Localization
 /// and takes in motion and range finder sensor data
 pub struct ObjectDetectorMCL {
     pub map: Arc<Map2D>,
-    pub belief: Vec<NewPose>,
+    pub belief: Vec<KinematicState>,
     max_particle_count: usize,
     weight_sum_threshold: f64,
     weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-    resampling_noise: NewPose,
+    resampling_noise: KinematicState,
 }
 
 impl ObjectDetectorMCL {
@@ -415,10 +414,10 @@ impl ObjectDetectorMCL {
         max_particle_count: usize,
         map: Arc<Map2D>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-        resampling_noise: NewPose,
+        resampling_noise: KinematicState,
     ) -> Self {
         let max_position = (map.width, map.height);
-        let belief = NewPoseBelief::new(max_particle_count, max_position.into());
+        let belief = KinematicBelief::new(max_particle_count, max_position.into());
         Self {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 60., // TODO: fixed parameter
@@ -432,17 +431,17 @@ impl ObjectDetectorMCL {
     /// Similar to new, but instead of generating `belief` based on a uniform distribution,
     /// generates it based on the given `pose_distr` which is in the form (angle distribution, (x distribution, y distribution))
     pub fn from_distributions<T, U: Clone>(
-        NewPose_distr: (T, (T, T)),
+        distr: (T, (T, T)),
         max_particle_count: usize,
         map: Arc<Map2D>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-        resampling_noise: NewPose,
+        resampling_noise: KinematicState,
     ) -> Self
     where
         T: Distribution<U>,
         U: Into<f64>,
     {
-        let belief = NewPoseBelief::from_distributions(max_particle_count, NewPose_distr);
+        let belief = KinematicBelief::from_distributions(max_particle_count, distr);
         Self {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 60., // TODO: fixed parameter
@@ -454,7 +453,7 @@ impl ObjectDetectorMCL {
     }
 
     /// Takes in a sensor which senses the total change in pose since the last update
-    pub fn control_update<U: Sensor<Output = NewPose>>(&mut self, u: &U) {
+    pub fn control_update<U: Sensor<Output = KinematicState>>(&mut self, u: &U) {
         let update = u.sense();
         self.belief.iter_mut().for_each(|p| *p += update);
     }
@@ -522,13 +521,13 @@ impl ObjectDetectorMCL {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
             new_particles
-                .push(self.belief[idx] + NewPose::random_from_range(self.resampling_noise));
+                .push(self.belief[idx] + KinematicState::random_from_range(self.resampling_noise));
         }
         self.belief = new_particles;
     }
 
-    pub fn get_prediction(&self) -> NewPose {
-        let mut average_pose = NewPose::default();
+    pub fn get_prediction(&self) -> KinematicState {
+        let mut average_pose = KinematicState::default();
         for sample in &self.belief {
             average_pose += *sample;
         }
