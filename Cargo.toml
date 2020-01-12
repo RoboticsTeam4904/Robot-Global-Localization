@@ -1,5 +1,5 @@
 [package]
-name = "name-this-later"
+name = "global-robot-localization"
 version = "0.1.0"
 authors = ["Codadillo <leoconr@nuevaschool.org>"]
 edition = "2018"
@@ -10,3 +10,6 @@ bitvec = "0.10.0"
 nalgebra = "0.18.0"
 typenum = "1.5.1"
 piston_window = "0.105.0"
+rplidar_drv = "0.6.0"
+serialport = { version = "3.3.0", default-features = false, features = [] }
+rpos_drv = "0.2.0"

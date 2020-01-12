@@ -70,8 +70,8 @@ impl NewPoseBelief {
 /// Uses Unscented Kalman Filter to approximate robot NewPose
 pub struct KalmanFilter<T, U>
 where
-    T: Sensor<f64>,
-    U: Sensor<(Pose, Pose)>,
+    T: Sensor<Output = f64>,
+    U: Sensor<Output = (Pose, Pose)>,
 {
     pub covariance_matrix: Matrix6<f64>,
     distance_sensors: Vec<T>,
@@ -89,8 +89,8 @@ where
 
 impl<T, U> KalmanFilter<T, U>
 where
-    T: Sensor<f64>,
-    U: Sensor<(Pose, Pose)>,
+    T: Sensor<Output = f64>,
+    U: Sensor<Output = (Pose, Pose)>,
 {
     pub fn new(
         covariance_matrix: Matrix6<f64>,
@@ -322,8 +322,8 @@ impl DistanceFinderMCL {
         }
     }
 
-    /// Takes in a sensor which senses the total change in NewPose sensed since the last update
-    pub fn control_update<U: Sensor<NewPose>>(&mut self, u: &U) {
+    /// Takes in a sensor which senses the total change in pose sensed since the last update
+    pub fn control_update<U: Sensor<Output = NewPose>>(&mut self, u: &U) {
         let update = u.sense();
         self.belief.iter_mut().for_each(|p| *p += update);
     }
@@ -331,7 +331,7 @@ impl DistanceFinderMCL {
     /// Takes in a vector of distance finder sensors (e.g. laser range finder)
     pub fn observation_update<Z>(&mut self, z: &[Z])
     where
-        Z: Sensor<Option<f64>> + LimitedSensor<f64, Option<f64>>,
+        Z: Sensor<Output = Option<f64>> + LimitedSensor<f64>,
     {
         let mut errors: Vec<f64> = Vec::with_capacity(self.belief.len());
         for sample in &self.belief {
@@ -453,8 +453,8 @@ impl ObjectDetectorMCL {
         }
     }
 
-    /// Takes in a sensor which senses the total change in NewPose since the last update
-    pub fn control_update<U: Sensor<NewPose>>(&mut self, u: &U) {
+    /// Takes in a sensor which senses the total change in pose since the last update
+    pub fn control_update<U: Sensor<Output = NewPose>>(&mut self, u: &U) {
         let update = u.sense();
         self.belief.iter_mut().for_each(|p| *p += update);
     }
@@ -462,7 +462,7 @@ impl ObjectDetectorMCL {
     /// Takes in a sensor which senses all objects within a certain field of view
     pub fn observation_update<Z>(&mut self, z: &Z)
     where
-        Z: Sensor<Vec<Point>> + LimitedSensor<f64, Vec<Point>>,
+        Z: Sensor<Output = Vec<Point>> + LimitedSensor<f64>,
     {
         let observation = {
             let mut observation = z.sense();

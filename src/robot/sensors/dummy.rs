@@ -4,6 +4,7 @@ use crate::utility::{NewPose, Point, Pose};
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 use std::sync::Arc;
+use std::time::Instant;
 
 /// A sensor which senses all objects' relative positions within a certain fov
 pub struct DummyObjectSensor {
@@ -38,12 +39,14 @@ impl DummyObjectSensor {
     }
 }
 
-impl Sensor<Vec<Point>> for DummyObjectSensor {
+impl Sensor for DummyObjectSensor {
+    type Output = Vec<Point>;
+
     fn relative_pose(&self) -> NewPose {
         self.relative_pose
     }
 
-    fn sense(&self) -> Vec<Point> {
+    fn sense(&self) -> Self::Output {
         let sensor_pose = self.robot_pose + self.relative_pose();
         self.map
             .cull_points(sensor_pose, self.fov)
@@ -72,7 +75,7 @@ impl Sensor<Vec<Point>> for DummyObjectSensor {
     }
 }
 
-impl LimitedSensor<f64, Vec<Point>> for DummyObjectSensor {
+impl LimitedSensor<f64> for DummyObjectSensor {
     fn range(&self) -> Option<f64> {
         Some(self.fov)
     }
@@ -111,8 +114,10 @@ impl DummyDistanceSensor {
     }
 }
 
-impl Sensor<f64> for DummyDistanceSensor {
-    fn sense(&self) -> f64 {
+impl Sensor for DummyDistanceSensor {
+    type Output = f64;
+
+    fn sense(&self) -> Self::Output {
         let sensor_pose = self.relative_pose + self.robot_pose;
         let ray = self.map.raycast(sensor_pose);
         if let Some(max_dist) = self.max_dist {
@@ -161,7 +166,7 @@ impl Sensor<f64> for DummyDistanceSensor {
     }
 }
 
-impl LimitedSensor<f64, f64> for DummyDistanceSensor {}
+impl LimitedSensor<f64> for DummyDistanceSensor {}
 
 pub struct DummyAccelerationSensor {
     x_noise_distr: Normal,
@@ -179,17 +184,19 @@ impl DummyAccelerationSensor {
     }
 }
 
-impl Sensor<(Pose, Pose)> for DummyAccelerationSensor {
-    fn sense(&self) -> (Pose, Pose) {
+impl Sensor for DummyAccelerationSensor {
+    type Output = (Pose, Pose);
+
+    fn sense(&self) -> Self::Output {
         return (Pose::default(), Pose::default());
     }
 
-    fn sense_from_pose(&self, pose: NewPose) -> (Pose, Pose) {
+    fn sense_from_pose(&self, pose: NewPose) -> Self::Output {
         return (Pose::default(), Pose::default());
     }
 }
 
-pub struct DummyMotionSensor {
+pub struct DummyPositionSensor {
     angle_noise_distr: Normal,
     x_noise_distr: Normal,
     y_noise_distr: Normal,
@@ -200,7 +207,7 @@ pub struct DummyMotionSensor {
     pub robot_pose: NewPose,
 }
 
-impl DummyMotionSensor {
+impl DummyPositionSensor {
     /// Noise is Guassian and `noise_margins` are each equal to three standard deviations of the noise distributions
     pub fn new(robot_pose: NewPose, noise_margins: NewPose) -> Self {
         Self {
@@ -221,8 +228,10 @@ impl DummyMotionSensor {
     }
 }
 
-impl Sensor<NewPose> for DummyMotionSensor {
-    fn sense(&self) -> NewPose {
+impl Sensor for DummyPositionSensor {
+    type Output = NewPose;
+
+    fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
         self.robot_pose - self.prev_robot_pose
             + NewPose {
@@ -239,7 +248,7 @@ impl Sensor<NewPose> for DummyMotionSensor {
             }
     }
 
-    fn sense_from_pose(&self, pose: NewPose) -> NewPose {
+    fn sense_from_pose(&self, pose: NewPose) -> Self::Output {
         let mut rng = thread_rng();
         pose - self.prev_robot_pose
             + NewPose {
@@ -254,5 +263,39 @@ impl Sensor<NewPose> for DummyMotionSensor {
                     y: self.y_vel_noise_distr.sample(&mut rng),
                 },
             }
+    }
+}
+
+pub struct DummyMotionSensor {
+    left_noise_distr: Normal,
+    right_noise_distr: Normal,
+    prev_robot_vel: Point,
+    prev_measurement_timestep: Instant,
+    pub robot_vel: Point,
+}
+
+impl Sensor for DummyMotionSensor {
+    type Output = Point;
+
+    fn update(&mut self) {
+        self.prev_measurement_timestep = Instant::now();
+    }
+
+    fn sense(&self) -> Self::Output {
+        let mut rng = thread_rng();
+        (self.robot_vel - self.prev_robot_vel)
+            / self
+                .prev_measurement_timestep
+                .duration_since(Instant::now())
+                .as_millis() as f64
+            / 1000.
+            + Point {
+                x: self.left_noise_distr.sample(&mut rng),
+                y: self.left_noise_distr.sample(&mut rng),
+            }
+    }
+
+    fn sense_from_pose(&self, pose: NewPose) -> Self::Output {
+        Point::default()
     }
 }
