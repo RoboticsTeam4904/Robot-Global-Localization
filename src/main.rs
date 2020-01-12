@@ -79,15 +79,12 @@ fn main() {
         },
         Pose {
             angle: 0.,
-            position: Point {
-                x: 10. / 3. / ((3 as f64).sqrt()),
-                y: 0.,
-            },
+            position: Point { x: 10. / 3., y: 0. },
         },
         Pose {
             angle: PI,
             position: Point {
-                x: -10. / 3. / ((3 as f64).sqrt()),
+                x: -10. / 3.,
                 y: 0.,
             },
         },
@@ -160,10 +157,10 @@ fn main() {
                     [
                         filter.real_state[1] * 3.
                             + map_visual_margins.x
-                            + scaler * filter.real_state[0].cos(),
+                            + scaler * 1.5 * filter.real_state[0].cos(),
                         filter.real_state[2] * 3.
                             + map_visual_margins.y
-                            + scaler * filter.real_state[0].sin(),
+                            + scaler * 1.5 * filter.real_state[0].sin(),
                     ],
                     [
                         filter.real_state[1] * 3.
@@ -191,10 +188,10 @@ fn main() {
                     [
                         filter.known_state[1] * 3.
                             + map_visual_margins.x
-                            + scaler * filter.known_state[0].cos(),
+                            + scaler * 1.5 * filter.known_state[0].cos(),
                         filter.known_state[2] * 3.
                             + map_visual_margins.y
-                            + scaler * filter.known_state[0].sin(),
+                            + scaler * 1.5 * filter.known_state[0].sin(),
                     ],
                     [
                         filter.known_state[1] * 3.
