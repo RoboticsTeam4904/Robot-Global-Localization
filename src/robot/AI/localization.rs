@@ -3,8 +3,8 @@ use crate::robot::sensors::LimitedSensor;
 use crate::robot::sensors::Sensor;
 use crate::utility::{KinematicState, Point, Pose};
 use nalgebra::{
-    ArrayStorage, ComplexField, Matrix, Matrix1x6, Matrix4, Matrix6, Matrix6x4, RowVector4,
-    RowVector6, SymmetricEigen, Vector6, U13, U4, U6,
+    ArrayStorage, Matrix, Matrix4, Matrix6, Matrix6x4, RowVector4,
+    RowVector6, U13, U4, U6,
 };
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
@@ -15,7 +15,7 @@ use std::sync::Arc;
 // TODO: c o d e d u p l i c a t i o n
 type Matrix13x6 = Matrix<f64, U13, U6, ArrayStorage<f64, U13, U6>>;
 type Matrix13x4 = Matrix<f64, U13, U4, ArrayStorage<f64, U13, U4>>;
-struct KinematicBelief {}
+struct KinematicBelief;
 
 impl KinematicBelief {
     fn new(max_particle_count: usize, max_position: Point) -> Vec<KinematicState> {
@@ -33,13 +33,13 @@ impl KinematicBelief {
         belief
     }
 
-    fn from_distributions<T, U: Clone>(
+    fn from_distributions<T, U>(
         max_particle_count: usize,
         distr: (T, (T, T)),
     ) -> Vec<KinematicState>
     where
         T: Distribution<U>,
-        U: Into<f64>,
+        U: Clone + Into<f64>,
     {
         let (angle_distr, (x_distr, y_distr)) = distr;
         let mut belief = Vec::with_capacity(max_particle_count);
@@ -299,7 +299,7 @@ impl DistanceFinderMCL {
 
     /// Similar to new, but instead of generating `belief` based on a uniform distribution,
     /// generates it based on the given `pose_distr` which is in the form (angle distribution, (x distribution, y distribution))
-    pub fn from_distributions<T, U: Clone>(
+    pub fn from_distributions<T, U>(
         distr: (T, (T, T)),
         max_particle_count: usize,
         map: Arc<Map2D>,
@@ -308,7 +308,7 @@ impl DistanceFinderMCL {
     ) -> Self
     where
         T: Distribution<U>,
-        U: Into<f64>,
+        U: Clone + Into<f64>,
     {
         let belief = KinematicBelief::from_distributions(max_particle_count, distr);
         Self {
@@ -430,7 +430,7 @@ impl ObjectDetectorMCL {
 
     /// Similar to new, but instead of generating `belief` based on a uniform distribution,
     /// generates it based on the given `pose_distr` which is in the form (angle distribution, (x distribution, y distribution))
-    pub fn from_distributions<T, U: Clone>(
+    pub fn from_distributions<T, U>(
         distr: (T, (T, T)),
         max_particle_count: usize,
         map: Arc<Map2D>,
@@ -439,7 +439,7 @@ impl ObjectDetectorMCL {
     ) -> Self
     where
         T: Distribution<U>,
-        U: Into<f64>,
+        U: Clone + Into<f64>,
     {
         let belief = KinematicBelief::from_distributions(max_particle_count, distr);
         Self {
