@@ -98,7 +98,7 @@ fn main() {
                     angle: e.angle,
                     position: e.position,
                     vel_angle: 0.,
-                    velocity: Point { x: 0., y: 0. },
+                    velocity: Point::default(),
                 },
                 map.clone(),
                 robot_pose.clone(),
@@ -126,6 +126,8 @@ fn main() {
     );
 
     const MAP_SCALE: f64 = 2.;
+    const ROBOT_ACCEL: f64 = 3.;
+    const ROBOT_ANGLE_ACCEL: f64 = 0.1;
     use piston_window::*;
     let map_visual_margins: Point = (25., 25.).into();
     let mut window: PistonWindow = WindowSettings::new("😎", [1000, 1000])
@@ -136,6 +138,30 @@ fn main() {
     let scaler = 10.;
 
     while let Some(e) = window.next() {
+        // User input
+        if let Some(Button::Keyboard(key)) = e.press_args() {
+            let robot_angle = filter.real_state[0];
+            match key {
+                keyboard::Key::W => {
+                    filter.real_state[4] += ROBOT_ACCEL * robot_angle.cos();
+                    filter.real_state[5] += ROBOT_ACCEL * robot_angle.sin();
+                },
+                keyboard::Key::S => {
+                    filter.real_state[4] -= ROBOT_ACCEL * robot_angle.cos();
+                    filter.real_state[5] -= ROBOT_ACCEL * robot_angle.sin();
+                },
+                keyboard::Key::A => filter.real_state[3] -= ROBOT_ANGLE_ACCEL,
+                keyboard::Key::D => filter.real_state[3] += ROBOT_ANGLE_ACCEL,
+                keyboard::Key::Space => {
+                    filter.real_state[3] = 0.;
+                    filter.real_state[4] = 0.;
+                    filter.real_state[5] = 0.;
+                },
+                _ => (),
+            }
+        }
+
+        // Rendering
         window.draw_2d(&e, |c, g, _device| {
             clear([1.0; 4], g);
             for line in map.lines.clone() {
@@ -224,6 +250,8 @@ fn main() {
                 tick as f64 / time_scale as f64
             )
         }
+
+        // Update the filter and sensors
         distance_sensors.iter_mut().for_each(|distance_sensor| {
             distance_sensor.update_pose(filter.real_state.into());
         });
