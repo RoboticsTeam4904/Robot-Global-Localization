@@ -2,7 +2,7 @@
 mod robot;
 mod utility;
 
-use nalgebra::{Matrix4, Matrix6, RowVector4, Vector4, Vector6};
+use nalgebra::{Matrix1, Matrix4, Matrix6, RowVector1, RowVector4, Vector1, Vector4, Vector6};
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 use robot::ai::localization::KalmanFilter;
@@ -14,10 +14,9 @@ use std::sync::Arc;
 use utility::{KinematicState, Point, Pose};
 
 fn main() {
-    let scale = 1.;
     let q: Matrix6<f64> =
         Matrix6::from_diagonal(&Vector6::new(0., 0., 0., 0.000004, 0.0036, 0.0036));
-    let r: Matrix4<f64> = Matrix4::from_diagonal(&Vector4::from_vec(vec![0.04; 4]));
+    let r: Matrix1<f64> = Matrix1::from_diagonal(&Vector1::from_vec(vec![0.04; 1]));
     let mut rng = thread_rng();
     let noise = Normal::new(0., 3.);
     let map = Arc::new(Map2D::new(
@@ -62,24 +61,24 @@ fn main() {
             angle: FRAC_PI_2,
             position: Point { x: 0., y: 10. / 3. },
         },
-        Pose {
-            angle: -FRAC_PI_2,
-            position: Point {
-                x: 0.,
-                y: -10. / 3.,
-            },
-        },
-        Pose {
-            angle: 0.,
-            position: Point { x: 10. / 3., y: 0. },
-        },
-        Pose {
-            angle: PI,
-            position: Point {
-                x: -10. / 3.,
-                y: 0.,
-            },
-        },
+        // Pose {
+        //     angle: -FRAC_PI_2,
+        //     position: Point {
+        //         x: 0.,
+        //         y: -10. / 3.,
+        //     },
+        // },
+        // Pose {
+        //     angle: 0.,
+        //     position: Point { x: 10. / 3., y: 0. },
+        // },
+        // Pose {
+        //     angle: PI,
+        //     position: Point {
+        //         x: -10. / 3.,
+        //         y: 0.,
+        //     },
+        // },
     ];
     let mut distance_sensors: Vec<DummyDistanceSensor> = distance_points
         .iter()
@@ -248,7 +247,7 @@ fn main() {
             distance_sensor.update_pose(filter.real_state.into());
         });
         filter.prediction_update(1. / TIME_SCALE as f64, control_update);
-        filter.measurement_update(RowVector4::from_vec(
+        filter.measurement_update(RowVector1::from_vec(
             distance_sensors
                 .iter()
                 .map(|distance_sensor| distance_sensor.sense())

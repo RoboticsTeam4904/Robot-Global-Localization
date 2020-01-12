@@ -3,7 +3,8 @@ use crate::robot::sensors::LimitedSensor;
 use crate::robot::sensors::Sensor;
 use crate::utility::{KinematicState, Point, Pose};
 use nalgebra::{
-    ArrayStorage, Matrix, Matrix4, Matrix6, Matrix6x4, RowVector4, RowVector6, U1, U13, U4, U6,
+    ArrayStorage, Matrix, Matrix1, Matrix4, Matrix6, Matrix6x1, Matrix6x4, RowVector1, RowVector4,
+    RowVector6, U1, U13, U4, U6,
 };
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
@@ -14,7 +15,7 @@ use std::sync::Arc;
 // TODO: c o d e d u p l i c a t i o n
 type Matrix13x6 = Matrix<f64, U13, U6, ArrayStorage<f64, U13, U6>>;
 type Vector13 = Matrix<f64, U13, U1, ArrayStorage<f64, U13, U1>>;
-type Matrix13x4 = Matrix<f64, U13, U4, ArrayStorage<f64, U13, U4>>;
+type Matrix13x1 = Matrix<f64, U13, U1, ArrayStorage<f64, U13, U1>>;
 struct KinematicBelief;
 
 impl KinematicBelief {
@@ -79,8 +80,8 @@ where
     pub real_state: RowVector6<f64>,
     sigma_matrix: Matrix13x6,
     q: Matrix6<f64>,
-    r: Matrix4<f64>,
-    sensor_sigma_matrix: Matrix13x4,
+    r: Matrix1<f64>,
+    sensor_sigma_matrix: Matrix13x1,
     beta: f64,
     alpha: f64,
     kappa: f64,
@@ -99,7 +100,7 @@ where
         kappa: f64,
         beta: f64,
         q: Matrix6<f64>,
-        r: Matrix4<f64>,
+        r: Matrix1<f64>,
         distance_sensors: Vec<T>,
         motion_sensor: U,
     ) -> Self {
@@ -112,7 +113,7 @@ where
             sigma_matrix: Matrix13x6::from_element(0.),
             q,
             r,
-            sensor_sigma_matrix: Matrix13x4::from_element(0.),
+            sensor_sigma_matrix: Matrix13x1::from_element(0.),
             beta,
             alpha,
             kappa,
@@ -197,9 +198,9 @@ where
         self.covariance_matrix += self.q;
     }
 
-    pub fn measurement_update(&mut self, sensor_update: RowVector4<f64>) {
+    pub fn measurement_update(&mut self, sensor_update: RowVector1<f64>) {
         let mut sensor_data: Vec<f64> = Vec::new();
-        self.sensor_sigma_matrix = Matrix13x4::from_rows(
+        self.sensor_sigma_matrix = Matrix13x1::from_rows(
             self.sigma_matrix
                 .row_iter()
                 .map(|e| {
@@ -215,21 +216,21 @@ where
                             })
                         })
                         .collect();
-                    RowVector4::from_vec(sensor_data.clone())
+                    RowVector1::from_vec(sensor_data.clone())
                 })
                 .collect::<Vec<_>>()
                 .as_slice(),
         );
         let lambda = (self.alpha.powi(2)) * (6. + self.kappa) - 6.;
-        let mut sensor_predicted = RowVector4::from_element(0.);
+        let mut sensor_predicted = RowVector1::from_element(0.);
         for i in 0..=(2 * 6) {
             sensor_predicted += self.sensor_sigma_matrix.row(i) / (6. + lambda)
                 * if i != 0 { 1. / 2. } else { lambda };
         }
 
-        let mut cov_zz = Matrix4::from_element(0.);
+        let mut cov_zz = Matrix1::from_element(0.);
         let temp_sensor_sigma_matrix =
-            self.sensor_sigma_matrix - Matrix13x4::from_rows(&vec![sensor_predicted; 13]);
+            self.sensor_sigma_matrix - Matrix13x1::from_rows(&vec![sensor_predicted; 13]);
         for i in 0..=(2 * 6) {
             cov_zz += temp_sensor_sigma_matrix.row(i).transpose()
                 * temp_sensor_sigma_matrix.row(i)
@@ -241,7 +242,7 @@ where
         }
         cov_zz += self.r;
 
-        let mut cov_xz = Matrix6x4::from_element(0.);
+        let mut cov_xz = Matrix6x1::from_element(0.);
         let temp_sigma_matrix =
             self.sigma_matrix - Matrix13x6::from_rows(&vec![self.known_state; 13]);
         for i in 0..=(2 * 6) {
