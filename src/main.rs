@@ -7,23 +7,20 @@ use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 use robot::ai::localization::KalmanFilter;
 use robot::map::{Map2D, Object2D};
-use robot::sensors::dummy::{
-    DummyAccelerationSensor, DummyDistanceSensor,
-};
+use robot::sensors::dummy::{DummyAccelerationSensor, DummyDistanceSensor};
 use robot::sensors::Sensor;
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, PI};
 use std::sync::Arc;
 use utility::{KinematicState, Point, Pose};
 
 fn main() {
-    let time_scale = 400;
     let q: Matrix6<f64> = Matrix6::from_diagonal(&Vector6::new(
         0.,
         0.,
         0.,
-        (0.1f64 / time_scale as f64).powi(2),
-        (0.2f64 / time_scale as f64).powi(2),
-        (0.2f64 / time_scale as f64).powi(2),
+        (0f64 / TIME_SCALE as f64).powi(2),
+        (0f64 / TIME_SCALE as f64).powi(2),
+        (0f64 / TIME_SCALE as f64).powi(2),
     ));
     let r: Matrix4<f64> = Matrix4::from_diagonal(&Vector4::from_vec(vec![0.04; 4]));
     let mut rng = thread_rng();
@@ -93,7 +90,7 @@ fn main() {
         .iter()
         .map(|e| {
             DummyDistanceSensor::new(
-                0.6,
+                0.2,
                 KinematicState {
                     angle: e.angle,
                     position: e.position,
@@ -108,8 +105,8 @@ fn main() {
         .collect();
 
     let motion_sensor = DummyAccelerationSensor::new(Pose {
-        angle: 0.1,
-        position: Point { x: 0.2, y: 0.2 },
+        angle: 0.,
+        position: Point { x: 0., y: 0. },
     });
 
     let mut filter = KalmanFilter::new(
@@ -124,10 +121,10 @@ fn main() {
         distance_sensors.clone(),
         motion_sensor,
     );
-
+    const TIME_SCALE: u32 = 400;
     const MAP_SCALE: f64 = 2.;
-    const ROBOT_ACCEL: f64 = 3.;
-    const ROBOT_ANGLE_ACCEL: f64 = 0.1;
+    const ROBOT_ACCEL: f64 = 3. * TIME_SCALE as f64;
+    const ROBOT_ANGLE_ACCEL: f64 = 0.1 * TIME_SCALE as f64;
     use piston_window::*;
     let map_visual_margins: Point = (25., 25.).into();
     let mut window: PistonWindow = WindowSettings::new("😎", [1000, 1000])
@@ -138,25 +135,26 @@ fn main() {
     let scaler = 10.;
 
     while let Some(e) = window.next() {
+        let mut control_update = Pose::default();
         // User input
         if let Some(Button::Keyboard(key)) = e.press_args() {
             let robot_angle = filter.real_state[0];
             match key {
                 keyboard::Key::W => {
-                    filter.real_state[4] += ROBOT_ACCEL * robot_angle.cos();
-                    filter.real_state[5] += ROBOT_ACCEL * robot_angle.sin();
-                },
+                    control_update.position.x += ROBOT_ACCEL * robot_angle.cos();
+                    control_update.position.y += ROBOT_ACCEL * robot_angle.sin();
+                }
                 keyboard::Key::S => {
-                    filter.real_state[4] -= ROBOT_ACCEL * robot_angle.cos();
-                    filter.real_state[5] -= ROBOT_ACCEL * robot_angle.sin();
-                },
-                keyboard::Key::A => filter.real_state[3] -= ROBOT_ANGLE_ACCEL,
-                keyboard::Key::D => filter.real_state[3] += ROBOT_ANGLE_ACCEL,
+                    control_update.position.x -= ROBOT_ACCEL * robot_angle.cos();
+                    control_update.position.y -= ROBOT_ACCEL * robot_angle.sin();
+                }
+                keyboard::Key::A => control_update.angle -= ROBOT_ANGLE_ACCEL,
+                keyboard::Key::D => control_update.angle += ROBOT_ANGLE_ACCEL,
                 keyboard::Key::Space => {
-                    filter.real_state[3] = 0.;
-                    filter.real_state[4] = 0.;
-                    filter.real_state[5] = 0.;
-                },
+                    control_update.position.x = 0.;
+                    control_update.position.y = 0.;
+                    control_update.angle = 0.;
+                }
                 _ => (),
             }
         }
@@ -242,12 +240,12 @@ fn main() {
                 g,
             );
         });
-        if tick % time_scale == 0 {
+        if tick % TIME_SCALE == 0 {
             let diff: KinematicState = (filter.real_state - filter.known_state).into();
             println!(
                 "The difference between predicted pose and real pose is {:?} at time {}.",
                 diff,
-                tick as f64 / time_scale as f64
+                tick as f64 / TIME_SCALE as f64
             )
         }
 
@@ -255,7 +253,7 @@ fn main() {
         distance_sensors.iter_mut().for_each(|distance_sensor| {
             distance_sensor.update_pose(filter.real_state.into());
         });
-        filter.prediction_update(1. / time_scale as f64);
+        filter.prediction_update(1. / TIME_SCALE as f64, control_update);
         filter.measurement_update(RowVector4::from_vec(
             distance_sensors
                 .iter()

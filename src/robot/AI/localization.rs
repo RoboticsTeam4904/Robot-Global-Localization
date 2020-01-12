@@ -69,7 +69,7 @@ impl KinematicBelief {
 pub struct KalmanFilter<T, U>
 where
     T: Sensor<Output = f64>,
-    U: Sensor<Output = (Pose, Pose)>,
+    U: Sensor<Output = Pose>,
 {
     pub covariance_matrix: Matrix6<f64>,
     distance_sensors: Vec<T>,
@@ -88,7 +88,7 @@ where
 impl<T, U> KalmanFilter<T, U>
 where
     T: Sensor<Output = f64>,
-    U: Sensor<Output = (Pose, Pose)>,
+    U: Sensor<Output = Pose>,
 {
     pub fn new(
         covariance_matrix: Matrix6<f64>,
@@ -144,16 +144,16 @@ where
         self.sigma_matrix = Matrix13x6::from_rows(rows.as_slice());
     }
 
-    pub fn prediction_update(&mut self, time: f64) {
+    pub fn prediction_update(&mut self, time: f64, control: Pose) {
         self.gen_sigma_matrix();
-        let control = self.motion_sensor.sense();
+        let control_noise = self.motion_sensor.sense();
         let temp: KinematicState;
         self.real_state[0] = (self.real_state[0] + self.real_state[3] * time) % (2. * PI);
         self.real_state[1] = self.real_state[1] + self.real_state[4] * time;
         self.real_state[2] = self.real_state[2] + self.real_state[5] * time;
-        self.real_state[3] += control.0.angle * time;
-        self.real_state[4] += control.0.position.x * time;
-        self.real_state[5] += control.0.position.y * time;
+        self.real_state[3] += control.angle * time;
+        self.real_state[4] += control.position.x * time;
+        self.real_state[5] += control.position.y * time;
         temp = self.real_state.clone().into();
         self.real_state = temp
             .clamp_control_update(Range {
@@ -161,13 +161,14 @@ where
                 end: Point { x: 200., y: 200. },
             })
             .into();
+        let noisy_control = control + control_noise;
         self.sigma_matrix.row_iter_mut().for_each(|mut e| {
             e[0] = (e[0] + e[3] * time) % (2. * PI);
             e[1] += e[4] * time;
             e[2] += e[5] * time;
-            e[3] += control.1.angle * time;
-            e[4] += control.1.position.x * time;
-            e[5] += control.1.position.y * time;
+            e[3] += noisy_control.angle * time;
+            e[4] += noisy_control.position.x * time;
+            e[5] += noisy_control.position.y * time;
 
             let temp_point = (Point { x: e[1], y: e[2] })
                 .clamp(Point { x: 0., y: 0. }, Point { x: 200., y: 200. });
