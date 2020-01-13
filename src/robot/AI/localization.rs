@@ -16,19 +16,16 @@ type Matrix7<T> = Matrix<T, U7, U7, ArrayStorage<T, U7, U7>>;
 type Matrix13x7 = Matrix<f64, U13, U7, ArrayStorage<f64, U13, U7>>;
 type Vector13 = Matrix<f64, U13, U1, ArrayStorage<f64, U13, U1>>;
 type Matrix13x6 = Matrix<f64, U13, U6, ArrayStorage<f64, U13, U6>>;
-struct KinematicBelief;
+struct PoseBelief;
 
-impl KinematicBelief {
-    fn new(max_particle_count: usize, max_position: Point) -> Vec<KinematicState> {
+impl PoseBelief {
+    fn new(max_particle_count: usize, max_position: Point) -> Vec<Pose> {
         let mut belief = Vec::with_capacity(max_particle_count);
         for _ in 0..max_particle_count {
-            belief.push(KinematicState::random(
+            belief.push(Pose::random(
                 0.0..2. * PI,
                 0.0..max_position.x,
                 0.0..max_position.y,
-                0.0..0.0,
-                0.0..0.0,
-                0.0..0.0,
             ));
         }
         belief
@@ -37,7 +34,7 @@ impl KinematicBelief {
     fn from_distributions<T, U>(
         max_particle_count: usize,
         distr: (T, (T, T)),
-    ) -> Vec<KinematicState>
+    ) -> Vec<Pose>
     where
         T: Distribution<U>,
         U: Into<f64>,
@@ -50,13 +47,12 @@ impl KinematicBelief {
             .zip(angle_distr.sample_iter(&mut thread_rng()))
             .take(max_particle_count)
         {
-            belief.push(KinematicState {
+            belief.push(Pose {
                 angle: angle.into(),
                 position: Point {
                     x: x.into(),
                     y: y.into(),
                 },
-                ..KinematicState::default()
             });
         }
         belief
@@ -201,7 +197,7 @@ where
                     sensor_data = sim_sensors
                         .iter_mut()
                         .map(|sim_sensor| {
-                            sim_sensor.update_pose(updated_pose);
+                            sim_sensor.update_pose(updated_pose.pose());
                             sim_sensor.sense()
                         })
                         .collect();
@@ -257,11 +253,11 @@ where
 /// and takes in motion and range finder sensor data
 pub struct DistanceFinderMCL {
     pub map: Arc<Map2D>,
-    pub belief: Vec<KinematicState>,
+    pub belief: Vec<Pose>,
     max_particle_count: usize,
     weight_sum_threshold: f64,
     weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-    resampling_noise: KinematicState,
+    resampling_noise: Pose,
 }
 
 impl DistanceFinderMCL {
@@ -271,10 +267,10 @@ impl DistanceFinderMCL {
         max_particle_count: usize,
         map: Arc<Map2D>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-        resampling_noise: KinematicState,
+        resampling_noise: Pose,
     ) -> Self {
         let max_position = (map.width, map.height);
-        let belief = KinematicBelief::new(max_particle_count, max_position.into());
+        let belief = PoseBelief::new(max_particle_count, max_position.into());
         Self {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 60., // TODO: fixed parameter
@@ -292,13 +288,13 @@ impl DistanceFinderMCL {
         max_particle_count: usize,
         map: Arc<Map2D>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-        resampling_noise: KinematicState,
+        resampling_noise: Pose,
     ) -> Self
     where
         T: Distribution<U>,
         U: Into<f64>,
     {
-        let belief = KinematicBelief::from_distributions(max_particle_count, distr);
+        let belief = PoseBelief::from_distributions(max_particle_count, distr);
         Self {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 60., // TODO: fixed parameter
@@ -310,7 +306,7 @@ impl DistanceFinderMCL {
     }
 
     /// Takes in a sensor which senses the total change in pose sensed since the last update
-    pub fn control_update<U: Sensor<Output = KinematicState>>(&mut self, u: &U) {
+    pub fn control_update<U: Sensor<Output = Pose>>(&mut self, u: &U) {
         let update = u.sense();
         self.belief.iter_mut().for_each(|p| *p += update);
     }
@@ -370,13 +366,13 @@ impl DistanceFinderMCL {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
             new_particles
-                .push(self.belief[idx] + KinematicState::random_from_range(self.resampling_noise));
+                .push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
         }
         self.belief = new_particles;
     }
 
-    pub fn get_prediction(&self) -> KinematicState {
-        let mut average_pose = KinematicState::default();
+    pub fn get_prediction(&self) -> Pose {
+        let mut average_pose = Pose::default();
         for sample in &self.belief {
             average_pose += *sample;
         }
@@ -388,11 +384,11 @@ impl DistanceFinderMCL {
 /// and takes in motion and range finder sensor data
 pub struct ObjectDetectorMCL {
     pub map: Arc<Map2D>,
-    pub belief: Vec<KinematicState>,
+    pub belief: Vec<Pose>,
     max_particle_count: usize,
     weight_sum_threshold: f64,
     weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-    resampling_noise: KinematicState,
+    resampling_noise: Pose,
 }
 
 impl ObjectDetectorMCL {
@@ -402,10 +398,10 @@ impl ObjectDetectorMCL {
         max_particle_count: usize,
         map: Arc<Map2D>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-        resampling_noise: KinematicState,
+        resampling_noise: Pose,
     ) -> Self {
         let max_position = (map.width, map.height);
-        let belief = KinematicBelief::new(max_particle_count, max_position.into());
+        let belief = PoseBelief::new(max_particle_count, max_position.into());
         Self {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 60., // TODO: fixed parameter
@@ -423,13 +419,13 @@ impl ObjectDetectorMCL {
         max_particle_count: usize,
         map: Arc<Map2D>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-        resampling_noise: KinematicState,
+        resampling_noise: Pose,
     ) -> Self
     where
         T: Distribution<U>,
         U: Into<f64>,
     {
-        let belief = KinematicBelief::from_distributions(max_particle_count, distr);
+        let belief = PoseBelief::from_distributions(max_particle_count, distr);
         Self {
             max_particle_count,
             weight_sum_threshold: max_particle_count as f64 / 60., // TODO: fixed parameter
@@ -441,7 +437,7 @@ impl ObjectDetectorMCL {
     }
 
     /// Takes in a sensor which senses the total change in pose since the last update
-    pub fn control_update<U: Sensor<Output = KinematicState>>(&mut self, u: &U) {
+    pub fn control_update<U: Sensor<Output = Pose>>(&mut self, u: &U) {
         let update = u.sense();
         self.belief.iter_mut().for_each(|p| *p += update);
     }
@@ -509,13 +505,13 @@ impl ObjectDetectorMCL {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
             new_particles
-                .push(self.belief[idx] + KinematicState::random_from_range(self.resampling_noise));
+                .push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
         }
         self.belief = new_particles;
     }
 
-    pub fn get_prediction(&self) -> KinematicState {
-        let mut average_pose = KinematicState::default();
+    pub fn get_prediction(&self) -> Pose {
+        let mut average_pose = Pose::default();
         for sample in &self.belief {
             average_pose += *sample;
         }

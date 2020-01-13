@@ -9,8 +9,8 @@ use std::time::Instant;
 /// A sensor which senses all objects' relative positions within a certain fov
 pub struct DummyObjectSensor {
     pub map: Arc<Map2D>,
-    pub relative_pose: KinematicState,
-    pub robot_pose: KinematicState,
+    pub relative_pose: Pose,
+    pub robot_pose: Pose,
     fov: f64,
     x_noise_distr: Normal,
     y_noise_distr: Normal,
@@ -20,8 +20,8 @@ impl DummyObjectSensor {
     pub fn new(
         fov: f64,
         map: Arc<Map2D>,
-        relative_pose: KinematicState,
-        robot_pose: KinematicState,
+        relative_pose: Pose,
+        robot_pose: Pose,
         noise_margins: Point,
     ) -> Self {
         Self {
@@ -34,7 +34,7 @@ impl DummyObjectSensor {
         }
     }
 
-    pub fn update_pose(&mut self, new_pose: KinematicState) {
+    pub fn update_pose(&mut self, new_pose: Pose) {
         self.robot_pose = new_pose
     }
 }
@@ -42,7 +42,7 @@ impl DummyObjectSensor {
 impl Sensor for DummyObjectSensor {
     type Output = Vec<Point>;
 
-    fn relative_pose(&self) -> KinematicState {
+    fn relative_pose(&self) -> Pose {
         self.relative_pose
     }
 
@@ -70,9 +70,9 @@ impl LimitedSensor<f64> for DummyObjectSensor {
 #[derive(Clone)]
 pub struct DummyDistanceSensor {
     noise_distr: Normal,
-    relative_pose: KinematicState,
+    relative_pose: Pose,
     pub map: Arc<Map2D>,
-    pub robot_pose: KinematicState,
+    pub robot_pose: Pose,
     pub max_dist: Option<f64>,
 }
 
@@ -81,9 +81,9 @@ impl DummyDistanceSensor {
     /// `relative_pose` is the pose of the sensor relative to the robot
     pub fn new(
         noise_margin: f64,
-        relative_pose: KinematicState,
+        relative_pose: Pose,
         map: Arc<Map2D>,
-        robot_pose: KinematicState,
+        robot_pose: Pose,
         max_dist: Option<f64>,
     ) -> Self {
         Self {
@@ -95,7 +95,7 @@ impl DummyDistanceSensor {
         }
     }
 
-    pub fn update_pose(&mut self, new_pose: KinematicState) {
+    pub fn update_pose(&mut self, new_pose: Pose) {
         self.robot_pose = new_pose
     }
 }
@@ -125,7 +125,7 @@ impl Sensor for DummyDistanceSensor {
         }
     }
 
-    fn relative_pose(&self) -> KinematicState {
+    fn relative_pose(&self) -> Pose {
         self.relative_pose
     }
 }
@@ -174,13 +174,13 @@ pub struct DummyPositionSensor {
     x_vel_noise_distr: Normal,
     y_vel_noise_distr: Normal,
     angle_vel_noise_distr: Normal,
-    prev_robot_pose: KinematicState,
-    pub robot_pose: KinematicState,
+    prev_robot_state: KinematicState,
+    pub robot_state: KinematicState,
 }
 
 impl DummyPositionSensor {
     /// Noise is Guassian and `noise_margins` are each equal to three standard deviations of the noise distributions
-    pub fn new(robot_pose: KinematicState, noise_margins: KinematicState) -> Self {
+    pub fn new(robot_state: KinematicState, noise_margins: KinematicState) -> Self {
         Self {
             angle_noise_distr: Normal::new(0., noise_margins.angle / 3.),
             x_noise_distr: Normal::new(0., noise_margins.position.x / 3.),
@@ -188,14 +188,14 @@ impl DummyPositionSensor {
             x_vel_noise_distr: Normal::new(0., noise_margins.velocity.x / 3.),
             y_vel_noise_distr: Normal::new(0., noise_margins.velocity.y / 3.),
             angle_vel_noise_distr: Normal::new(0., noise_margins.vel_angle / 3.),
-            prev_robot_pose: robot_pose,
-            robot_pose,
+            prev_robot_state: robot_state,
+            robot_state,
         }
     }
 
     pub fn update_pose(&mut self, new_pose: KinematicState) {
-        self.prev_robot_pose = self.robot_pose;
-        self.robot_pose = new_pose;
+        self.prev_robot_state = self.robot_state;
+        self.robot_state = new_pose;
     }
 }
 
@@ -204,7 +204,7 @@ impl Sensor for DummyPositionSensor {
 
     fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
-        self.robot_pose - self.prev_robot_pose
+        self.robot_state - self.prev_robot_state
             + KinematicState {
                 angle: self.angle_noise_distr.sample(&mut rng),
                 position: Point {
