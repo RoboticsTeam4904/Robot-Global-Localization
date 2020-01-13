@@ -213,9 +213,9 @@ impl KinematicState {
             -range.angle..range.angle,
             -range.position.x..range.position.x,
             -range.position.y..range.position.y,
-            -range.vel_angle..range.vel_angle,
-            -range.velocity.x..range.velocity.x,
-            -range.velocity.y..range.velocity.y,
+            -0.001..0.001,
+            -0.001..0.001,
+            -0.001..0.001,
         )
     }
 

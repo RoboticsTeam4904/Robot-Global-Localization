@@ -115,7 +115,7 @@ impl DummyDistanceSensor {
 }
 
 impl Sensor for DummyDistanceSensor {
-    type Output = f64;
+    type Output = Option<f64>;
 
     fn sense(&self) -> Self::Output {
         let sensor_pose = self.relative_pose + self.robot_pose;
@@ -126,39 +126,21 @@ impl Sensor for DummyDistanceSensor {
                 None => max_dist,
             };
             if dist > max_dist {
-                max_dist
+                None
             } else {
-                dist + self.noise_distr.sample(&mut thread_rng())
+                Some(dist + self.noise_distr.sample(&mut thread_rng()))
             }
         } else {
             let dist = match ray {
                 Some(c) => c.dist(sensor_pose.position),
                 None => unreachable!(),
             };
-            dist + self.noise_distr.sample(&mut thread_rng())
+            Some(dist + self.noise_distr.sample(&mut thread_rng()))
         }
     }
 
-    fn sense_from_pose(&self, pose: KinematicState) -> f64 {
-        let sensor_pose = self.relative_pose + pose;
-        let ray = self.map.raycast(sensor_pose);
-        if let Some(max_dist) = self.max_dist {
-            let dist = match ray {
-                Some(c) => c.dist(sensor_pose.position),
-                None => max_dist,
-            };
-            if dist > max_dist {
-                max_dist
-            } else {
-                dist + self.noise_distr.sample(&mut thread_rng())
-            }
-        } else {
-            let dist = match ray {
-                Some(c) => c.dist(sensor_pose.position),
-                None => unreachable!(),
-            };
-            dist + self.noise_distr.sample(&mut thread_rng())
-        }
+    fn sense_from_pose(&self, pose: KinematicState) -> Option<f64> {
+        None
     }
 
     fn relative_pose(&self) -> KinematicState {
@@ -166,7 +148,11 @@ impl Sensor for DummyDistanceSensor {
     }
 }
 
-impl LimitedSensor<f64> for DummyDistanceSensor {}
+impl LimitedSensor<f64> for DummyDistanceSensor {
+    fn range(&self) -> Option<f64> {
+        self.max_dist
+    }
+}
 
 pub struct DummyAccelerationSensor {
     x_noise_distr: Normal,
@@ -254,11 +240,8 @@ impl Sensor for DummyPositionSensor {
                     x: self.x_noise_distr.sample(&mut rng),
                     y: self.y_noise_distr.sample(&mut rng),
                 },
-                vel_angle: self.angle_vel_noise_distr.sample(&mut rng),
-                velocity: Point {
-                    x: self.x_vel_noise_distr.sample(&mut rng),
-                    y: self.y_vel_noise_distr.sample(&mut rng),
-                },
+                vel_angle: 0.,
+                velocity: Point::default(),
             }
     }
 

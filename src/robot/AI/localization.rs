@@ -25,9 +25,9 @@ impl KinematicBelief {
                 0.0..2. * PI,
                 0.0..max_position.x,
                 0.0..max_position.y,
-                0.0..0.0,
-                0.0..0.0,
-                0.0..0.0,
+                0.0..0.5,
+                0.0..0.5,
+                0.0..0.5,
             ));
         }
         belief

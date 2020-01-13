@@ -2,29 +2,20 @@
 mod robot;
 mod utility;
 
-use nalgebra::{Matrix4, Matrix6, RowVector4, Vector4, Vector6};
+use piston_window::*;
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
-use robot::ai::localization::KalmanFilter;
+use robot::ai::localization::DistanceFinderMCL;
 use robot::map::{Map2D, Object2D};
-use robot::sensors::dummy::{DummyAccelerationSensor, DummyDistanceSensor};
+use robot::sensors::dummy::{DummyDistanceSensor, DummyPositionSensor};
 use robot::sensors::Sensor;
-use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, PI};
-use std::sync::Arc;
+use std::{
+    f64::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_8, PI},
+    sync::Arc,
+};
 use utility::{KinematicState, Point, Pose};
 
 fn main() {
-    let q: Matrix6<f64> = Matrix6::from_diagonal(&Vector6::new(
-        0.,
-        0.,
-        0.,
-        (0.01f64).powi(2),
-        (0.01f64).powi(2),
-        (0.01f64).powi(2),
-    ));
-    let r: Matrix4<f64> = Matrix4::from_diagonal(&Vector4::from_vec(vec![0.04; 4]));
-    let mut rng = thread_rng();
-    let noise = Normal::new(0., 1.);
     let map = Arc::new(Map2D::new(
         200.,
         200.,
@@ -47,55 +38,22 @@ fn main() {
             Object2D::Triangle(t) => Object2D::Triangle(*t),
         }),
     ));
-    let init_pose = KinematicState {
-        angle: FRAC_PI_2,
-        position: Point {
-            x: 8. + noise.sample(&mut rng),
-            y: 8. + noise.sample(&mut rng),
-        },
-        vel_angle: 0.,
-        velocity: Point { x: 0., y: 0. },
-    };
-    let robot_pose = KinematicState {
+    let mut robot_pose = KinematicState {
         angle: FRAC_PI_2,
         position: Point { x: 8., y: 8. },
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
-    let distance_points = vec![
-        Pose {
-            angle: FRAC_PI_2,
-            position: Point { x: 0., y: 10. / 3. },
-        },
-        Pose {
-            angle: -FRAC_PI_2,
-            position: Point {
-                x: 0.,
-                y: -10. / 3.,
-            },
-        },
-        Pose {
-            angle: 0.,
-            position: Point { x: 10. / 3., y: 0. },
-        },
-        Pose {
-            angle: PI,
-            position: Point {
-                x: -10. / 3.,
-                y: 0.,
-            },
-        },
-    ];
-    let mut distance_sensors: Vec<DummyDistanceSensor> = distance_points
-        .iter()
-        .map(|e| {
+
+    let distance_sensor_count = 4;
+    let mut distance_sensors: Vec<DummyDistanceSensor> = (0..distance_sensor_count)
+        .into_iter()
+        .map(|i| {
             DummyDistanceSensor::new(
-                0.2,
+                0.5,
                 KinematicState {
-                    angle: e.angle,
-                    position: e.position,
-                    vel_angle: 0.,
-                    velocity: Point::default(),
+                    angle: PI / distance_sensor_count as f64,
+                    ..KinematicState::default()
                 },
                 map.clone(),
                 robot_pose.clone(),
@@ -104,55 +62,50 @@ fn main() {
         })
         .collect();
 
-    let motion_sensor = DummyAccelerationSensor::new(Pose {
-        angle: 0.1 * TIME_SCALE as f64,
-        position: Point {
-            x: 0.1 * TIME_SCALE as f64,
-            y: 0.1 * TIME_SCALE as f64,
+    let mut motion_sensor = DummyPositionSensor::new(
+        robot_pose,
+        KinematicState {
+            position: (0.5, 0.5).into(),
+            angle: FRAC_PI_8 / 4.,
+            ..KinematicState::default()
         },
-    });
-
-    let mut filter = KalmanFilter::new(
-        Matrix6::from_diagonal(&Vector6::new(0., 9., 9., 0., 0., 0.)),
-        init_pose.into(),
-        robot_pose.into(),
-        1e-3,
-        0.,
-        2.,
-        q,
-        r,
-        distance_sensors.clone(),
-        motion_sensor,
     );
-    const TIME_SCALE: u32 = 400;
+
+    let mut mcl = DistanceFinderMCL::new(
+        20_000,
+        map.clone(),
+        Box::new(|error| 1.05f64.powf(-error)),
+        KinematicState {
+            angle: FRAC_PI_8 / 4.,
+            position: Point { x: 0.5, y: 0.5 },
+            ..KinematicState::default()
+        },
+    );
+
     const MAP_SCALE: f64 = 2.;
-    const ROBOT_ACCEL: f64 = 3. * TIME_SCALE as f64;
-    const ROBOT_ANGLE_ACCEL: f64 = 0.1 * TIME_SCALE as f64;
-    use piston_window::*;
+    const ROBOT_ACCEL: f64 = 3.;
+    const ROBOT_ANGLE_ACCEL: f64 = 0.1;
     let map_visual_margins: Point = (25., 25.).into();
     let mut window: PistonWindow = WindowSettings::new("😎", [1000, 1000])
         .exit_on_esc(true)
         .build()
         .unwrap();
     let mut tick: u32 = 0;
-    let scaler = 10.;
 
     while let Some(e) = window.next() {
-        let mut control_update = Pose::default();
         // User input
         if let Some(Button::Keyboard(key)) = e.press_args() {
-            let robot_angle = filter.real_state[0];
             match key {
                 keyboard::Key::W => {
-                    control_update.position.x += ROBOT_ACCEL * robot_angle.cos();
-                    control_update.position.y += ROBOT_ACCEL * robot_angle.sin();
+                    robot_pose.position.x += ROBOT_ACCEL * robot_pose.angle.cos();
+                    robot_pose.position.y += ROBOT_ACCEL * robot_pose.angle.sin();
                 }
                 keyboard::Key::S => {
-                    control_update.position.x -= ROBOT_ACCEL * robot_angle.cos();
-                    control_update.position.y -= ROBOT_ACCEL * robot_angle.sin();
+                    robot_pose.position.x -= ROBOT_ACCEL * robot_pose.angle.cos();
+                    robot_pose.position.y -= ROBOT_ACCEL * robot_pose.angle.sin();
                 }
-                keyboard::Key::A => control_update.angle -= ROBOT_ANGLE_ACCEL,
-                keyboard::Key::D => control_update.angle += ROBOT_ANGLE_ACCEL,
+                keyboard::Key::A => robot_pose.angle -= ROBOT_ANGLE_ACCEL,
+                keyboard::Key::D => robot_pose.angle += ROBOT_ANGLE_ACCEL,
 
                 _ => (),
             }
@@ -176,89 +129,79 @@ fn main() {
                 let size: Point = (5., 5.).into();
                 ellipse_from_to([0.7, 0.3, 0.3, 1.], v + size, v - size, c.transform, g);
             }
-            polygon(
-                [0., 0., 0., 1.],
-                &[
-                    [
-                        filter.real_state[1] * MAP_SCALE
-                            + map_visual_margins.x
-                            + scaler * 1.5 * filter.real_state[0].cos(),
-                        filter.real_state[2] * MAP_SCALE
-                            + map_visual_margins.y
-                            + scaler * 1.5 * filter.real_state[0].sin(),
-                    ],
-                    [
-                        filter.real_state[1] * MAP_SCALE
-                            + map_visual_margins.x
-                            + scaler * (filter.real_state[0] + 2. * FRAC_PI_3).cos(),
-                        filter.real_state[2] * MAP_SCALE
-                            + map_visual_margins.y
-                            + scaler * (filter.real_state[0] + 2. * FRAC_PI_3).sin(),
-                    ],
-                    [
-                        filter.real_state[1] * MAP_SCALE
-                            + map_visual_margins.x
-                            + scaler * (filter.real_state[0] + 4. * FRAC_PI_3).cos(),
-                        filter.real_state[2] * MAP_SCALE
-                            + map_visual_margins.y
-                            + scaler * (filter.real_state[0] + 4. * FRAC_PI_3).sin(),
-                    ],
-                ],
+            println!("Particle count: {}", mcl.belief.len());
+            for particle in &mcl.belief {
+                isoceles_triangle(
+                    [0., 0., 0., 1.],
+                    map_visual_margins,
+                    MAP_SCALE,
+                    0.5,
+                    *particle,
+                    c.transform,
+                    g
+                );
+            }
+            isoceles_triangle(
+                [0., 1., 0., 1.],
+                map_visual_margins,
+                MAP_SCALE,
+                1.,
+                robot_pose,
                 c.transform,
                 g,
             );
-            polygon(
-                [0.3, 0.3, 0.3, 1.],
-                &[
-                    [
-                        filter.known_state[1] * MAP_SCALE
-                            + map_visual_margins.x
-                            + scaler * 1.5 * filter.known_state[0].cos(),
-                        filter.known_state[2] * MAP_SCALE
-                            + map_visual_margins.y
-                            + scaler * 1.5 * filter.known_state[0].sin(),
-                    ],
-                    [
-                        filter.known_state[1] * MAP_SCALE
-                            + map_visual_margins.x
-                            + scaler * (filter.known_state[0] + 2. * FRAC_PI_3).cos(),
-                        filter.known_state[2] * MAP_SCALE
-                            + map_visual_margins.y
-                            + scaler * (filter.known_state[0] + 2. * FRAC_PI_3).sin(),
-                    ],
-                    [
-                        filter.known_state[1] * MAP_SCALE
-                            + map_visual_margins.x
-                            + scaler * (filter.known_state[0] + 4. * FRAC_PI_3).cos(),
-                        filter.known_state[2] * MAP_SCALE
-                            + map_visual_margins.y
-                            + scaler * (filter.known_state[0] + 4. * FRAC_PI_3).sin(),
-                    ],
-                ],
+            isoceles_triangle(
+                [0., 0., 1., 1.],
+                map_visual_margins,
+                MAP_SCALE,
+                1.,
+                mcl.get_prediction(),
                 c.transform,
                 g,
             );
         });
-        if tick % TIME_SCALE == 0 {
-            let diff: KinematicState = (filter.real_state - filter.known_state).into();
-            println!(
-                "The difference between predicted pose and real pose is {:?} at time {}.",
-                diff,
-                tick as f64 / TIME_SCALE as f64
-            )
-        }
 
         // Update the filter and sensors
+        motion_sensor.update_pose(robot_pose);
         distance_sensors.iter_mut().for_each(|distance_sensor| {
-            distance_sensor.update_pose(filter.real_state.into());
+            distance_sensor.update_pose(robot_pose);
         });
-        filter.prediction_update(1. / TIME_SCALE as f64, control_update);
-        filter.measurement_update(RowVector4::from_vec(
-            distance_sensors
-                .iter()
-                .map(|distance_sensor| distance_sensor.sense())
-                .collect(),
-        ));
+        mcl.control_update(&motion_sensor);
+        mcl.observation_update(&distance_sensors);
         tick += 1;
     }
+}
+
+fn isoceles_triangle<G: Graphics>(color: [f32; 4], margin: Point, pose_scale: f64, triangle_scale: f64, pose: KinematicState, transform: math::Matrix2d, g: &mut G) {
+    polygon(
+        color,
+        &[
+            [
+                pose.position.x * pose_scale
+                    + margin.x
+                    + triangle_scale * 15. * pose.angle.cos(),
+                pose.position.y * pose_scale
+                    + margin.y
+                    + triangle_scale * 15. * pose.angle.sin(),
+            ],
+            [
+                pose.position.x * pose_scale
+                    + margin.x
+                    + triangle_scale * 10. * (pose.angle + 2. * FRAC_PI_3).cos(),
+                pose.position.y * pose_scale
+                    + margin.y
+                    + triangle_scale * 10. * (pose.angle + 2. * FRAC_PI_3).sin(),
+            ],
+            [
+                pose.position.x * pose_scale
+                    + margin.x
+                    + triangle_scale * 10. * (pose.angle + 4. * FRAC_PI_3).cos(),
+                pose.position.y * pose_scale
+                    + margin.y
+                    + triangle_scale * 10. * (pose.angle + 4. * FRAC_PI_3).sin(),
+            ],
+        ],
+        transform,
+        g,
+    );
 }
