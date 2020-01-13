@@ -1,30 +1,27 @@
 #![allow(dead_code)] // TODO: This will be removed after organizational overhall and a lib.rs
 mod robot;
 mod utility;
-
-use nalgebra::{Matrix4, Matrix6, RowVector4, Vector4, Vector6};
+use nalgebra::{ArrayStorage, Matrix, Matrix5, Matrix6, RowVector5, Vector5, Vector6, U1, U7};
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 use robot::ai::localization::KalmanFilter;
 use robot::map::{Map2D, Object2D};
-use robot::sensors::dummy::{DummyAccelerationSensor, DummyDistanceSensor};
-use robot::sensors::Sensor;
+use robot::sensors::dummy::{DummyDistanceSensor, DummyVelocitySensor};
 use std::f64::consts::{FRAC_PI_2, FRAC_PI_3, PI};
+use std::ops::Range;
 use std::sync::Arc;
 use utility::{KinematicState, Point, Pose};
+type Vector7 = Matrix<f64, U7, U1, ArrayStorage<f64, U7, U1>>;
+type Matrix7<T> = Matrix<T, U7, U7, ArrayStorage<T, U7, U7>>;
 
 fn main() {
-    let q: Matrix6<f64> = Matrix6::from_diagonal(&Vector6::new(
-        0.,
-        0.,
-        0.,
-        (0.01f64).powi(2),
-        (0.01f64).powi(2),
-        (0.01f64).powi(2),
-    ));
-    let r: Matrix4<f64> = Matrix4::from_diagonal(&Vector4::from_vec(vec![0.04; 4]));
+    let q: Matrix6<f64> =
+        Matrix6::from_diagonal(&Vector6::new(0., 0., 0., 0.000004, 0.0036, 0.0036));
+    let r: Matrix7<f64> = Matrix7::from_diagonal(&Vector7::from_vec(vec![
+        0., 0., 0., 0., 0.0025, 0.0025, 0.0025,
+    ]));
     let mut rng = thread_rng();
-    let noise = Normal::new(0., 1.);
+    let noise = Normal::new(0., 3.);
     let map = Arc::new(Map2D::new(
         200.,
         200.,
@@ -50,13 +47,13 @@ fn main() {
     let init_pose = KinematicState {
         angle: FRAC_PI_2,
         position: Point {
-            x: 8. + noise.sample(&mut rng),
-            y: 8. + noise.sample(&mut rng),
+            x: (8. + noise.sample(&mut rng)).max(0.).min(200.),
+            y: (8. + noise.sample(&mut rng)).max(0.).min(200.),
         },
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
-    let robot_pose = KinematicState {
+    let mut robot_pose = KinematicState {
         angle: FRAC_PI_2,
         position: Point { x: 8., y: 8. },
         vel_angle: 0.,
@@ -65,32 +62,26 @@ fn main() {
     let distance_points = vec![
         Pose {
             angle: FRAC_PI_2,
-            position: Point { x: 0., y: 10. / 3. },
+            position: Point { x: 0., y: 0. },
         },
         Pose {
             angle: -FRAC_PI_2,
-            position: Point {
-                x: 0.,
-                y: -10. / 3.,
-            },
+            position: Point { x: 0., y: 0. },
         },
         Pose {
             angle: 0.,
-            position: Point { x: 10. / 3., y: 0. },
+            position: Point { x: 0., y: 0. },
         },
         Pose {
             angle: PI,
-            position: Point {
-                x: -10. / 3.,
-                y: 0.,
-            },
+            position: Point { x: 0., y: 0. },
         },
     ];
-    let mut distance_sensors: Vec<DummyDistanceSensor> = distance_points
+    let distance_sensors: Vec<DummyDistanceSensor> = distance_points
         .iter()
         .map(|e| {
             DummyDistanceSensor::new(
-                0.2,
+                0.,
                 KinematicState {
                     angle: e.angle,
                     position: e.position,
@@ -99,29 +90,50 @@ fn main() {
                 },
                 map.clone(),
                 robot_pose.clone(),
-                Some(100.),
+                None,
             )
         })
         .collect();
 
-    let motion_sensor = DummyAccelerationSensor::new(Pose {
-        angle: 0.1 * TIME_SCALE as f64,
-        position: Point {
-            x: 0.1 * TIME_SCALE as f64,
-            y: 0.1 * TIME_SCALE as f64,
+    let sim_sensors: Vec<DummyDistanceSensor> = distance_points
+        .iter()
+        .map(|e| {
+            DummyDistanceSensor::new(
+                0.,
+                KinematicState {
+                    angle: e.angle,
+                    position: e.position,
+                    vel_angle: 0.,
+                    velocity: Point::default(),
+                },
+                map.clone(),
+                robot_pose.clone(),
+                None,
+            )
+        })
+        .collect();
+
+    let motion_sensor = DummyVelocitySensor::new(
+        Pose {
+            angle: 0.05,
+            position: Point { x: 0.05, y: 0.05 },
         },
-    });
+        Pose {
+            angle: robot_pose.vel_angle,
+            position: robot_pose.velocity,
+        },
+    );
 
     let mut filter = KalmanFilter::new(
         Matrix6::from_diagonal(&Vector6::new(0., 9., 9., 0., 0., 0.)),
         init_pose.into(),
-        robot_pose.into(),
-        1e-3,
+        1e-5,
         0.,
         2.,
         q,
         r,
-        distance_sensors.clone(),
+        distance_sensors,
+        sim_sensors,
         motion_sensor,
     );
     const TIME_SCALE: u32 = 400;
@@ -136,23 +148,26 @@ fn main() {
         .unwrap();
     let mut tick: u32 = 0;
     let scaler = 10.;
+    let control_noise_angle = Normal::new(0., 0.002 * TIME_SCALE as f64);
+    let control_noise_x = Normal::new(0., 0.06 * TIME_SCALE as f64);
+    let control_noise_y = Normal::new(0., 0.06 * TIME_SCALE as f64);
 
     while let Some(e) = window.next() {
-        let mut control_update = Pose::default();
+        let mut control = Pose::default();
         // User input
         if let Some(Button::Keyboard(key)) = e.press_args() {
-            let robot_angle = filter.real_state[0];
+            let robot_angle = robot_pose.angle;
             match key {
                 keyboard::Key::W => {
-                    control_update.position.x += ROBOT_ACCEL * robot_angle.cos();
-                    control_update.position.y += ROBOT_ACCEL * robot_angle.sin();
+                    control.position.x += ROBOT_ACCEL * robot_angle.cos();
+                    control.position.y += ROBOT_ACCEL * robot_angle.sin();
                 }
                 keyboard::Key::S => {
-                    control_update.position.x -= ROBOT_ACCEL * robot_angle.cos();
-                    control_update.position.y -= ROBOT_ACCEL * robot_angle.sin();
+                    control.position.x -= ROBOT_ACCEL * robot_angle.cos();
+                    control.position.y -= ROBOT_ACCEL * robot_angle.sin();
                 }
-                keyboard::Key::A => control_update.angle -= ROBOT_ANGLE_ACCEL,
-                keyboard::Key::D => control_update.angle += ROBOT_ANGLE_ACCEL,
+                keyboard::Key::A => control.angle -= ROBOT_ANGLE_ACCEL,
+                keyboard::Key::D => control.angle += ROBOT_ANGLE_ACCEL,
 
                 _ => (),
             }
@@ -180,28 +195,28 @@ fn main() {
                 [0., 0., 0., 1.],
                 &[
                     [
-                        filter.real_state[1] * MAP_SCALE
+                        robot_pose.position.x * MAP_SCALE
                             + map_visual_margins.x
-                            + scaler * 1.5 * filter.real_state[0].cos(),
-                        filter.real_state[2] * MAP_SCALE
+                            + scaler * 1.5 * robot_pose.angle.cos(),
+                        robot_pose.position.y * MAP_SCALE
                             + map_visual_margins.y
-                            + scaler * 1.5 * filter.real_state[0].sin(),
+                            + scaler * 1.5 * robot_pose.angle.sin(),
                     ],
                     [
-                        filter.real_state[1] * MAP_SCALE
+                        robot_pose.position.x * MAP_SCALE
                             + map_visual_margins.x
-                            + scaler * (filter.real_state[0] + 2. * FRAC_PI_3).cos(),
-                        filter.real_state[2] * MAP_SCALE
+                            + scaler * (robot_pose.angle + 2. * FRAC_PI_3).cos(),
+                        robot_pose.position.y * MAP_SCALE
                             + map_visual_margins.y
-                            + scaler * (filter.real_state[0] + 2. * FRAC_PI_3).sin(),
+                            + scaler * (robot_pose.angle + 2. * FRAC_PI_3).sin(),
                     ],
                     [
-                        filter.real_state[1] * MAP_SCALE
+                        robot_pose.position.x * MAP_SCALE
                             + map_visual_margins.x
-                            + scaler * (filter.real_state[0] + 4. * FRAC_PI_3).cos(),
-                        filter.real_state[2] * MAP_SCALE
+                            + scaler * (robot_pose.angle + 4. * FRAC_PI_3).cos(),
+                        robot_pose.position.y * MAP_SCALE
                             + map_visual_margins.y
-                            + scaler * (filter.real_state[0] + 4. * FRAC_PI_3).sin(),
+                            + scaler * (robot_pose.angle + 4. * FRAC_PI_3).sin(),
                     ],
                 ],
                 c.transform,
@@ -239,26 +254,63 @@ fn main() {
                 g,
             );
         });
-        if tick % TIME_SCALE == 0 {
-            let diff: KinematicState = (filter.real_state - filter.known_state).into();
+        if tick % 1 == 0 {
+            let diff2: KinematicState = robot_pose;
+            let diff: KinematicState = (filter.known_state).into();
             println!(
-                "The difference between predicted pose and real pose is {:?} at time {}.",
+                "The difference between predicted pose and real pose is {:?} {:?}at time {}.",
                 diff,
+                diff2,
                 tick as f64 / TIME_SCALE as f64
             )
         }
 
         // Update the filter and sensors
-        distance_sensors.iter_mut().for_each(|distance_sensor| {
-            distance_sensor.update_pose(filter.real_state.into());
-        });
-        filter.prediction_update(1. / TIME_SCALE as f64, control_update);
-        filter.measurement_update(RowVector4::from_vec(
-            distance_sensors
-                .iter()
-                .map(|distance_sensor| distance_sensor.sense())
-                .collect(),
-        ));
+        let mut rng = thread_rng();
+        let control_noise = Pose {
+            angle: control_noise_angle.sample(&mut rng),
+            position: (
+                control_noise_x.sample(&mut rng),
+                control_noise_y.sample(&mut rng),
+            )
+                .into(),
+        };
+        let temp: KinematicState;
+        robot_pose.angle =
+            (robot_pose.angle + robot_pose.vel_angle / TIME_SCALE as f64) % (2. * PI);
+        robot_pose.position.x += robot_pose.velocity.x / TIME_SCALE as f64;
+        robot_pose.position.y += robot_pose.velocity.y / TIME_SCALE as f64;
+        robot_pose.vel_angle += control.angle / TIME_SCALE as f64;
+        robot_pose.velocity.x += control.position.x / TIME_SCALE as f64;
+        robot_pose.velocity.y += control.position.y / TIME_SCALE as f64;
+        temp = robot_pose.clone().into();
+        robot_pose = temp
+            .clamp_control_update(Range {
+                start: Point { x: 0., y: 0. },
+                end: Point { x: 200., y: 200. },
+            })
+            .into();
+
+        let mut control = control + control_noise;
+        control.angle += (robot_pose.vel_angle - temp.vel_angle) * TIME_SCALE as f64;
+        control.position.x += (robot_pose.velocity.x - temp.velocity.x) * TIME_SCALE as f64;
+        control.position.y += (robot_pose.velocity.y - temp.velocity.y) * TIME_SCALE as f64;
+
+        filter
+            .distance_sensors
+            .iter_mut()
+            .for_each(|distance_sensor| {
+                distance_sensor.update_pose(robot_pose.into());
+            });
+        filter.prediction_update(1. / TIME_SCALE as f64, control);
+        filter.measurement_update();
         tick += 1;
+        // println!(
+        //     "{:?}",
+        //     distance_sensors
+        //         .iter()
+        //         .map(|distance_sensor| distance_sensor.sense())
+        //         .collect::<Vec<f64>>()
+        // );
     }
 }
