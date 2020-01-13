@@ -3,7 +3,7 @@ use crate::utility::{Point, KinematicState};
 use rplidar_drv::{RplidarDevice, RplidarHostProtocol, ScanPoint};
 use rpos_drv::Channel;
 use serialport::prelude::*;
-use std::time::Duration;
+use std::{ops::{RangeBounds, Bound, Range}, time::Duration};
 
 const DEFAULT_BUAD_RATE: u32 = 115200;
 
@@ -11,15 +11,32 @@ const DEFAULT_BUAD_RATE: u32 = 115200;
 
 /// An Rplidar wrapper.
 /// More info found here: https://www.robotshop.com/en/rplidar-a2m8-360-laser-scanner.html.
-struct RplidarSensor {
+struct RplidarSensor<T: RangeBounds<f64> + Clone> {
     pub device: RplidarDevice<dyn serialport::SerialPort>,
     pub latest_scan: Vec<ScanPoint>,
     pub relative_pose: KinematicState,
-    pub max_range: Option<f64>,
+    pub sense_range: Option<T>,
 }
 
-impl RplidarSensor {
-    pub fn new(serial_port: &str, relative_pose: KinematicState, baud_rate: Option<u32>) -> Self {
+impl<T: RangeBounds<f64> + Clone> RplidarSensor<T> {
+    pub fn new(serial_port: &str, relative_pose: KinematicState, baud_rate: Option<u32>) -> RplidarSensor<Range<f64>> {
+        let mut sensor = Self::with_range(serial_port, relative_pose, None, baud_rate);
+        let typical_mode = sensor.device.get_typical_scan_mode().unwrap();
+        let sense_range = sensor.device
+            .get_all_supported_scan_modes()
+            .unwrap()
+            .iter()
+            .find(|mode| mode.id == typical_mode)
+            .map(|mode| 0.0..mode.max_distance as f64);
+        RplidarSensor {
+            device: sensor.device,
+            latest_scan: vec![],
+            relative_pose,
+            sense_range,
+        }
+    }
+
+    pub fn with_range(serial_port: &str, relative_pose: KinematicState, sense_range: Option<T>, baud_rate: Option<u32>) -> RplidarSensor<T> {
         let s = SerialPortSettings {
             baud_rate: baud_rate.unwrap_or(DEFAULT_BUAD_RATE),
             data_bits: DataBits::Eight,
@@ -37,24 +54,17 @@ impl RplidarSensor {
             RplidarHostProtocol::new(),
             serial_port,
         );
-        let mut device = RplidarDevice::new(channel);
-        let typical_mode = device.get_typical_scan_mode().unwrap();
-        let max_range = device
-            .get_all_supported_scan_modes()
-            .unwrap()
-            .iter()
-            .find(|mode| mode.id == typical_mode)
-            .map(|mode| mode.max_distance as f64);
-        Self {
+        let device = RplidarDevice::new(channel);
+        RplidarSensor {
             device,
             latest_scan: vec![],
             relative_pose,
-            max_range,
+            sense_range,
         }
     }
 }
 
-impl Sensor for RplidarSensor {
+impl<T: RangeBounds<f64> + Clone> Sensor for RplidarSensor<T> {
     type Output = Vec<Point>;
 
     fn update(&mut self) {
@@ -82,8 +92,8 @@ impl Sensor for RplidarSensor {
     }
 }
 
-impl LimitedSensor<f64> for RplidarSensor {
-    fn range(&self) -> Option<f64> {
-        self.max_range
+impl<T: RangeBounds<f64> + Clone> LimitedSensor<T> for RplidarSensor<T> {
+    fn range(&self) -> Option<T> {
+        self.sense_range.clone()
     }
 }

@@ -29,14 +29,6 @@ fn main() {
             Object2D::Line(((200., 0.).into(), (200., 200.).into())),
             Object2D::Line(((0., 200.).into(), (200., 200.).into())),
         ]
-        .iter()
-        .map(|o| match o {
-            // temp
-            Object2D::Point(p) => Object2D::Point(*p),
-            Object2D::Line((p1, p2)) => Object2D::Line((*p1, *p2)),
-            Object2D::Rectangle(r) => Object2D::Rectangle(*r),
-            Object2D::Triangle(t) => Object2D::Triangle(*t),
-        }),
     ));
     let mut robot_pose = KinematicState {
         angle: FRAC_PI_2,
