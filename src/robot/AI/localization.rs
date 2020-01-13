@@ -39,7 +39,7 @@ impl KinematicBelief {
     ) -> Vec<KinematicState>
     where
         T: Distribution<U>,
-        U: Clone + Into<f64>,
+        U: Into<f64>,
     {
         let (angle_distr, (x_distr, y_distr)) = distr;
         let mut belief = Vec::with_capacity(max_particle_count);
@@ -50,16 +50,12 @@ impl KinematicBelief {
             .take(max_particle_count)
         {
             belief.push(KinematicState {
-                angle: angle.clone().into(),
+                angle: angle.into(),
                 position: Point {
-                    x: x.clone().into(),
-                    y: y.clone().into(),
+                    x: x.into(),
+                    y: y.into(),
                 },
-                vel_angle: angle.into(),
-                velocity: Point {
-                    x: x.clone().into(),
-                    y: y.clone().into(),
-                },
+                ..KinematicState::default()
             });
         }
         belief
@@ -302,7 +298,7 @@ impl DistanceFinderMCL {
     ) -> Self
     where
         T: Distribution<U>,
-        U: Clone + Into<f64>,
+        U: Into<f64>,
     {
         let belief = KinematicBelief::from_distributions(max_particle_count, distr);
         Self {
@@ -433,7 +429,7 @@ impl ObjectDetectorMCL {
     ) -> Self
     where
         T: Distribution<U>,
-        U: Clone + Into<f64>,
+        U: Into<f64>,
     {
         let belief = KinematicBelief::from_distributions(max_particle_count, distr);
         Self {
