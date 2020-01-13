@@ -1,5 +1,5 @@
 use super::{LimitedSensor, Sensor};
-use crate::utility::{Point, KinematicState};
+use crate::utility::{Point, Pose};
 use rplidar_drv::{RplidarDevice, RplidarHostProtocol, ScanPoint};
 use rpos_drv::Channel;
 use serialport::prelude::*;
@@ -14,12 +14,12 @@ const DEFAULT_BUAD_RATE: u32 = 115200;
 struct RplidarSensor<T: RangeBounds<f64> + Clone> {
     pub device: RplidarDevice<dyn serialport::SerialPort>,
     pub latest_scan: Vec<ScanPoint>,
-    pub relative_pose: KinematicState,
+    pub relative_pose: Pose,
     pub sense_range: Option<T>,
 }
 
 impl<T: RangeBounds<f64> + Clone> RplidarSensor<T> {
-    pub fn new(serial_port: &str, relative_pose: KinematicState, baud_rate: Option<u32>) -> RplidarSensor<Range<f64>> {
+    pub fn new(serial_port: &str, relative_pose: Pose, baud_rate: Option<u32>) -> RplidarSensor<Range<f64>> {
         let mut sensor = Self::with_range(serial_port, relative_pose, None, baud_rate);
         let typical_mode = sensor.device.get_typical_scan_mode().unwrap();
         let sense_range = sensor.device
@@ -36,7 +36,7 @@ impl<T: RangeBounds<f64> + Clone> RplidarSensor<T> {
         }
     }
 
-    pub fn with_range(serial_port: &str, relative_pose: KinematicState, sense_range: Option<T>, baud_rate: Option<u32>) -> RplidarSensor<T> {
+    pub fn with_range(serial_port: &str, relative_pose: Pose, sense_range: Option<T>, baud_rate: Option<u32>) -> RplidarSensor<T> {
         let s = SerialPortSettings {
             baud_rate: baud_rate.unwrap_or(DEFAULT_BUAD_RATE),
             data_bits: DataBits::Eight,
@@ -83,11 +83,7 @@ impl<T: RangeBounds<f64> + Clone> Sensor for RplidarSensor<T> {
             .collect()
     }
 
-    fn sense_from_pose(&self, pose: KinematicState) -> Self::Output {
-        unimplemented!()
-    }
-
-    fn relative_pose(&self) -> KinematicState {
+    fn relative_pose(&self) -> Pose {
         self.relative_pose
     }
 }

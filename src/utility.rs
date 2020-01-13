@@ -219,6 +219,13 @@ impl KinematicState {
         )
     }
 
+    pub fn pose(&self) -> Pose {
+        Pose {
+            position: self.position,
+            angle: self.angle,
+        }
+    }
+
     /// Mod `angle` by 2π
     pub fn normalize(mut self) -> KinematicState {
         self.angle %= 2. * PI;

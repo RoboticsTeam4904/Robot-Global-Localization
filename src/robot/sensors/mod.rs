@@ -1,4 +1,4 @@
-use crate::utility::KinematicState;
+use crate::utility::Pose;
 
 // pub mod gpio;
 pub mod dummy;
@@ -15,11 +15,9 @@ pub trait Sensor {
     fn update(&mut self) {}
     /// Gets the value that the sensor is currently sensing
     fn sense(&self) -> Self::Output;
-    /// Gets the value that the sensor would sense at a given pose
-    fn sense_from_pose(&self, pose: KinematicState) -> Self::Output;
     /// Get the pose of the sensor relative to the pose of the robot
-    fn relative_pose(&self) -> KinematicState {
-        KinematicState::default()
+    fn relative_pose(&self) -> Pose {
+        Pose::default()
     }
 }
 

@@ -30,11 +30,9 @@ fn main() {
             Object2D::Line(((0., 200.).into(), (200., 200.).into())),
         ]
     ));
-    let mut robot_pose = KinematicState {
+    let mut robot_pose = Pose {
         angle: FRAC_PI_2,
         position: Point { x: 8., y: 8. },
-        vel_angle: 0.,
-        velocity: Point { x: 0., y: 0. },
     };
 
     let distance_sensor_count = 4;
@@ -43,9 +41,9 @@ fn main() {
         .map(|i| {
             DummyDistanceSensor::new(
                 0.5,
-                KinematicState {
+                Pose {
                     angle: PI / distance_sensor_count as f64,
-                    ..KinematicState::default()
+                    ..Pose::default()
                 },
                 map.clone(),
                 robot_pose.clone(),
@@ -56,10 +54,9 @@ fn main() {
 
     let mut motion_sensor = DummyPositionSensor::new(
         robot_pose,
-        KinematicState {
+        Pose {
             position: (0.5, 0.5).into(),
             angle: FRAC_PI_8 / 4.,
-            ..KinematicState::default()
         },
     );
 
@@ -67,10 +64,9 @@ fn main() {
         20_000,
         map.clone(),
         Box::new(|error| 1.05f64.powf(-error)),
-        KinematicState {
+        Pose {
             angle: FRAC_PI_8 / 4.,
             position: Point { x: 0.5, y: 0.5 },
-            ..KinematicState::default()
         },
     );
 
@@ -164,7 +160,7 @@ fn main() {
     }
 }
 
-fn isoceles_triangle<G: Graphics>(color: [f32; 4], margin: Point, pose_scale: f64, triangle_scale: f64, pose: KinematicState, transform: math::Matrix2d, g: &mut G) {
+fn isoceles_triangle<G: Graphics>(color: [f32; 4], margin: Point, pose_scale: f64, triangle_scale: f64, pose: Pose, transform: math::Matrix2d, g: &mut G) {
     polygon(
         color,
         &[
