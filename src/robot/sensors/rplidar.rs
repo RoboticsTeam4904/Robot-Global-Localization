@@ -1,5 +1,5 @@
 use super::{LimitedSensor, Sensor};
-use crate::utility::{Point, KinematicState};
+use crate::utility::{KinematicState, Point};
 use rplidar_drv::{RplidarDevice, RplidarHostProtocol, ScanPoint};
 use rpos_drv::Channel;
 use serialport::prelude::*;
@@ -71,10 +71,6 @@ impl Sensor for RplidarSensor {
                 } * rp_point.distance() as f64
             })
             .collect()
-    }
-
-    fn sense_from_pose(&self, pose: KinematicState) -> Self::Output {
-        unimplemented!()
     }
 
     fn relative_pose(&self) -> KinematicState {
