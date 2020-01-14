@@ -1,7 +1,7 @@
 use super::Sensor;
-use crate::utility::Pose;
-use nt::{NetworkTables, Client, EntryData, EntryValue};
+use crate::utility::{Point, Pose};
 use failure;
+use nt::{Client, EntryData, EntryValue, NetworkTables};
 
 pub struct NTSensor {
     inst: NetworkTables<Client>,
@@ -33,5 +33,45 @@ impl Sensor for NTSensor {
 
     fn relative_pose(&self) -> Pose {
         self.relative_pose
+    }
+}
+
+pub struct PoseNTSensor {
+    x: NTSensor,
+    y: NTSensor,
+    angle: NTSensor,
+}
+
+impl PoseNTSensor {
+    fn new(
+        relative_pose: Pose,
+        ip: &str,
+        x_path: String,
+        y_path: String,
+        angle_path: String,
+    ) -> Result<Self, failure::Error> {
+        Ok(Self {
+            x: NTSensor::new(relative_pose, ip, x_path)?,
+            y: NTSensor::new(relative_pose, ip, y_path)?,
+            angle: NTSensor::new(relative_pose, ip, angle_path)?,
+        })
+    }
+}
+
+impl Sensor for PoseNTSensor {
+    type Output = Pose;
+
+    fn sense(&self) -> Self::Output {
+        Pose {
+            position: Point {
+                x: self.x.sense(),
+                y: self.y.sense(),
+            },
+            angle: self.angle.sense(),
+        }
+    }
+
+    fn relative_pose(&self) -> Pose {
+        self.x.relative_pose
     }
 }
