@@ -31,10 +31,7 @@ impl PoseBelief {
         belief
     }
 
-    fn from_distributions<T, U>(
-        max_particle_count: usize,
-        distr: (T, (T, T)),
-    ) -> Vec<Pose>
+    fn from_distributions<T, U>(max_particle_count: usize, distr: (T, (T, T))) -> Vec<Pose>
     where
         T: Distribution<U>,
         U: Into<f64>,
@@ -67,7 +64,7 @@ where
     pub covariance_matrix: Matrix6<f64>,
     pub distance_sensors: Vec<T>,
     sim_sensors: Vec<DummyDistanceSensor>,
-    motion_sensor: DummyVelocitySensor,
+    pub motion_sensor: DummyVelocitySensor,
     pub known_state: RowVector6<f64>,
     sigma_matrix: Matrix13x6,
     q: Matrix6<f64>,
@@ -114,11 +111,7 @@ where
         let mut rows: Vec<RowVector6<f64>> = Vec::new();
         rows.push(self.known_state);
         let lambda = (self.alpha.powi(2)) * (6. + self.kappa) - 6.;
-        let eigendecomp = (self
-            .covariance_matrix
-            .map(|e| (e * 100000.).round() / 100000.)
-            * (6. + lambda))
-            .symmetric_eigen();
+        let eigendecomp = (self.covariance_matrix * (6. + lambda)).symmetric_eigen();
         let mut diagonalization = eigendecomp.eigenvalues;
         diagonalization.data.iter_mut().for_each(|e| {
             *e = e.max(0.).sqrt();
@@ -202,12 +195,13 @@ where
                         })
                         .collect();
 
-                    sensor_data.extend(vec![e[0], e[1], e[2]]);
+                    sensor_data.extend(vec![e[3], e[4], e[5]]);
                     RowVector7::from_vec(sensor_data.clone())
                 })
                 .collect::<Vec<_>>()
                 .as_slice(),
         );
+
         let lambda = (self.alpha.powi(2)) * (6. + self.kappa) - 6.;
         let mut sensor_predicted = RowVector7::from_element(0.);
         for i in 0..=(2 * 6) {
@@ -228,7 +222,6 @@ where
                 };
         }
         cov_zz += self.r;
-
         let mut cov_xz = Matrix6x7::from_element(0.);
         let temp_sigma_matrix =
             self.sigma_matrix - Matrix13x6::from_rows(&vec![self.known_state; 13]);
@@ -241,9 +234,10 @@ where
                     1. / (2. * (6. + lambda))
                 };
         }
-        cov_zz = cov_zz.map(|e| (e * 100000.).round() / 100000.);
-        println!("{:?}", cov_zz);
-        let k = cov_xz * cov_zz.try_inverse().unwrap();
+        let k = cov_xz
+            * cov_zz.try_inverse().unwrap_or_else(|| {
+                panic!("{:?}", cov_zz);
+            });
         self.known_state += (k * (sensor_update - sensor_predicted).transpose()).transpose();
         self.covariance_matrix -= k * cov_zz * k.transpose();
     }
@@ -365,8 +359,7 @@ impl DistanceFinderMCL {
         {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
-            new_particles
-                .push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
+            new_particles.push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
         }
         self.belief = new_particles;
     }
@@ -504,8 +497,7 @@ impl ObjectDetectorMCL {
         {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
-            new_particles
-                .push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
+            new_particles.push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
         }
         self.belief = new_particles;
     }

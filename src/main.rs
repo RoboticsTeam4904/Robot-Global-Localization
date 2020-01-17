@@ -2,7 +2,10 @@
 mod robot;
 mod utility;
 use nalgebra::{ArrayStorage, Matrix, Matrix5, Matrix6, RowVector5, Vector5, Vector6, U1, U7};
-use rand::{thread_rng, distributions::{Distribution, Normal}};
+use rand::{
+    distributions::{Distribution, Normal},
+    thread_rng,
+};
 use robot::{
     ai::localization::KalmanFilter,
     map::{Map2D, Object2D},
@@ -102,13 +105,7 @@ fn main() {
     let sim_sensors: Vec<DummyDistanceSensor> = distance_sensors
         .iter()
         .map(|e| {
-            DummyDistanceSensor::new(
-                0.,
-                e.relative_pose(),
-                map.clone(),
-                robot_state.pose(),
-                None,
-            )
+            DummyDistanceSensor::new(0., e.relative_pose(), map.clone(), robot_state.pose(), None)
         })
         .collect();
 
@@ -126,7 +123,7 @@ fn main() {
     let mut filter = KalmanFilter::new(
         Matrix6::from_diagonal(&Vector6::new(0., 9., 9., 0., 0., 0.)),
         init_state.into(),
-        1e-5,
+        1e-6,
         0.,
         2.,
         q,
@@ -257,9 +254,8 @@ fn main() {
             let diff2: KinematicState = robot_state;
             let diff: KinematicState = (filter.known_state).into();
             println!(
-                "The difference between predicted pose and real pose is {:?} {:?}at time {}.",
-                diff,
-                diff2,
+                "The difference between predicted pose and real pose is {:?} at time {}.",
+                diff - diff2,
                 tick as f64 / TIME_SCALE as f64
             )
         }
@@ -300,6 +296,10 @@ fn main() {
             .for_each(|distance_sensor| {
                 distance_sensor.update_pose(robot_state.pose());
             });
+        filter.motion_sensor.update_pose(Pose {
+            angle: robot_state.vel_angle,
+            position: (robot_state.velocity.x, robot_state.velocity.y).into(),
+        });
         filter.prediction_update(1. / TIME_SCALE as f64, control);
         filter.measurement_update();
         tick += 1;
