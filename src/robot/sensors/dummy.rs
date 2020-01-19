@@ -1,6 +1,6 @@
 use super::{LimitedSensor, Sensor};
 use crate::robot::map::Map2D;
-use crate::utility::{KinematicState, Point, Pose};
+use crate::utility::{Point, Pose};
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 use std::sync::Arc;
@@ -152,6 +152,7 @@ impl DummyVelocitySensor {
         self.real_velocity = pose;
     }
 }
+
 impl Sensor for DummyVelocitySensor {
     type Output = Pose;
 

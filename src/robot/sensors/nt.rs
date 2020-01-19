@@ -43,7 +43,7 @@ pub struct PoseNTSensor {
 }
 
 impl PoseNTSensor {
-    fn new(
+    pub fn new(
         relative_pose: Pose,
         ip: &str,
         x_path: String,

@@ -13,3 +13,5 @@ piston_window = "0.105.0"
 rplidar_drv = "0.6.0"
 serialport = { version = "3.3.0", default-features = false, features = [] }
 rpos_drv = "0.2.0"
+nt = "1.0.3"
+failure = "0.1.6"

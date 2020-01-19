@@ -3,7 +3,7 @@ use crate::utility::{Point, Pose};
 use rplidar_drv::{RplidarDevice, RplidarHostProtocol, ScanPoint};
 use rpos_drv::Channel;
 use serialport::prelude::*;
-use std::{ops::{RangeBounds, Bound, Range}, time::Duration};
+use std::{ops::{RangeBounds, Range}, time::Duration};
 
 const DEFAULT_BUAD_RATE: u32 = 115200;
 
@@ -11,7 +11,7 @@ const DEFAULT_BUAD_RATE: u32 = 115200;
 
 /// An Rplidar wrapper.
 /// More info found here: https://www.robotshop.com/en/rplidar-a2m8-360-laser-scanner.html.
-struct RplidarSensor<T: RangeBounds<f64> + Clone> {
+pub struct RplidarSensor<T: RangeBounds<f64> + Clone> {
     pub device: RplidarDevice<dyn serialport::SerialPort>,
     pub latest_scan: Vec<ScanPoint>,
     pub relative_pose: Pose,
