@@ -177,6 +177,8 @@ where
         ]);
         let sensor_update = RowVector7::from_vec(sensor_update_vector);
         let mut sim_sensors = self.sim_sensors.clone();
+        let important_temp = self.sigma_matrix;
+        // println!("{:?}", sensor_update);
         self.sensor_sigma_matrix = Matrix13x7::from_rows(
             self.sigma_matrix
                 .row_iter()
@@ -236,7 +238,7 @@ where
         }
         let k = cov_xz
             * cov_zz.try_inverse().unwrap_or_else(|| {
-                panic!("{:?}", cov_zz);
+                panic!("{:?} {:?}", self.sensor_sigma_matrix, important_temp);
             });
         self.known_state += (k * (sensor_update - sensor_predicted).transpose()).transpose();
         self.covariance_matrix -= k * cov_zz * k.transpose();
