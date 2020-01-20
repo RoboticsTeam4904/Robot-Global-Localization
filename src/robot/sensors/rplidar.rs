@@ -49,8 +49,8 @@ impl<T: RangeBounds<f64> + Clone> RplidarSensor<T> {
         serial_port
             .write_data_terminal_ready(false)
             .expect("failed to clear DTR");
-        //<RplidarHostProtocol, dyn serialport::SerialPort>::
-        let device = RplidarDevice::with_stream(serial_port);
+        let mut device = RplidarDevice::with_stream(serial_port);
+        device.start_scan().expect("Failed to start scan");
         RplidarSensor {
             device,
             latest_scan: vec![],
