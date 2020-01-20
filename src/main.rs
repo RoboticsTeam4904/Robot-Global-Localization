@@ -60,7 +60,7 @@ fn main() {
     //     "navx/yaw".to_string(),
     // )
     // .expect("Failed to initialized motion sensor.");
-    let lidar = RplidarSensor::with_range("/dev/ttyUSB0", Pose::default(), Some(0.15..8.0), None);
+    let mut lidar = RplidarSensor::with_range("/dev/ttyUSB0", Pose::default(), Some(0.15..8.0), None);
 
     // let mcl = PoseMCL::<RplidarSensor<Range<f64>>>::new(
     //     20_000,
@@ -176,7 +176,7 @@ fn main() {
 
         // Update the filter
         // robot.update();
-        // lidar.update();
+        lidar.update();
         tick += 1;
     }
 }
