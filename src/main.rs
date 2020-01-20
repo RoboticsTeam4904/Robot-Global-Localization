@@ -19,6 +19,7 @@ use replay::point_cloud;
 
 const NETWORKTABLES_IP: &'static str = "localhost:1735";
 const MAP_SCALE: f64 = 2.;
+const WINDOW_SIZE: [f64; 2] = [700., 700.];
 const ROBOT_ACCEL: f64 = 3.;
 const ROBOT_ANGLE_ACCEL: f64 = 0.1;
 
@@ -125,17 +126,18 @@ fn main() {
     // };
 
     // let map_visual_margins: Point = (25., 25.).into();
-    let mut window: PistonWindow = WindowSettings::new("😎", [1000, 1000])
+    let mut window: PistonWindow = WindowSettings::new("😎", WINDOW_SIZE)
         .exit_on_esc(true)
         .build()
         .unwrap();
     let mut tick: u32 = 0;
 
     while let Some(e) = window.next() {
+        lidar.update();
         // Rendering
         window.draw_2d(&e, |c, g, _device| {
             clear([1.0; 4], g);
-            point_cloud(lidar.sense(), [1., 0.,0., 1.], 5., 10., (250., 250.).into(), c.transform, g);
+            point_cloud(lidar.sense(), [1., 0.,0., 1.], 5., 40., (WINDOW_SIZE[0] / 2., WINDOW_SIZE[1] / 2.).into(), c.transform, g);
             // for line in map.lines.clone() {
             //     line_from_to(
             //         [0., 0., 0., 1.],
@@ -176,7 +178,7 @@ fn main() {
 
         // Update the filter
         // robot.update();
-        lidar.update();
+        // lidar.update();
         tick += 1;
     }
 }
