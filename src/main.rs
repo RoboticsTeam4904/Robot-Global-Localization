@@ -176,6 +176,7 @@ fn main() {
 
         // Update the filter
         // robot.update();
+        // lidar.update();
         tick += 1;
     }
 }

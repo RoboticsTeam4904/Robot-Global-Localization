@@ -1,7 +1,6 @@
 use super::{LimitedSensor, Sensor};
 use crate::utility::{Point, Pose};
 use rplidar_drv::{RplidarDevice, RplidarHostProtocol, ScanPoint};
-use rpos_drv::Channel;
 use serialport::prelude::*;
 use std::{ops::{RangeBounds, Range}, time::Duration};
 
@@ -50,11 +49,8 @@ impl<T: RangeBounds<f64> + Clone> RplidarSensor<T> {
         serial_port
             .write_data_terminal_ready(false)
             .expect("failed to clear DTR");
-        let channel = Channel::<RplidarHostProtocol, dyn serialport::SerialPort>::new(
-            RplidarHostProtocol::new(),
-            serial_port,
-        );
-        let device = RplidarDevice::new(channel);
+        //<RplidarHostProtocol, dyn serialport::SerialPort>::
+        let device = RplidarDevice::with_stream(serial_port);
         RplidarSensor {
             device,
             latest_scan: vec![],

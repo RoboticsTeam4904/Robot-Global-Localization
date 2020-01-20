@@ -12,6 +12,5 @@ typenum = "1.5.1"
 piston_window = "0.105.0"
 rplidar_drv = { git = "https://github.com/RoboticsTeam4904/rplidar.rs" }
 serialport = { version = "3.3.0", default-features = false, features = [] }
-rpos_drv = "0.2.0"
 nt = "1.0.3"
 failure = "0.1.6"

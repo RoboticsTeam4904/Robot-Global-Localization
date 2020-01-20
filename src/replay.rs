@@ -1,8 +1,6 @@
 use piston_window::*;
 use crate::utility::Point;
 
-
-
 pub fn point_cloud<G, I>(
     points: I,
     color: [f32; 4],
