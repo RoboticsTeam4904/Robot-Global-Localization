@@ -28,9 +28,9 @@ fn main() {
     const X_NOISE: f64 = 25.;
     const Y_NOISE: f64 = 3.;
     const DISTANCE_SENSOR_NOISE: f64 = 0.05;
-    const CONTROL_X_NOISE: f64 = 0.06;
-    const CONTROL_Y_NOISE: f64 = 0.06;
-    const CONTROL_ANGLE_NOISE: f64 = 0.002;
+    const CONTROL_X_NOISE: f64 = 1.;
+    const CONTROL_Y_NOISE: f64 = 1.;
+    const CONTROL_ANGLE_NOISE: f64 = 0.02;
     const VELOCITY_X_SENSOR_NOISE: f64 = 0.05;
     const VELOCITY_Y_SENSOR_NOISE: f64 = 0.05;
     const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.05;
@@ -85,8 +85,8 @@ fn main() {
     let init_state = KinematicState {
         angle: FRAC_PI_2 + noise_angle.sample(&mut rng),
         position: Point {
-            x: (100. + noise_x.sample(&mut rng)).max(0.).min(200.),
-            y: (8. + noise_y.sample(&mut rng)).max(0.).min(200.),
+            x: (100. + noise_x.sample(&mut rng)),
+            y: (8. + noise_y.sample(&mut rng)),
         },
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
@@ -286,7 +286,7 @@ fn main() {
                 g,
             );
         });
-        if tick % 100 == 0 {
+        if tick % TIME_SCALE == 0 {
             let diff2: KinematicState = robot_state;
             let diff: KinematicState = (filter.known_state).into();
             println!(
