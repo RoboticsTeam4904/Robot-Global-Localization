@@ -2,7 +2,10 @@ use super::{LimitedSensor, Sensor};
 use crate::utility::{Point, Pose};
 use rplidar_drv::{RplidarDevice, RplidarHostProtocol, ScanPoint};
 use serialport::prelude::*;
-use std::{ops::{RangeBounds, Range}, time::Duration};
+use std::{
+    ops::{Range, RangeBounds},
+    time::Duration,
+};
 
 const DEFAULT_BUAD_RATE: u32 = 115200;
 
@@ -18,10 +21,15 @@ pub struct RplidarSensor<T: RangeBounds<f64> + Clone> {
 }
 
 impl<T: RangeBounds<f64> + Clone> RplidarSensor<T> {
-    pub fn new(serial_port: &str, relative_pose: Pose, baud_rate: Option<u32>) -> RplidarSensor<Range<f64>> {
+    pub fn new(
+        serial_port: &str,
+        relative_pose: Pose,
+        baud_rate: Option<u32>,
+    ) -> RplidarSensor<Range<f64>> {
         let mut sensor = Self::with_range(serial_port, relative_pose, None, baud_rate);
         let typical_mode = sensor.device.get_typical_scan_mode().unwrap();
-        let sense_range = sensor.device
+        let sense_range = sensor
+            .device
             .get_all_supported_scan_modes()
             .unwrap()
             .iter()
@@ -35,7 +43,12 @@ impl<T: RangeBounds<f64> + Clone> RplidarSensor<T> {
         }
     }
 
-    pub fn with_range(serial_port: &str, relative_pose: Pose, sense_range: Option<T>, baud_rate: Option<u32>) -> RplidarSensor<T> {
+    pub fn with_range(
+        serial_port: &str,
+        relative_pose: Pose,
+        sense_range: Option<T>,
+        baud_rate: Option<u32>,
+    ) -> RplidarSensor<T> {
         let s = SerialPortSettings {
             baud_rate: baud_rate.unwrap_or(DEFAULT_BUAD_RATE),
             data_bits: DataBits::Eight,
@@ -71,10 +84,10 @@ impl<T: RangeBounds<f64> + Clone> Sensor for RplidarSensor<T> {
         self.latest_scan
             .iter()
             .map(|rp_point| {
-                Point {
-                    x: rp_point.angle().cos() as f64,
-                    y: rp_point.angle().sin() as f64,
-                } * rp_point.distance() as f64
+                Point::polar(
+                    rp_point.angle() as f64 * std::f64::consts::PI / 180., // By default it returns milimeters and degrees ith
+                    rp_point.distance() as f64 / 1000.,
+                )
             })
             .collect()
     }

@@ -1,8 +1,9 @@
+use std::f64::consts::PI;
 use piston_window::*;
 use crate::utility::Point;
 
-pub fn point_cloud<G, I>(
-    points: I,
+pub fn point_cloud<G>(
+    points: &[Point],
     color: [f32; 4],
     point_radius: f64,
     scale: f64,
@@ -10,12 +11,15 @@ pub fn point_cloud<G, I>(
     transform: [[f64; 3]; 2],
     g: &mut G,
 ) where
-    I: IntoIterator<Item = Point>,
     G: Graphics,
 {
-    let radius = Point { x: point_radius, y: point_radius };
+    let point_radius: Point = (point_radius,point_radius).into();
+    let mut furthest_point = Point::default();
     for point in points {
-        let center = offset + point * scale;
-        ellipse_from_to(color, center - radius, center + radius, transform, g);
+        if point.mag() > furthest_point.mag() {
+            furthest_point = *point;
+        }
+        let center = offset + *point * scale;
+        ellipse_from_to(color, center - point_radius, center + point_radius, transform, g);
     }
 }

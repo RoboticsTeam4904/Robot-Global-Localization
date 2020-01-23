@@ -11,6 +11,13 @@ pub struct Point {
 }
 
 impl Point {
+    pub fn polar(angle: f64, radius: f64) -> Self {
+        Self {
+            x: radius * angle.cos(),
+            y: radius * angle.sin(),
+        }
+    }
+
     pub fn clamp(self, lower: Point, upper: Point) -> Point {
         Point {
             x: if self.x > upper.x {

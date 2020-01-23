@@ -1,10 +1,11 @@
 #![allow(dead_code)] // TODO: This will be removed after organizational overhall and a lib.rs
+mod replay;
 mod robot;
 mod utility;
-mod replay;
 
 use piston_window::*;
 use rand::distributions::{Distribution, Normal};
+use replay::point_cloud;
 use robot::ai::localization::PoseMCL;
 use robot::map::{Map2D, Object2D};
 use robot::sensors::{nt::PoseNTSensor, rplidar::RplidarSensor, LimitedSensor, Sensor};
@@ -13,13 +14,14 @@ use std::{
     f64::consts::*,
     ops::{Bound, Range, RangeBounds},
     sync::Arc,
+    thread::sleep,
+    time::Duration,
 };
 use utility::{Point, Pose};
-use replay::point_cloud;
 
 const NETWORKTABLES_IP: &'static str = "localhost:1735";
 const MAP_SCALE: f64 = 2.;
-const WINDOW_SIZE: [f64; 2] = [700., 700.];
+const WINDOW_SIZE: [f64; 2] = [1000., 700.];
 const ROBOT_ACCEL: f64 = 3.;
 const ROBOT_ANGLE_ACCEL: f64 = 0.1;
 
@@ -53,79 +55,60 @@ fn main() {
         ],
     ));
 
-    // let motion_sensor = PoseNTSensor::new(
-    //     Pose::default(),
-    //     NETWORKTABLES_IP,
-    //     "navx/x".to_string(),
-    //     "navx/y".to_string(),
-    //     "navx/yaw".to_string(),
-    // )
-    // .expect("Failed to initialized motion sensor.");
-    let mut lidar = RplidarSensor::with_range("/dev/ttyUSB0", Pose::default(), Some(0.15..8.0), None);
+    let motion_sensor = PoseNTSensor::new(
+        Pose::default(),
+        NETWORKTABLES_IP,
+        "navx/x".to_string(),
+        "navx/y".to_string(),
+        "navx/yaw".to_string(),
+    )
+    .expect("Failed to initialized motion sensor.");
+    let mut lidar =
+        RplidarSensor::with_range("/dev/ttyUSB0", Pose::default(), Some(0.15..8.0), None);
 
-    // let mcl = PoseMCL::<RplidarSensor<Range<f64>>>::new(
-    //     20_000,
-    //     map.clone(),
-    //     Box::new(|error| 1.05f64.powf(-error)),
-    //     Box::new(|sample, lidar, map| {
-    //         let angle_increment = 0.01570796327; // 0.45 degrees in radians
-    //         let mut observed_scan = lidar.sense();
-    //         let mut expected_scan = vec![];
-    //         let mut angle = 0.;
-    //         while angle < 2. * PI {
-    //             let scan_point = map.raycast(
-    //                 (lidar.relative_pose() + *sample)
-    //                     + Pose {
-    //                         angle,
-    //                         ..Pose::default()
-    //                     },
-    //             );
-    //             angle += angle_increment; // do not use angle from this point on in the loop
-    //             if let Some(s) = scan_point {
-    //                 if let Some(sense_range) = lidar.range() {
-    //                     match sense_range.end_bound() {
-    //                         Bound::Included(&max) if s.mag() > max => continue,
-    //                         Bound::Excluded(&max) if s.mag() >= max => continue,
-    //                         _ => (),
-    //                     }
-    //                     match sense_range.start_bound() {
-    //                         Bound::Included(&max) if s.mag() < max => continue,
-    //                         Bound::Excluded(&max) if s.mag() <= max => continue,
-    //                         _ => (),
-    //                     }
-    //                 }
-    //                 expected_scan.push(s);
-    //             };
-    //         }
-    //         observed_scan.sort_by(|a, b| {
-    //             a.angle(Point::default())
-    //                 .partial_cmp(&b.angle(Point::default()))
-    //                 .unwrap_or(Ordering::Equal)
-    //         });
-    //         expected_scan.sort_by(|a, b| {
-    //             a.angle(Point::default())
-    //                 .partial_cmp(&b.angle(Point::default()))
-    //                 .unwrap_or(Ordering::Equal)
-    //         });
-    //         let mut error = 0.;
-    //         for (observed, expected) in observed_scan.iter().zip(expected_scan) {
-                
-    //         }
-    //         error
-    //     }),
-    //     Pose {
-    //         angle: FRAC_PI_8 / 4.,
-    //         position: Point { x: 0.5, y: 0.5 },
-    //     },
-    //     1.,
-    // );
-    // let mut robot = Robot {
-    //     lidar,
-    //     mcl,
-    //     motion_sensor,
-    // };
+    let mcl = PoseMCL::<RplidarSensor<Range<f64>>>::new(
+        20_000,
+        map.clone(),
+        Box::new(|error| 1.05f64.powf(-error)),
+        Box::new(|sample, lidar, map| {
+            let mut observed_scan = lidar.sense();
+            observed_scan.sort_by(|a, b| {
+                a.angle(Point::default())
+                    .partial_cmp(&b.angle(Point::default()))
+                    .unwrap_or(Ordering::Equal)
+            });
+            let mut error = 0.;
+            for scan_point in observed_scan {
+                let predicted_scan_point = map.raycast(
+                    *sample
+                        + Pose {
+                            angle: scan_point.angle(Point::default()),
+                            ..Pose::default()
+                        },
+                );
+                let sense_range = lidar.range().unwrap_or(0.0..std::f64::INFINITY);
+                match predicted_scan_point {
+                    Some(i) if sense_range.contains(&i.mag()) => {
+                        error += (scan_point.mag() - i.mag()).abs()
+                    }
+                    _ => (),
+                }
+            }
+            error
+        }),
+        Pose {
+            angle: FRAC_PI_8 / 4.,
+            position: Point { x: 0.5, y: 0.5 },
+        },
+        1.,
+    );
+    let mut robot = Robot {
+        lidar,
+        mcl,
+        motion_sensor,
+    };
 
-    // let map_visual_margins: Point = (25., 25.).into();
+    let map_visual_margins: Point = (25., 25.).into();
     let mut window: PistonWindow = WindowSettings::new("😎", WINDOW_SIZE)
         .exit_on_esc(true)
         .build()
@@ -133,11 +116,25 @@ fn main() {
     let mut tick: u32 = 0;
 
     while let Some(e) = window.next() {
-        lidar.update();
         // Rendering
         window.draw_2d(&e, |c, g, _device| {
-            clear([1.0; 4], g);
-            point_cloud(lidar.sense(), [1., 0.,0., 1.], 5., 40., (WINDOW_SIZE[0] / 2., WINDOW_SIZE[1] / 2.).into(), c.transform, g);
+            clear([1.; 4], g);
+            point_cloud(
+                &robot.lidar.sense(),
+                [1., 0., 0., 1.],
+                2.5,
+                0.5,
+                (WINDOW_SIZE[0] / 2., WINDOW_SIZE[1] / 2.).into(),
+                c.transform,
+                g,
+            );
+            ellipse_from_to(
+                [0., 0., 0., 1.],
+                [WINDOW_SIZE[0] / 2. - 2.5, WINDOW_SIZE[1] / 2. - 2.5],
+                [WINDOW_SIZE[0] / 2. + 2.5, WINDOW_SIZE[1] / 2. + 2.5],
+                c.transform,
+                g,
+            );
             // for line in map.lines.clone() {
             //     line_from_to(
             //         [0., 0., 0., 1.],
@@ -178,7 +175,7 @@ fn main() {
 
         // Update the filter
         // robot.update();
-        // lidar.update();
+        robot.lidar.update();
         tick += 1;
     }
 }
