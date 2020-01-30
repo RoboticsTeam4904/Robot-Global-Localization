@@ -105,24 +105,6 @@ fn main() {
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
-    let distance_points = vec![
-        Pose {
-            angle: FRAC_PI_2,
-            position: Point { x: 0., y: 0. },
-        },
-        Pose {
-            angle: 0.,
-            position: Point { x: 0., y: 0. },
-        },
-        Pose {
-            angle: -FRAC_PI_2,
-            position: Point { x: 0., y: 0. },
-        },
-        Pose {
-            angle: PI,
-            position: Point { x: 0., y: 0. },
-        },
-    ];
 
     let motion_sensor = DummyVelocitySensor::new(
         Pose {
