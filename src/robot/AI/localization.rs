@@ -6,7 +6,7 @@ use crate::utility::{KinematicState, Point, Pose};
 use nalgebra::{ArrayStorage, Matrix, Matrix6, RowVector6, U1, U13, U6, U7};
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
-use std::f64::consts::PI;
+use std::f64::consts::{FRAC_PI_2, PI};
 use std::sync::Arc;
 
 // TODO: c o d e d u p l i c a t i o n
@@ -66,7 +66,7 @@ where
     sim_sensors: Vec<DummyDistanceSensor>,
     pub motion_sensor: DummyVelocitySensor,
     pub known_state: RowVector6<f64>,
-    sigma_matrix: Matrix13x6,
+    pub sigma_matrix: Matrix13x6,
     q: Matrix6<f64>,
     r: Matrix7<f64>,
     sensor_sigma_matrix: Matrix13x7,
@@ -133,12 +133,16 @@ where
         self.gen_sigma_matrix();
 
         self.sigma_matrix.row_iter_mut().for_each(|mut e| {
-            e[0] = (e[0] + e[3] * time) % (2. * PI);
             e[1] += e[4] * time;
             e[2] += e[5] * time;
+            e[4] += (control.position.x * e[0].cos()
+                + control.position.y * (e[0] - FRAC_PI_2).cos())
+                * time;
+            e[5] += (control.position.x * e[0].sin()
+                + control.position.y * (e[0] - FRAC_PI_2).sin())
+                * time;
+            e[0] = (e[0] + e[3] * time) % (2. * PI);
             e[3] += control.angle * time;
-            e[4] += control.position.x * time;
-            e[5] += control.position.y * time;
         });
         // self.sigma_matrix.column(4) = Vector13::from_element(mult_pose.position.x);
         let lambda = (self.alpha.powi(2)) * (6. + self.kappa) - 6.;
@@ -238,7 +242,7 @@ where
         }
         let k = cov_xz
             * cov_zz.try_inverse().unwrap_or_else(|| {
-                panic!("{:?} {:?}", self.sensor_sigma_matrix, important_temp);
+                panic!("{:?} {:?}", cov_zz, cov_zz.determinant());
             });
         self.known_state += (k * (sensor_update - sensor_predicted).transpose()).transpose();
         self.covariance_matrix -= k * cov_zz * k.transpose();

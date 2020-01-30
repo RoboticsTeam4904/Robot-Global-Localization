@@ -23,21 +23,22 @@ use utility::{KinematicState, Point, Pose};
 type Vector7 = Matrix<f64, U7, U1, ArrayStorage<f64, U7, U1>>;
 type Matrix7<T> = Matrix<T, U7, U7, ArrayStorage<T, U7, U7>>;
 
+const ANGLE_NOISE: f64 = 0.;
+const X_NOISE: f64 = 25.;
+const Y_NOISE: f64 = 3.;
+const DISTANCE_SENSOR_NOISE: f64 = 0.5;
+const CONTROL_X_NOISE: f64 = 0.02;
+const CONTROL_Y_NOISE: f64 = 0.02;
+const CONTROL_ANGLE_NOISE: f64 = 0.002;
+const VELOCITY_X_SENSOR_NOISE: f64 = 0.05;
+const VELOCITY_Y_SENSOR_NOISE: f64 = 0.05;
+const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.05;
+const TIME_SCALE: u32 = 400;
+const MAP_SCALE: f64 = 2.;
+const ROBOT_ACCEL: f64 = 3. * TIME_SCALE as f64;
+const ROBOT_ANGLE_ACCEL: f64 = 0.1 * TIME_SCALE as f64;
+
 fn main() {
-    const ANGLE_NOISE: f64 = 0.;
-    const X_NOISE: f64 = 25.;
-    const Y_NOISE: f64 = 3.;
-    const DISTANCE_SENSOR_NOISE: f64 = 0.05;
-    const CONTROL_X_NOISE: f64 = 1.;
-    const CONTROL_Y_NOISE: f64 = 1.;
-    const CONTROL_ANGLE_NOISE: f64 = 0.02;
-    const VELOCITY_X_SENSOR_NOISE: f64 = 0.05;
-    const VELOCITY_Y_SENSOR_NOISE: f64 = 0.05;
-    const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.05;
-    const TIME_SCALE: u32 = 400;
-    const MAP_SCALE: f64 = 2.;
-    const ROBOT_ACCEL: f64 = 3. * TIME_SCALE as f64;
-    const ROBOT_ANGLE_ACCEL: f64 = 0.1 * TIME_SCALE as f64;
     let q: Matrix6<f64> = Matrix6::from_diagonal(&Vector6::new(
         0.00000,
         0.00000,
@@ -46,10 +47,11 @@ fn main() {
         CONTROL_X_NOISE.powi(2),
         CONTROL_Y_NOISE.powi(2),
     ));
+
     let r: Matrix7<f64> = Matrix7::from_diagonal(&Vector7::from_vec(vec![
-        0.,
-        0.,
-        0.,
+        ROTATIONAL_VELOCITY_SENSOR_NOISE.powi(2),
+        VELOCITY_X_SENSOR_NOISE.powi(2),
+        VELOCITY_Y_SENSOR_NOISE.powi(2),
         DISTANCE_SENSOR_NOISE.powi(2),
         DISTANCE_SENSOR_NOISE.powi(2),
         DISTANCE_SENSOR_NOISE.powi(2),
@@ -72,6 +74,12 @@ fn main() {
             Object2D::Line(((0., 0.).into(), (0., 200.).into())),
             Object2D::Line(((200., 0.).into(), (200., 200.).into())),
             Object2D::Line(((0., 200.).into(), (200., 200.).into())),
+            // Object2D::Line(((20., 60.).into(), (50., 100.).into())),
+            // Object2D::Line(((50., 100.).into(), (80., 50.).into())),
+            // Object2D::Line(((80., 50.).into(), (20., 60.).into())),
+            // Object2D::Line(((140., 100.).into(), (180., 120.).into())),
+            // Object2D::Line(((180., 120.).into(), (160., 90.).into())),
+            // Object2D::Line(((160., 90.).into(), (140., 100.).into())),
         ]
         .iter()
         .map(|o| match o {
@@ -91,6 +99,7 @@ fn main() {
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
+    println!("{:?}", init_state);
     let mut robot_state = KinematicState {
         angle: FRAC_PI_2,
         position: Point { x: 100., y: 8. },
@@ -119,7 +128,7 @@ fn main() {
         .iter()
         .map(|e| {
             DummyDistanceSensor::new(
-                0.,
+                DISTANCE_SENSOR_NOISE,
                 Pose {
                     angle: e.angle,
                     position: e.position,
@@ -162,7 +171,7 @@ fn main() {
             0.,
         )),
         init_state.into(),
-        1e-4,
+        1e-5,
         0.,
         2.,
         q,
@@ -191,12 +200,10 @@ fn main() {
             let robot_angle = robot_state.angle;
             match key {
                 keyboard::Key::W => {
-                    control.position.x += ROBOT_ACCEL * robot_angle.cos();
-                    control.position.y += ROBOT_ACCEL * robot_angle.sin();
+                    control.position.x += ROBOT_ACCEL;
                 }
                 keyboard::Key::S => {
-                    control.position.x -= ROBOT_ACCEL * robot_angle.cos();
-                    control.position.y -= ROBOT_ACCEL * robot_angle.sin();
+                    control.position.x -= ROBOT_ACCEL;
                 }
                 keyboard::Key::A => control.angle -= ROBOT_ANGLE_ACCEL,
                 keyboard::Key::D => control.angle += ROBOT_ANGLE_ACCEL,
@@ -307,25 +314,31 @@ fn main() {
             )
                 .into(),
         };
-        robot_state.angle =
-            (robot_state.angle + robot_state.vel_angle / TIME_SCALE as f64) % (2. * PI);
+
         robot_state.position.x += robot_state.velocity.x / TIME_SCALE as f64;
         robot_state.position.y += robot_state.velocity.y / TIME_SCALE as f64;
+        robot_state.velocity.x += (control.position.x * robot_state.angle.cos()
+            + control.position.y * (robot_state.angle - FRAC_PI_2).cos())
+            / TIME_SCALE as f64;
+        robot_state.velocity.y += (control.position.x * robot_state.angle.sin()
+            + control.position.y * (robot_state.angle - FRAC_PI_2).sin())
+            / TIME_SCALE as f64;
+        robot_state.angle =
+            (robot_state.angle + robot_state.vel_angle / TIME_SCALE as f64) % (2. * PI);
         robot_state.vel_angle += control.angle / TIME_SCALE as f64;
-        robot_state.velocity.x += control.position.x / TIME_SCALE as f64;
-        robot_state.velocity.y += control.position.y / TIME_SCALE as f64;
         let temp = robot_state.clone();
         robot_state = temp
             .clamp_control_update(Range {
-                start: Point { x: 0., y: 0. },
-                end: Point { x: 200., y: 200. },
+                start: Point { x: 0.1, y: 0.1 },
+                end: Point { x: 199.9, y: 199. },
             })
             .into();
 
-        let mut control = control + control_noise;
-        control.angle += (robot_state.vel_angle - temp.vel_angle) * TIME_SCALE as f64;
-        control.position.x += (robot_state.velocity.x - temp.velocity.x) * TIME_SCALE as f64;
-        control.position.y += (robot_state.velocity.y - temp.velocity.y) * TIME_SCALE as f64;
+        let mut control = control;
+        control.angle -= (robot_state.vel_angle - temp.vel_angle) * TIME_SCALE as f64;
+        control.position.x -= (robot_state.velocity.x - temp.velocity.x) * TIME_SCALE as f64;
+        control.position.y -= (robot_state.velocity.y - temp.velocity.y) * TIME_SCALE as f64;
+        control += control_noise;
 
         filter
             .distance_sensors
@@ -337,8 +350,10 @@ fn main() {
             angle: robot_state.vel_angle,
             position: (robot_state.velocity.x, robot_state.velocity.y).into(),
         });
+
         filter.prediction_update(1. / TIME_SCALE as f64, control);
         filter.measurement_update();
+
         tick += 1;
         // println!(
         //     "{:?}",

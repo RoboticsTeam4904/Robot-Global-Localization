@@ -71,6 +71,7 @@ impl LimitedSensor<f64> for DummyObjectSensor {
 pub struct DummyDistanceSensor {
     noise_distr: Normal,
     relative_pose: Pose,
+    tester: Normal,
     pub map: Arc<Map2D>,
     pub robot_pose: Pose,
     pub max_dist: Option<f64>,
@@ -87,6 +88,7 @@ impl DummyDistanceSensor {
         max_dist: Option<f64>,
     ) -> Self {
         Self {
+            tester: Normal::new(0., 0.1),
             noise_distr: Normal::new(0., noise_margin),
             relative_pose,
             map,
@@ -119,7 +121,7 @@ impl Sensor for DummyDistanceSensor {
         } else {
             let dist = match ray {
                 Some(c) => c.dist(sensor_pose.position),
-                None => 200.,
+                None => 300. + self.tester.sample(&mut thread_rng()),
             };
             dist + self.noise_distr.sample(&mut thread_rng())
         }
@@ -142,7 +144,7 @@ impl DummyVelocitySensor {
     pub fn new(noise_margins: Pose, real_velocity: Pose) -> Self {
         Self {
             x_noise_distr: Normal::new(0., noise_margins.position.x),
-            y_noise_distr: Normal::new(0., noise_margins.position.x),
+            y_noise_distr: Normal::new(0., noise_margins.position.y),
             angle_noise_distr: Normal::new(0., noise_margins.angle),
             real_velocity,
         }
