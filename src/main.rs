@@ -20,13 +20,13 @@ use std::{
     sync::Arc,
 };
 use utility::{KinematicState, Point, Pose};
-type Vector7 = Matrix<f64, U7, U1, ArrayStorage<f64, U7, U1>>;
-type Matrix7<T> = Matrix<T, U7, U7, ArrayStorage<T, U7, U7>>;
 
 const ANGLE_NOISE: f64 = 0.;
 const X_NOISE: f64 = 25.;
 const Y_NOISE: f64 = 3.;
-const DISTANCE_SENSOR_NOISE: f64 = 0.5;
+const X_MCL_NOISE: f64 = 0.5;
+const Y_MCL_NOISE: f64 = 0.5;
+const ANGLE_MCL_NOISE: f64 = 0.5;
 const CONTROL_X_NOISE: f64 = 0.02;
 const CONTROL_Y_NOISE: f64 = 0.02;
 const CONTROL_ANGLE_NOISE: f64 = 0.002;
@@ -48,14 +48,13 @@ fn main() {
         CONTROL_Y_NOISE.powi(2),
     ));
 
-    let r: Matrix7<f64> = Matrix7::from_diagonal(&Vector7::from_vec(vec![
+    let r: Matrix6<f64> = Matrix6::from_diagonal(&Vector6::from_vec(vec![
+        ANGLE_MCL_NOISE.powi(2),
+        X_MCL_NOISE.powi(2),
+        Y_MCL_NOISE.powi(2),
         ROTATIONAL_VELOCITY_SENSOR_NOISE.powi(2),
         VELOCITY_X_SENSOR_NOISE.powi(2),
         VELOCITY_Y_SENSOR_NOISE.powi(2),
-        DISTANCE_SENSOR_NOISE.powi(2),
-        DISTANCE_SENSOR_NOISE.powi(2),
-        DISTANCE_SENSOR_NOISE.powi(2),
-        DISTANCE_SENSOR_NOISE.powi(2),
     ]));
     let mut rng = thread_rng();
 
@@ -124,28 +123,6 @@ fn main() {
             position: Point { x: 0., y: 0. },
         },
     ];
-    let distance_sensors: Vec<DummyDistanceSensor> = distance_points
-        .iter()
-        .map(|e| {
-            DummyDistanceSensor::new(
-                DISTANCE_SENSOR_NOISE,
-                Pose {
-                    angle: e.angle,
-                    position: e.position,
-                },
-                map.clone(),
-                robot_state.pose(),
-                None,
-            )
-        })
-        .collect();
-
-    let sim_sensors: Vec<DummyDistanceSensor> = distance_sensors
-        .iter()
-        .map(|e| {
-            DummyDistanceSensor::new(0., e.relative_pose(), map.clone(), robot_state.pose(), None)
-        })
-        .collect();
 
     let motion_sensor = DummyVelocitySensor::new(
         Pose {
@@ -176,9 +153,6 @@ fn main() {
         2.,
         q,
         r,
-        distance_sensors,
-        sim_sensors,
-        motion_sensor,
     );
 
     use piston_window::*;
@@ -340,19 +314,16 @@ fn main() {
         control.position.y -= (robot_state.velocity.y - temp.velocity.y) * TIME_SCALE as f64;
         control += control_noise;
 
-        filter
-            .distance_sensors
-            .iter_mut()
-            .for_each(|distance_sensor| {
-                distance_sensor.update_pose(robot_state.pose());
-            });
-        filter.motion_sensor.update_pose(Pose {
+        motion_sensor.update_pose(Pose {
             angle: robot_state.vel_angle,
             position: (robot_state.velocity.x, robot_state.velocity.y).into(),
         });
 
         filter.prediction_update(1. / TIME_SCALE as f64, control);
-        filter.measurement_update();
+        filter.measurement_update(
+            motion_sensor.sense(),
+            "POSE THAT LEO BUBBALU WILL BE FEEDING IN",
+        );
 
         tick += 1;
         // println!(

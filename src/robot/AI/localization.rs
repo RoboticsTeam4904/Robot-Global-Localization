@@ -3,17 +3,13 @@ use crate::robot::sensors::dummy::{DummyDistanceSensor, DummyVelocitySensor};
 use crate::robot::sensors::LimitedSensor;
 use crate::robot::sensors::Sensor;
 use crate::utility::{KinematicState, Point, Pose};
-use nalgebra::{ArrayStorage, Matrix, Matrix6, RowVector6, U1, U13, U6, U7};
+use nalgebra::{ArrayStorage, Matrix, Matrix6, RowVector6, U1, U13, U6};
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
 use std::f64::consts::{FRAC_PI_2, PI};
 use std::sync::Arc;
 
 // TODO: c o d e d u p l i c a t i o n
-type RowVector7<T> = Matrix<T, U1, U7, ArrayStorage<T, U1, U7>>;
-type Matrix6x7<T> = Matrix<T, U6, U7, ArrayStorage<T, U6, U7>>;
-type Matrix7<T> = Matrix<T, U7, U7, ArrayStorage<T, U7, U7>>;
-type Matrix13x7 = Matrix<f64, U13, U7, ArrayStorage<f64, U13, U7>>;
 type Vector13 = Matrix<f64, U13, U1, ArrayStorage<f64, U13, U1>>;
 type Matrix13x6 = Matrix<f64, U13, U6, ArrayStorage<f64, U13, U6>>;
 struct PoseBelief;
@@ -57,28 +53,19 @@ impl PoseBelief {
 }
 
 /// Uses Unscented Kalman Filter to approximate robot state
-pub struct KalmanFilter<T>
-where
-    T: Sensor<Output = f64>,
-{
+pub struct KalmanFilter {
     pub covariance_matrix: Matrix6<f64>,
-    pub distance_sensors: Vec<T>,
-    sim_sensors: Vec<DummyDistanceSensor>,
-    pub motion_sensor: DummyVelocitySensor,
     pub known_state: RowVector6<f64>,
     pub sigma_matrix: Matrix13x6,
     q: Matrix6<f64>,
-    r: Matrix7<f64>,
-    sensor_sigma_matrix: Matrix13x7,
+    r: Matrix6<f64>,
+    sensor_sigma_matrix: Matrix13x6,
     beta: f64,
     alpha: f64,
     kappa: f64,
 }
 
-impl<T> KalmanFilter<T>
-where
-    T: Sensor<Output = f64>,
-{
+impl KalmanFilter {
     pub fn new(
         covariance_matrix: Matrix6<f64>,
         init_state: RowVector6<f64>, // the components of this vector are x-pos, y-pos, theta, x-acceleration, y-acceleration
@@ -86,21 +73,15 @@ where
         kappa: f64,
         beta: f64,
         q: Matrix6<f64>,
-        r: Matrix7<f64>,
-        distance_sensors: Vec<T>,
-        sim_sensors: Vec<DummyDistanceSensor>,
-        motion_sensor: DummyVelocitySensor,
+        r: Matrix6<f64>,
     ) -> Self {
         Self {
             covariance_matrix,
-            distance_sensors,
-            sim_sensors,
-            motion_sensor,
             known_state: init_state,
             sigma_matrix: Matrix13x6::from_element(0.),
             q,
             r,
-            sensor_sigma_matrix: Matrix13x7::from_element(0.),
+            sensor_sigma_matrix: Matrix13x6::from_element(0.),
             beta,
             alpha,
             kappa,
@@ -166,58 +147,39 @@ where
         self.covariance_matrix += self.q;
     }
 
-    pub fn measurement_update(&mut self) {
+    pub fn measurement_update(&mut self, velocity_sensor_data: Pose, mcl_pose: Pose) {
         let mut sensor_data: Vec<f64> = Vec::new();
-        let mut sensor_update_vector: Vec<f64> = self
-            .distance_sensors
-            .iter()
-            .map(|distance_sensor| distance_sensor.sense())
-            .collect();
-        let velocity_sensor_data = self.motion_sensor.sense();
-        sensor_update_vector.extend(vec![
+
+        let sensor_update_vector = vec![
+            mcl_pose.angle,
+            mcl_pose.position.x,
+            mcl_pose.position.y,
             velocity_sensor_data.angle,
             velocity_sensor_data.position.x,
             velocity_sensor_data.position.y,
-        ]);
-        let sensor_update = RowVector7::from_vec(sensor_update_vector);
-        let mut sim_sensors = self.sim_sensors.clone();
-        let important_temp = self.sigma_matrix;
-        // println!("{:?}", sensor_update);
-        self.sensor_sigma_matrix = Matrix13x7::from_rows(
+        ];
+        let sensor_update = RowVector6::from_vec(sensor_update_vector);
+        self.sensor_sigma_matrix = Matrix13x6::from_rows(
             self.sigma_matrix
                 .row_iter()
                 .map(|e| {
-                    let updated_pose: KinematicState = KinematicState {
-                        angle: e[0],
-                        position: (e[1], e[2]).into(),
-                        vel_angle: e[3],
-                        velocity: (e[4], e[5]).into(),
-                    };
-                    sensor_data = sim_sensors
-                        .iter_mut()
-                        .map(|sim_sensor| {
-                            sim_sensor.update_pose(updated_pose.pose());
-                            sim_sensor.sense()
-                        })
-                        .collect();
-
-                    sensor_data.extend(vec![e[3], e[4], e[5]]);
-                    RowVector7::from_vec(sensor_data.clone())
+                    sensor_data.extend(vec![e[0], e[1], e[2], e[3], e[4], e[5]]);
+                    RowVector6::from_vec(sensor_data.clone())
                 })
                 .collect::<Vec<_>>()
                 .as_slice(),
         );
 
         let lambda = (self.alpha.powi(2)) * (6. + self.kappa) - 6.;
-        let mut sensor_predicted = RowVector7::from_element(0.);
+        let mut sensor_predicted = RowVector6::from_element(0.);
         for i in 0..=(2 * 6) {
             sensor_predicted += self.sensor_sigma_matrix.row(i) / (6. + lambda)
                 * if i != 0 { 1. / 2. } else { lambda };
         }
 
-        let mut cov_zz = Matrix7::from_element(0.);
+        let mut cov_zz = Matrix6::from_element(0.);
         let temp_sensor_sigma_matrix =
-            self.sensor_sigma_matrix - Matrix13x7::from_rows(&vec![sensor_predicted; 13]);
+            self.sensor_sigma_matrix - Matrix13x6::from_rows(&vec![sensor_predicted; 13]);
         for i in 0..=(2 * 6) {
             cov_zz += temp_sensor_sigma_matrix.row(i).transpose()
                 * temp_sensor_sigma_matrix.row(i)
@@ -228,7 +190,7 @@ where
                 };
         }
         cov_zz += self.r;
-        let mut cov_xz = Matrix6x7::from_element(0.);
+        let mut cov_xz = Matrix6::from_element(0.);
         let temp_sigma_matrix =
             self.sigma_matrix - Matrix13x6::from_rows(&vec![self.known_state; 13]);
         for i in 0..=(2 * 6) {
