@@ -1,7 +1,7 @@
 #![allow(dead_code)] // TODO: This will be removed after organizational overhall and a lib.rs
 mod robot;
 mod utility;
-use nalgebra::{ArrayStorage, Matrix, Matrix5, Matrix6, RowVector5, Vector5, Vector6, U1, U7};
+use nalgebra::{Matrix, Matrix5, Matrix6, RowVector5, Vector5, Vector6, U1, U7};
 use rand::{
     distributions::{Distribution, Normal},
     thread_rng,
@@ -10,7 +10,7 @@ use robot::{
     ai::localization::KalmanFilter,
     map::{Map2D, Object2D},
     sensors::{
-        dummy::{DummyDistanceSensor, DummyVelocitySensor},
+        dummy::DummyVelocitySensor,
         LimitedSensor, Sensor,
     },
 };
@@ -20,6 +20,7 @@ use std::{
     sync::Arc,
 };
 use utility::{KinematicState, Point, Pose};
+use piston_window::*;
 
 const ANGLE_NOISE: f64 = 0.;
 const X_NOISE: f64 = 25.;
@@ -106,7 +107,7 @@ fn main() {
         velocity: Point { x: 0., y: 0. },
     };
 
-    let motion_sensor = DummyVelocitySensor::new(
+    let mut motion_sensor = DummyVelocitySensor::new(
         Pose {
             angle: ROTATIONAL_VELOCITY_SENSOR_NOISE,
             position: Point {
@@ -137,7 +138,6 @@ fn main() {
         r,
     );
 
-    use piston_window::*;
     let map_visual_margins: Point = (25., 25.).into();
     let mut window: PistonWindow = WindowSettings::new("😎", [1000, 1000])
         .exit_on_esc(true)
@@ -249,6 +249,8 @@ fn main() {
                 g,
             );
         });
+
+        // Log state
         if tick % TIME_SCALE == 0 {
             let diff2: KinematicState = robot_state;
             let diff: KinematicState = (filter.known_state).into();
@@ -260,16 +262,8 @@ fn main() {
             )
         }
 
-        // Update the filter and sensors
+        // Update the physics simulation
         let mut rng = thread_rng();
-        let control_noise = Pose {
-            angle: control_noise_angle.sample(&mut rng),
-            position: (
-                control_noise_x.sample(&mut rng),
-                control_noise_y.sample(&mut rng),
-            )
-                .into(),
-        };
 
         robot_state.position.x += robot_state.velocity.x / TIME_SCALE as f64;
         robot_state.position.y += robot_state.velocity.y / TIME_SCALE as f64;
@@ -294,26 +288,30 @@ fn main() {
         control.angle -= (robot_state.vel_angle - temp.vel_angle) * TIME_SCALE as f64;
         control.position.x -= (robot_state.velocity.x - temp.velocity.x) * TIME_SCALE as f64;
         control.position.y -= (robot_state.velocity.y - temp.velocity.y) * TIME_SCALE as f64;
+
+        let control_noise = Pose {
+            angle: control_noise_angle.sample(&mut rng),
+            position: (
+                control_noise_x.sample(&mut rng),
+                control_noise_y.sample(&mut rng),
+            )
+                .into(),
+        };
         control += control_noise;
 
+        // update sensors
         motion_sensor.update_pose(Pose {
             angle: robot_state.vel_angle,
             position: (robot_state.velocity.x, robot_state.velocity.y).into(),
         });
 
+        // update localization
         filter.prediction_update(1. / TIME_SCALE as f64, control);
         filter.measurement_update(
             motion_sensor.sense(),
-            "POSE THAT LEO BUBBALU WILL BE FEEDING IN",
+            unimplemented!(),
         );
 
         tick += 1;
-        // println!(
-        //     "{:?}",
-        //     distance_sensors
-        //         .iter()
-        //         .map(|distance_sensor| distance_sensor.sense())
-        //         .collect::<Vec<f64>>()
-        // );
     }
 }
