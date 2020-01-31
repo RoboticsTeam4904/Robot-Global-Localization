@@ -1,8 +1,7 @@
 use crate::robot::map::Map2D;
-use crate::robot::sensors::dummy::{DummyDistanceSensor, DummyVelocitySensor};
 use crate::robot::sensors::LimitedSensor;
 use crate::robot::sensors::Sensor;
-use crate::utility::{KinematicState, Point, Pose};
+use crate::utility::{Point, Pose};
 use nalgebra::{ArrayStorage, Matrix, Matrix6, RowVector6, U1, U13, U6};
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;

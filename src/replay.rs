@@ -14,11 +14,7 @@ pub fn point_cloud<G>(
     G: Graphics,
 {
     let point_radius: Point = (point_radius,point_radius).into();
-    let mut furthest_point = Point::default();
     for point in points {
-        if point.mag() > furthest_point.mag() {
-            furthest_point = *point;
-        }
         let center = offset + *point * scale;
         ellipse_from_to(color, center - point_radius, center + point_radius, transform, g);
     }
