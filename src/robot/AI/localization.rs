@@ -211,6 +211,119 @@ impl KalmanFilter {
     }
 }
 
+pub type WeightCalculator = Box<dyn FnMut(&f64) -> f64 + Send + Sync>;
+pub type ErrorCalculator<Z> = Box<dyn FnMut(&Pose, &Z, Arc<Map2D>) -> f64 + Send + Sync>;
+
+/// A localizer that uses likelyhood-based Monte Carlo Localization
+/// and takes in motion sensor data and `Z` as sensor data
+pub struct PoseMCL<Z> {
+    pub map: Arc<Map2D>,
+    pub belief: Vec<Pose>,
+    max_particle_count: usize,
+    weight_sum_threshold: f64,
+    weight_from_error: WeightCalculator,
+    errors_from_sense: ErrorCalculator<Z>,
+    resampling_noise: Pose,
+}
+
+impl<Z> PoseMCL<Z> {
+    pub fn new(
+        max_particle_count: usize,
+        map: Arc<Map2D>,
+        weight_from_error: WeightCalculator,
+        errors_from_sense: ErrorCalculator<Z>,
+        resampling_noise: Pose,
+        weight_sum_threshold: f64,
+    ) -> Self {
+        let belief = PoseBelief::new(max_particle_count, (map.width, map.height).into());
+        Self {
+            max_particle_count,
+            map,
+            belief,
+            weight_sum_threshold,
+            weight_from_error,
+            errors_from_sense,
+            resampling_noise,
+        }
+    }
+
+    pub fn from_distributions<U, V>(
+        belief_distr: (U, (U, U)),
+        max_particle_count: usize,
+        map: Arc<Map2D>,
+        weight_from_error: WeightCalculator,
+        errors_from_sense: ErrorCalculator<Z>,
+        resampling_noise: Pose,
+        weight_sum_threshold: f64,
+    ) -> Self
+    where
+        U: Distribution<V>,
+        V: Into<f64>,
+    {
+        let belief = PoseBelief::from_distributions(max_particle_count, belief_distr);
+        Self {
+            max_particle_count,
+            weight_sum_threshold,
+            map,
+            weight_from_error,
+            errors_from_sense,
+            belief,
+            resampling_noise,
+        }
+    }
+
+    /// Takes in a sensor which senses the total change in pose sensed since the last update
+    pub fn control_update<U: Sensor<Output = Pose>>(&mut self, u: &U) {
+        let update = u.sense();
+        self.belief.iter_mut().for_each(|p| *p += update);
+    }
+
+    /// Takes in a vector of distance finder sensors (e.g. laser range finder)
+    pub fn observation_update(&mut self, z: &Z) {
+        let mut errors: Vec<f64> = Vec::with_capacity(self.belief.len());
+        for sample in &self.belief {
+            errors.push(
+                (self.errors_from_sense)(sample, z, self.map.clone())
+            )
+        }
+
+        let mut new_particles = Vec::new();
+        #[allow(clippy::float_cmp)]
+        let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
+            errors
+                .iter()
+                .map(|_| 2. * self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
+                .collect()
+        } else {
+            errors
+                .iter()
+                .map(|error| (self.weight_from_error)(error))
+                .collect()
+        };
+        let distr = WeightedIndex::new(weights.clone()).unwrap();
+        let mut sum_weights = 0.;
+        let mut rng = thread_rng();
+        // TODO: rather than have max particle count and weight sum threshold parameters,
+        // it might be beneficial to use some dynamic combination of the two as the break condition.
+        while sum_weights < self.weight_sum_threshold
+            && new_particles.len() < self.max_particle_count
+        {
+            let idx = distr.sample(&mut rng);
+            sum_weights += weights[idx];
+            new_particles.push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
+        }
+        self.belief = new_particles;
+    }
+
+    pub fn get_prediction(&self) -> Pose {
+        let mut average_pose = Pose::default();
+        for sample in &self.belief {
+            average_pose += *sample;
+        }
+        average_pose / (self.belief.len() as f64)
+    }
+}
+
 /// A localizer that uses likelyhood-based Monte Carlo Localization
 /// and takes in motion and range finder sensor data
 pub struct DistanceFinderMCL {

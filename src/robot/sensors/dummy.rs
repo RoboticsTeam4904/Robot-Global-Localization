@@ -1,6 +1,6 @@
 use super::{LimitedSensor, Sensor};
 use crate::robot::map::Map2D;
-use crate::utility::{KinematicState, Point, Pose};
+use crate::utility::{Point, Pose};
 use rand::distributions::{Distribution, Normal};
 use rand::thread_rng;
 use std::sync::Arc;
@@ -103,7 +103,7 @@ impl DummyDistanceSensor {
 }
 
 impl Sensor for DummyDistanceSensor {
-    type Output = f64;
+    type Output = Option<f64>;
 
     fn sense(&self) -> Self::Output {
         let sensor_pose = self.relative_pose + self.robot_pose;
@@ -114,16 +114,16 @@ impl Sensor for DummyDistanceSensor {
                 None => max_dist,
             };
             if dist > max_dist {
-                max_dist + self.noise_distr.sample(&mut thread_rng())
+                None
             } else {
-                dist + self.noise_distr.sample(&mut thread_rng())
+                Some(dist + self.noise_distr.sample(&mut thread_rng()))
             }
         } else {
             let dist = match ray {
                 Some(c) => c.dist(sensor_pose.position),
                 None => 300. + self.tester.sample(&mut thread_rng()),
             };
-            dist + self.noise_distr.sample(&mut thread_rng())
+            Some(dist + self.noise_distr.sample(&mut thread_rng()))
         }
     }
 
@@ -154,6 +154,7 @@ impl DummyVelocitySensor {
         self.real_velocity = pose;
     }
 }
+
 impl Sensor for DummyVelocitySensor {
     type Output = Pose;
 
@@ -173,50 +174,39 @@ pub struct DummyPositionSensor {
     angle_noise_distr: Normal,
     x_noise_distr: Normal,
     y_noise_distr: Normal,
-    x_vel_noise_distr: Normal,
-    y_vel_noise_distr: Normal,
-    angle_vel_noise_distr: Normal,
-    prev_robot_state: KinematicState,
-    pub robot_state: KinematicState,
+    prev_robot_state: Pose,
+    pub robot_pose: Pose,
 }
 
 impl DummyPositionSensor {
     /// Noise is Guassian and `noise_margins` are each equal to three standard deviations of the noise distributions
-    pub fn new(robot_state: KinematicState, noise_margins: KinematicState) -> Self {
+    pub fn new(robot_pose: Pose, noise_margins: Pose) -> Self {
         Self {
             angle_noise_distr: Normal::new(0., noise_margins.angle / 3.),
             x_noise_distr: Normal::new(0., noise_margins.position.x / 3.),
             y_noise_distr: Normal::new(0., noise_margins.position.y / 3.),
-            x_vel_noise_distr: Normal::new(0., noise_margins.velocity.x / 3.),
-            y_vel_noise_distr: Normal::new(0., noise_margins.velocity.y / 3.),
-            angle_vel_noise_distr: Normal::new(0., noise_margins.vel_angle / 3.),
-            prev_robot_state: robot_state,
-            robot_state,
+            prev_robot_state: robot_pose,
+            robot_pose,
         }
     }
 
-    pub fn update_pose(&mut self, new_pose: KinematicState) {
-        self.prev_robot_state = self.robot_state;
-        self.robot_state = new_pose;
+    pub fn update_pose(&mut self, new_pose: Pose) {
+        self.prev_robot_state = self.robot_pose;
+        self.robot_pose = new_pose;
     }
 }
 
 impl Sensor for DummyPositionSensor {
-    type Output = KinematicState;
+    type Output = Pose;
 
     fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
-        self.robot_state - self.prev_robot_state
-            + KinematicState {
+        self.robot_pose - self.prev_robot_state
+            + Pose {
                 angle: self.angle_noise_distr.sample(&mut rng),
                 position: Point {
                     x: self.x_noise_distr.sample(&mut rng),
                     y: self.y_noise_distr.sample(&mut rng),
-                },
-                vel_angle: self.angle_vel_noise_distr.sample(&mut rng),
-                velocity: Point {
-                    x: self.x_vel_noise_distr.sample(&mut rng),
-                    y: self.y_vel_noise_distr.sample(&mut rng),
                 },
             }
     }

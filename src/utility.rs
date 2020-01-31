@@ -11,6 +11,13 @@ pub struct Point {
 }
 
 impl Point {
+    pub fn polar(angle: f64, radius: f64) -> Self {
+        Self {
+            x: radius * angle.cos(),
+            y: radius * angle.sin(),
+        }
+    }
+
     pub fn clamp(self, lower: Point, upper: Point) -> Point {
         Point {
             x: if self.x > upper.x {
@@ -213,9 +220,9 @@ impl KinematicState {
             -range.angle..range.angle,
             -range.position.x..range.position.x,
             -range.position.y..range.position.y,
-            -range.vel_angle..range.vel_angle,
-            -range.velocity.x..range.velocity.x,
-            -range.velocity.y..range.velocity.y,
+            -0.001..0.001,
+            -0.001..0.001,
+            -0.001..0.001,
         )
     }
 
@@ -486,18 +493,18 @@ where
     num
 }
 
-// pub fn clamp_to_range<T, U>(num: T, range: U) -> T
-// where U: std::ops::RangeBounds<isize>, T: Into<isize> + From<isize>,
-// {
-//     let num = num.into();
-//     let num = match range.start_bound() {
-//         std::ops::Bound::Excluded(lower) if num <= *lower => *lower + 1isize,
-//         std::ops::Bound::Included(lower) if num < *lower => *lower,
-//         _ => num
-//     };
-//     match range.end_bound() {
-//         std::ops::Bound::Excluded(upper) if num >= *upper => *upper - 1isize,
-//         std::ops::Bound::Included(upper) if num > *upper => *upper,
-//         _ => num
-//     }.into()
-// }
+pub fn clamp_to_range<T>(num: f64, range: T) -> f64
+    where T: std::ops::RangeBounds<f64>,
+{
+    let num = num.into();
+    let num = match range.start_bound() {
+        std::ops::Bound::Excluded(lower) if num <= *lower => *lower + 1.,
+        std::ops::Bound::Included(lower) if num < *lower => *lower,
+        _ => num
+    };
+    match range.end_bound() {
+        std::ops::Bound::Excluded(upper) if num >= *upper => *upper - 1.,
+        std::ops::Bound::Included(upper) if num > *upper => *upper,
+        _ => num
+    }.into()
+}
