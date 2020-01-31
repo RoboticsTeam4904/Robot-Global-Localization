@@ -176,6 +176,7 @@ pub struct DummyPositionSensor {
     y_noise_distr: Normal,
     prev_robot_state: Pose,
     pub robot_pose: Pose,
+    last_update: Instant,
 }
 
 impl DummyPositionSensor {
@@ -187,12 +188,14 @@ impl DummyPositionSensor {
             y_noise_distr: Normal::new(0., noise_margins.position.y / 3.),
             prev_robot_state: robot_pose,
             robot_pose,
+            last_update: Instant::now(),
         }
     }
 
     pub fn update_pose(&mut self, new_pose: Pose) {
         self.prev_robot_state = self.robot_pose;
         self.robot_pose = new_pose;
+        self.last_update = Instant::now();
     }
 }
 
@@ -201,13 +204,14 @@ impl Sensor for DummyPositionSensor {
 
     fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
+        let elapsed = self.last_update.elapsed().as_secs_f64();
         self.robot_pose - self.prev_robot_state
             + Pose {
-                angle: self.angle_noise_distr.sample(&mut rng),
+                angle: self.angle_noise_distr.sample(&mut rng) * elapsed,
                 position: Point {
                     x: self.x_noise_distr.sample(&mut rng),
                     y: self.y_noise_distr.sample(&mut rng),
-                },
+                } * elapsed,
             }
     }
 }

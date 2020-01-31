@@ -435,7 +435,7 @@ impl std::ops::Add for Pose {
     /// Does normalize angle
     fn add(self, other: Pose) -> Pose {
         Pose {
-            angle: self.angle + other.angle,
+            angle: (self.angle + other.angle) % (2. * PI),
             position: self.position + other.position,
         }
     }

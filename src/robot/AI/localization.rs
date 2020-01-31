@@ -228,11 +228,11 @@ pub struct PoseMCL<Z> {
 impl<Z> PoseMCL<Z> {
     pub fn new(
         max_particle_count: usize,
+        weight_sum_threshold: f64,
         map: Arc<Map2D>,
         weight_from_error: WeightCalculator,
         errors_from_sense: ErrorCalculator<Z>,
         resampling_noise: Pose,
-        weight_sum_threshold: f64,
     ) -> Self {
         let belief = PoseBelief::new(max_particle_count, (map.width, map.height).into());
         Self {
@@ -249,11 +249,11 @@ impl<Z> PoseMCL<Z> {
     pub fn from_distributions<U, V>(
         belief_distr: (U, (U, U)),
         max_particle_count: usize,
+        weight_sum_threshold: f64,
         map: Arc<Map2D>,
         weight_from_error: WeightCalculator,
         errors_from_sense: ErrorCalculator<Z>,
         resampling_noise: Pose,
-        weight_sum_threshold: f64,
     ) -> Self
     where
         U: Distribution<V>,
@@ -339,6 +339,7 @@ impl DistanceFinderMCL {
     /// Every step, the localizer should recieve a control and observation update
     pub fn new(
         max_particle_count: usize,
+        weight_sum_threshold: f64,
         map: Arc<Map2D>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
         resampling_noise: Pose,
@@ -347,7 +348,7 @@ impl DistanceFinderMCL {
         let belief = PoseBelief::new(max_particle_count, max_position.into());
         Self {
             max_particle_count,
-            weight_sum_threshold: max_particle_count as f64 / 60., // TODO: fixed parameter
+            weight_sum_threshold,
             map,
             weight_from_error,
             belief,
@@ -360,6 +361,7 @@ impl DistanceFinderMCL {
     pub fn from_distributions<T, U>(
         distr: (T, (T, T)),
         max_particle_count: usize,
+        weight_sum_threshold: f64,
         map: Arc<Map2D>,
         weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
         resampling_noise: Pose,
@@ -371,7 +373,7 @@ impl DistanceFinderMCL {
         let belief = PoseBelief::from_distributions(max_particle_count, distr);
         Self {
             max_particle_count,
-            weight_sum_threshold: max_particle_count as f64 / 60., // TODO: fixed parameter
+            weight_sum_threshold,
             map,
             weight_from_error,
             belief,
@@ -417,8 +419,7 @@ impl DistanceFinderMCL {
         }
 
         let mut new_particles = Vec::new();
-        #[allow(clippy::float_cmp)]
-        let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
+         let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
             errors
                 .iter()
                 .map(|_| 2. * self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
@@ -441,15 +442,18 @@ impl DistanceFinderMCL {
             sum_weights += weights[idx];
             new_particles.push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
         }
+        println!("S = {}", sum_weights);
         self.belief = new_particles;
     }
 
     pub fn get_prediction(&self) -> Pose {
         let mut average_pose = Pose::default();
+        let mut angle = 0.;
         for sample in &self.belief {
             average_pose += *sample;
+            angle += sample.angle;
         }
-        average_pose / (self.belief.len() as f64)
+        average_pose.with_angle(angle) / self.belief.len() as f64
     }
 }
 
