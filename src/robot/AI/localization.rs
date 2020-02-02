@@ -212,33 +212,80 @@ impl KalmanFilter {
 
 pub type WeightCalculator = Box<dyn FnMut(&f64) -> f64 + Send + Sync>;
 pub type ErrorCalculator<Z> = Box<dyn FnMut(&Pose, &Z, Arc<Map2D>) -> f64 + Send + Sync>;
+pub type ResampleNoiseCalculator = Box<dyn FnMut(usize) -> Pose + Send + Sync>;
+
+pub struct DeathCondition {
+    pub particle_count_threshold: usize,
+    pub particle_concentration_threshold: f64,
+}
+
+impl DeathCondition {
+    /// Calculates whether or not the condition described by `self` has been met
+    ///
+    /// Currently is ignorant of `Pose`s' angles
+    pub fn triggered(&self, belief: &[Pose]) -> bool {
+        let mut average = Point::default();
+        for sample in belief {
+            average += sample.position;
+        }
+        average = average / belief.len() as f64;
+
+        let mut standard_deviation = 0.;
+        for sample in belief {
+            standard_deviation += (average - sample.position).mag().powi(2);
+        }
+        standard_deviation = standard_deviation.sqrt();
+        println!("σ = {}", standard_deviation);
+        belief.len() >= self.particle_count_threshold
+            && standard_deviation <= self.particle_concentration_threshold
+    }
+}
 
 /// A localizer that uses likelyhood-based Monte Carlo Localization
 /// and takes in motion sensor data and `Z` as sensor data
+///
+/// `map` is the map on which the filter is localization
+///
+/// `belief` is the set of particles
+///
+/// `max_particle_count` is the max number of particles and starting number
+///
+/// `weight_sum_threshold` is cumulative weight of the belief used for likelyhood-based resampling
+///
+/// `death_condition` is the condition for the belief after resampling required to "restart" the algorithm
+///
+/// `weight_from_error` calculates the weight of each particle from its error
+///
+/// `errors_from_sense` calculates the error of each particle from its sensor data
+///
+/// `resampling_noise` calculates the amount of noise to add to each particle during resampling
 pub struct PoseMCL<Z> {
     pub map: Arc<Map2D>,
     pub belief: Vec<Pose>,
     max_particle_count: usize,
     weight_sum_threshold: f64,
+    death_condition: DeathCondition,
     weight_from_error: WeightCalculator,
     errors_from_sense: ErrorCalculator<Z>,
-    resampling_noise: Pose,
+    resampling_noise: ResampleNoiseCalculator,
 }
 
 impl<Z> PoseMCL<Z> {
     pub fn new(
         max_particle_count: usize,
         weight_sum_threshold: f64,
+        death_condition: DeathCondition,
         map: Arc<Map2D>,
         weight_from_error: WeightCalculator,
         errors_from_sense: ErrorCalculator<Z>,
-        resampling_noise: Pose,
+        resampling_noise: ResampleNoiseCalculator,
     ) -> Self {
         let belief = PoseBelief::new(max_particle_count, (map.width, map.height).into());
         Self {
             max_particle_count,
             map,
             belief,
+            death_condition,
             weight_sum_threshold,
             weight_from_error,
             errors_from_sense,
@@ -250,10 +297,11 @@ impl<Z> PoseMCL<Z> {
         belief_distr: (U, (U, U)),
         max_particle_count: usize,
         weight_sum_threshold: f64,
+        death_condition: DeathCondition,
         map: Arc<Map2D>,
         weight_from_error: WeightCalculator,
         errors_from_sense: ErrorCalculator<Z>,
-        resampling_noise: Pose,
+        resampling_noise: ResampleNoiseCalculator,
     ) -> Self
     where
         U: Distribution<V>,
@@ -263,6 +311,7 @@ impl<Z> PoseMCL<Z> {
         Self {
             max_particle_count,
             weight_sum_threshold,
+            death_condition,
             map,
             weight_from_error,
             errors_from_sense,
@@ -281,9 +330,7 @@ impl<Z> PoseMCL<Z> {
     pub fn observation_update(&mut self, z: &Z) {
         let mut errors: Vec<f64> = Vec::with_capacity(self.belief.len());
         for sample in &self.belief {
-            errors.push(
-                (self.errors_from_sense)(sample, z, self.map.clone())
-            )
+            errors.push((self.errors_from_sense)(sample, z, self.map.clone()))
         }
 
         let mut new_particles = Vec::new();
@@ -309,29 +356,56 @@ impl<Z> PoseMCL<Z> {
         {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
-            new_particles.push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
+            new_particles.push(self.belief[idx]);
         }
-        self.belief = new_particles;
+        self.belief = if self.death_condition.triggered(&new_particles) {
+            PoseBelief::new(
+                self.max_particle_count,
+                (self.map.width, self.map.height).into(),
+            )
+        } else {
+            new_particles
+                .iter()
+                .map(|&p| p + (self.resampling_noise)(self.belief.len()))
+                .collect()
+        };
     }
 
     pub fn get_prediction(&self) -> Pose {
         let mut average_pose = Pose::default();
+        let mut angle = 0.;
         for sample in &self.belief {
             average_pose += *sample;
+            angle += sample.angle;
         }
-        average_pose / (self.belief.len() as f64)
+        average_pose.with_angle(angle) / self.belief.len() as f64
     }
 }
 
 /// A localizer that uses likelyhood-based Monte Carlo Localization
 /// and takes in motion and range finder sensor data
+///
+/// `map` is the map on which the filter is localization
+///
+/// `belief` is the set of particles
+///
+/// `max_particle_count` is the max number of particles and starting number
+///
+/// `weight_sum_threshold` is cumulative weight of the belief used for likelyhood-based resampling
+///
+/// `death_condition` is the condition for the belief after resampling required to "restart" the algorithm
+///
+/// `weight_from_error` calculates the weight of each particle from its error
+///
+/// `resampling_noise` calculates the amount of noise to add to each particle during resampling
 pub struct DistanceFinderMCL {
     pub map: Arc<Map2D>,
     pub belief: Vec<Pose>,
     max_particle_count: usize,
     weight_sum_threshold: f64,
-    weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-    resampling_noise: Pose,
+    death_condition: DeathCondition,
+    weight_from_error: WeightCalculator,
+    resampling_noise: ResampleNoiseCalculator,
 }
 
 impl DistanceFinderMCL {
@@ -340,9 +414,10 @@ impl DistanceFinderMCL {
     pub fn new(
         max_particle_count: usize,
         weight_sum_threshold: f64,
+        death_condition: DeathCondition,
         map: Arc<Map2D>,
-        weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-        resampling_noise: Pose,
+        weight_from_error: WeightCalculator,
+        resampling_noise: ResampleNoiseCalculator,
     ) -> Self {
         let max_position = (map.width, map.height);
         let belief = PoseBelief::new(max_particle_count, max_position.into());
@@ -351,6 +426,7 @@ impl DistanceFinderMCL {
             weight_sum_threshold,
             map,
             weight_from_error,
+            death_condition,
             belief,
             resampling_noise,
         }
@@ -362,9 +438,10 @@ impl DistanceFinderMCL {
         distr: (T, (T, T)),
         max_particle_count: usize,
         weight_sum_threshold: f64,
+        death_condition: DeathCondition,
         map: Arc<Map2D>,
-        weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-        resampling_noise: Pose,
+        weight_from_error: WeightCalculator,
+        resampling_noise: ResampleNoiseCalculator,
     ) -> Self
     where
         T: Distribution<U>,
@@ -374,6 +451,7 @@ impl DistanceFinderMCL {
         Self {
             max_particle_count,
             weight_sum_threshold,
+            death_condition,
             map,
             weight_from_error,
             belief,
@@ -419,7 +497,7 @@ impl DistanceFinderMCL {
         }
 
         let mut new_particles = Vec::new();
-         let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
+        let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
             errors
                 .iter()
                 .map(|_| 2. * self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
@@ -440,10 +518,20 @@ impl DistanceFinderMCL {
         {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
-            new_particles.push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
+            new_particles.push(self.belief[idx]);
         }
         println!("S = {}", sum_weights);
-        self.belief = new_particles;
+        self.belief = if self.death_condition.triggered(&new_particles) {
+            PoseBelief::new(
+                self.max_particle_count,
+                (self.map.width, self.map.height).into(),
+            )
+        } else {
+            new_particles
+                .iter()
+                .map(|&p| p + (self.resampling_noise)(self.belief.len()))
+                .collect()
+        };
     }
 
     pub fn get_prediction(&self) -> Pose {
@@ -459,13 +547,28 @@ impl DistanceFinderMCL {
 
 /// A localizer that uses likelyhood-based Monte Carlo Localization
 /// and takes in motion and range finder sensor data
+///
+/// `map` is the map on which the filter is localization
+///
+/// `belief` is the set of particles
+///
+/// `max_particle_count` is the max number of particles and starting number
+///
+/// `weight_sum_threshold` is cumulative weight of the belief used for likelyhood-based resampling
+///
+/// `death_condition` is the condition for the belief after resampling required to "restart" the algorithm
+///
+/// `weight_from_error` calculates the weight of each particle from its error
+///
+/// `resampling_noise` calculates the amount of noise to add to each particle during resampling
 pub struct ObjectDetectorMCL {
     pub map: Arc<Map2D>,
     pub belief: Vec<Pose>,
     max_particle_count: usize,
     weight_sum_threshold: f64,
-    weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-    resampling_noise: Pose,
+    death_condition: DeathCondition,
+    weight_from_error: WeightCalculator,
+    resampling_noise: ResampleNoiseCalculator,
 }
 
 impl ObjectDetectorMCL {
@@ -473,15 +576,18 @@ impl ObjectDetectorMCL {
     /// Every step, the localizer should recieve a control and observation update
     pub fn new(
         max_particle_count: usize,
+        weight_sum_threshold: f64,
+        death_condition: DeathCondition,
         map: Arc<Map2D>,
-        weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-        resampling_noise: Pose,
+        weight_from_error: WeightCalculator,
+        resampling_noise: ResampleNoiseCalculator,
     ) -> Self {
         let max_position = (map.width, map.height);
         let belief = PoseBelief::new(max_particle_count, max_position.into());
         Self {
             max_particle_count,
-            weight_sum_threshold: max_particle_count as f64 / 60., // TODO: fixed parameter
+            weight_sum_threshold,
+            death_condition,
             map,
             weight_from_error,
             belief,
@@ -494,9 +600,11 @@ impl ObjectDetectorMCL {
     pub fn from_distributions<T, U>(
         distr: (T, (T, T)),
         max_particle_count: usize,
+        weight_sum_threshold: f64,
+        death_condition: DeathCondition,
         map: Arc<Map2D>,
-        weight_from_error: Box<dyn FnMut(&f64) -> f64 + Send + Sync>,
-        resampling_noise: Pose,
+        weight_from_error: WeightCalculator,
+        resampling_noise: ResampleNoiseCalculator,
     ) -> Self
     where
         T: Distribution<U>,
@@ -505,7 +613,8 @@ impl ObjectDetectorMCL {
         let belief = PoseBelief::from_distributions(max_particle_count, distr);
         Self {
             max_particle_count,
-            weight_sum_threshold: max_particle_count as f64 / 60., // TODO: fixed parameter
+            weight_sum_threshold,
+            death_condition,
             map,
             weight_from_error,
             belief,
@@ -581,16 +690,28 @@ impl ObjectDetectorMCL {
         {
             let idx = distr.sample(&mut rng);
             sum_weights += weights[idx];
-            new_particles.push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
+            new_particles.push(self.belief[idx]);
         }
-        self.belief = new_particles;
+        self.belief = if self.death_condition.triggered(&new_particles) {
+            PoseBelief::new(
+                self.max_particle_count,
+                (self.map.width, self.map.height).into(),
+            )
+        } else {
+            new_particles
+                .iter()
+                .map(|&p| p + (self.resampling_noise)(self.belief.len()))
+                .collect()
+        };
     }
 
     pub fn get_prediction(&self) -> Pose {
         let mut average_pose = Pose::default();
+        let mut angle = 0.;
         for sample in &self.belief {
             average_pose += *sample;
+            angle += sample.angle;
         }
-        average_pose / (self.belief.len() as f64)
+        average_pose.with_angle(angle) / self.belief.len() as f64
     }
 }

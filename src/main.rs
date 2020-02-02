@@ -9,7 +9,7 @@ use rand::{
     thread_rng,
 };
 use robot::{
-    ai::localization::{DistanceFinderMCL, KalmanFilter},
+    ai::localization::{DistanceFinderMCL, KalmanFilter, DeathCondition},
     map::{Map2D, Object2D},
     sensors::{
         dummy::{DummyDistanceSensor, DummyPositionSensor, DummyVelocitySensor},
@@ -83,8 +83,8 @@ fn main() {
             Object2D::Line(((80., 50.).into(), (20., 60.).into())),
             Object2D::Line(((140., 100.).into(), (180., 120.).into())),
             Object2D::Line(((180., 120.).into(), (160., 90.).into())),
-            Object2D::Line(((160., 90.).into(), (140., 100.).into())),  
-            Object2D::Line(((100., 40.,).into(), (160., 80.).into())),
+            Object2D::Line(((160., 90.).into(), (140., 100.).into())),
+            Object2D::Line(((100., 40.).into(), (160., 80.).into())),
         ],
     ));
     let init_state = KinematicState {
@@ -157,16 +157,27 @@ fn main() {
         q,
         r,
     );
-    let mut mcl = DistanceFinderMCL::new(
-        40_000,
-        200.,
-        map.clone(),
-        Box::new(|e| 1.05f64.powf(-e)),
-        Pose {
-            angle: 0.001,
-            position: (0.5, 0.5).into()
-        }
-    );
+    let mut mcl = {
+        let particle_count = 40_000;
+        let weight_sum_threshold = 400.;
+        let death_threshold = DeathCondition {
+            particle_count_threshold: 2000,
+            particle_concentration_threshold: 300.,
+        };
+        DistanceFinderMCL::new(
+            particle_count,
+            weight_sum_threshold,
+            death_threshold,
+            map.clone(),
+            Box::new(|e| 1.05f64.powf(-e)),
+            Box::new(move |_| {
+                Pose::random_from_range(Pose {
+                    angle: 0.0001,
+                    position: (0.5, 0.5).into(),
+                })
+            }),
+        )
+    };
 
     let map_visual_margins: Point = (25., 25.).into();
     let mut window: PistonWindow = WindowSettings::new("😎", [1000, 1000])
@@ -222,7 +233,7 @@ fn main() {
                     0.2,
                     *particle,
                     c.transform,
-                    g
+                    g,
                 )
             }
             isoceles_triangle(
@@ -235,7 +246,7 @@ fn main() {
                     position: robot_state.position,
                 },
                 c.transform,
-                g
+                g,
             );
             isoceles_triangle(
                 [0., 0., 1., 1.],
@@ -298,7 +309,9 @@ fn main() {
             position: robot_state.velocity,
         });
         position_sensor.update_pose(robot_state.pose());
-        distance_sensors.iter_mut().for_each(|d| d.update_pose(robot_state.pose()));
+        distance_sensors
+            .iter_mut()
+            .for_each(|d| d.update_pose(robot_state.pose()));
 
         println!("P = {}", mcl.belief.len());
         // update localization
