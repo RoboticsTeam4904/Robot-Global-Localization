@@ -1,28 +1,29 @@
-#![allow(dead_code)] // TODO: This will be removed after organizational overhall and a lib.rs
-mod replay;
-mod robot;
-mod utility;
+use global_robot_localization::{
+    replay::isoceles_triangle,
+    robot::{
+        ai::{
+            kalman_filter::KalmanFilter,
+            localization::{DeathCondition, DistanceFinderMCL},
+        },
+        map::{Map2D, Object2D},
+        sensors::{
+            dummy::{DummyDistanceSensor, DummyPositionSensor, DummyVelocitySensor},
+            Sensor,
+        },
+    },
+    utility::{KinematicState, Point, Pose},
+};
 use nalgebra::{Matrix, Matrix5, Matrix6, RowVector5, Vector5, Vector6, U1, U7};
 use piston_window::*;
 use rand::{
     distributions::{Distribution, Normal},
     thread_rng,
 };
-use robot::{
-    ai::{localization::{DistanceFinderMCL, DeathCondition}, kalman_filter::KalmanFilter},
-    map::{Map2D, Object2D},
-    sensors::{
-        dummy::{DummyDistanceSensor, DummyPositionSensor, DummyVelocitySensor},
-        Sensor,
-    },
-};
 use std::{
     f64::consts::{FRAC_PI_2, FRAC_PI_8, PI},
     ops::Range,
     sync::Arc,
 };
-use utility::{KinematicState, Point, Pose};
-use replay::isoceles_triangle;
 
 const ANGLE_NOISE: f64 = 0.;
 const X_NOISE: f64 = 25.;
