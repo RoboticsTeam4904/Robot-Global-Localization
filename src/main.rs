@@ -24,6 +24,7 @@ use std::{
     time::Duration,
 };
 use utility::{KinematicState, Point, Pose};
+use replay::isoceles_triangle;
 
 const ANGLE_NOISE: f64 = 0.;
 const X_NOISE: f64 = 25.;
@@ -323,42 +324,4 @@ fn main() {
         tick += 1;
         // sleep(Duration::from_secs_f64(0.5));
     }
-}
-
-fn isoceles_triangle<G: Graphics>(
-    color: [f32; 4],
-    margin: Point,
-    pose_scale: f64,
-    triangle_scale: f64,
-    pose: Pose,
-    transform: math::Matrix2d,
-    g: &mut G,
-) {
-    polygon(
-        color,
-        &[
-            [
-                pose.position.x * pose_scale + margin.x + triangle_scale * 15. * pose.angle.cos(),
-                pose.position.y * pose_scale + margin.y + triangle_scale * 15. * pose.angle.sin(),
-            ],
-            [
-                pose.position.x * pose_scale
-                    + margin.x
-                    + triangle_scale * 10. * (pose.angle + 2. * FRAC_PI_3).cos(),
-                pose.position.y * pose_scale
-                    + margin.y
-                    + triangle_scale * 10. * (pose.angle + 2. * FRAC_PI_3).sin(),
-            ],
-            [
-                pose.position.x * pose_scale
-                    + margin.x
-                    + triangle_scale * 10. * (pose.angle + 4. * FRAC_PI_3).cos(),
-                pose.position.y * pose_scale
-                    + margin.y
-                    + triangle_scale * 10. * (pose.angle + 4. * FRAC_PI_3).sin(),
-            ],
-        ],
-        transform,
-        g,
-    );
 }
