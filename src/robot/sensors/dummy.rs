@@ -241,7 +241,7 @@ impl Sensor for DummyMotionSensor {
             / 1000.
             + Point {
                 x: self.left_noise_distr.sample(&mut rng),
-                y: self.left_noise_distr.sample(&mut rng),
+                y: self.right_noise_distr.sample(&mut rng),
             }
     }
 }

@@ -13,7 +13,7 @@ use global_robot_localization::{
     },
     utility::{KinematicState, Point, Pose},
 };
-use nalgebra::{Matrix, Matrix5, Matrix6, RowVector5, Vector5, Vector6, U1, U7};
+use nalgebra::{Matrix6, Vector6};
 use piston_window::*;
 use rand::{
     distributions::{Distribution, Normal},
@@ -161,7 +161,7 @@ fn main() {
         let particle_count = 40_000;
         let weight_sum_threshold = 400.;
         let death_threshold = DeathCondition {
-            particle_count_threshold: 2000,
+            particle_count_threshold: 4_000,
             particle_concentration_threshold: 300.,
         };
         DistanceFinderMCL::new(
@@ -172,7 +172,7 @@ fn main() {
             Box::new(|e| 1.05f64.powf(-e)),
             Box::new(move |_| {
                 Pose::random_from_range(Pose {
-                    angle: 0.0001,
+                    angle: 0.001,
                     position: (0.5, 0.5).into(),
                 })
             }),
@@ -190,6 +190,7 @@ fn main() {
     let control_noise_y = Normal::new(0., CONTROL_Y_NOISE * TIME_SCALE);
 
     while let Some(e) = window.next() {
+        println!("T = {}", tick);
         // User input
         let mut control = Pose::default();
         if let Some(Button::Keyboard(key)) = e.press_args() {
@@ -313,7 +314,7 @@ fn main() {
             .iter_mut()
             .for_each(|d| d.update_pose(robot_state.pose()));
 
-        println!("P = {}", mcl.belief.len());
+        println!("\tP = {}", mcl.belief.len());
         // update localization
         mcl.control_update(&position_sensor);
         mcl.observation_update(&distance_sensors);

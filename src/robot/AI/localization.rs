@@ -4,7 +4,7 @@ use crate::robot::sensors::Sensor;
 use crate::utility::{Point, Pose};
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
-use std::f64::consts::{FRAC_PI_2, PI};
+use std::f64::consts::*;
 use std::sync::Arc;
 
 // TODO: c o d e d u p l i c a t i o n
@@ -73,7 +73,7 @@ impl DeathCondition {
             standard_deviation += (average - sample.position).mag().powi(2);
         }
         standard_deviation = standard_deviation.sqrt();
-        println!("σ = {}", standard_deviation);
+        println!("\tσ = {}", standard_deviation);
         belief.len() >= self.particle_count_threshold
             && standard_deviation <= self.particle_concentration_threshold
     }
@@ -358,7 +358,7 @@ impl DistanceFinderMCL {
             sum_weights += weights[idx];
             new_particles.push(self.belief[idx]);
         }
-        println!("S = {}", sum_weights);
+        println!("\tΣ = {}", sum_weights);
         self.belief = if self.death_condition.triggered(&new_particles) {
             PoseBelief::new(
                 self.max_particle_count,
@@ -491,10 +491,8 @@ impl ObjectDetectorMCL {
             };
             // TODO: fixed parameter
             // This method of calculating error is not entirely sound
-            let mut total = 0;
             for (real, pred) in observation.iter().zip(pred_observation.iter()) {
                 sum_error += (*real - *pred).mag();
-                total += 1;
             }
             // TODO: fixed parameter
             // TODO: panics at Uniform::new called with `low >= high` when erorr is divided by total
