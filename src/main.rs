@@ -1,5 +1,5 @@
 use global_robot_localization::{
-    replay::isoceles_triangle,
+    replay::{draw_map, isoceles_triangle},
     robot::{
         ai::{
             kalman_filter::KalmanFilter,
@@ -211,21 +211,16 @@ fn main() {
         // Rendering
         window.draw_2d(&e, |c, g, _device| {
             clear([1.0; 4], g);
-            for line in map.lines.clone() {
-                line_from_to(
-                    [0., 0., 0., 1.],
-                    1.,
-                    map.vertices[line.0] * MAP_SCALE + map_visual_margins,
-                    map.vertices[line.1] * MAP_SCALE + map_visual_margins,
-                    c.transform,
-                    g,
-                );
-            }
-            for point in map.points.clone() {
-                let v: Point = map.vertices[point] * MAP_SCALE + map_visual_margins;
-                let size: Point = (5., 5.).into();
-                ellipse_from_to([0.7, 0.3, 0.3, 1.], v + size, v - size, c.transform, g);
-            }
+            draw_map(
+                map.clone(),
+                [0., 0., 0., 1.],
+                0.5,
+                1.,
+                MAP_SCALE,
+                map_visual_margins,
+                c.transform,
+                g
+            );
             for particle in &mcl.belief {
                 isoceles_triangle(
                     [1., 0., 0., 1.],

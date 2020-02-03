@@ -1,6 +1,38 @@
-use std::f64::consts::*;
+use crate::{
+    robot::map::Map2D,
+    utility::{Point, Pose},
+};
 use piston_window::*;
-use crate::utility::{Pose, Point};
+use std::{f64::consts::*, sync::Arc};
+
+pub fn draw_map<G>(
+    map: Arc<Map2D>,
+    color: [f32; 4],
+    point_radius: f64,
+    line_radius: f64,
+    scale: f64,
+    offset: Point,
+    transform: [[f64; 3]; 2],
+    g: &mut G,
+) where
+    G: Graphics,
+{
+    let point_radius: Point = (point_radius, point_radius).into();
+    for line in map.lines.clone() {
+        line_from_to(
+            color,
+            line_radius,
+            map.vertices[line.0] * scale + offset,
+            map.vertices[line.1] * scale + offset,
+            transform,
+            g,
+        );
+    }
+    for &point in &map.points {
+        let v: Point = map.vertices[point] * scale + offset;
+        ellipse_from_to(color, v + point_radius, v - point_radius, transform, g);
+    }
+}
 
 pub fn point_cloud<G>(
     points: &[Point],
@@ -13,10 +45,16 @@ pub fn point_cloud<G>(
 ) where
     G: Graphics,
 {
-    let point_radius: Point = (point_radius,point_radius).into();
+    let point_radius: Point = (point_radius, point_radius).into();
     for point in points {
         let center = offset + *point * scale;
-        ellipse_from_to(color, center - point_radius, center + point_radius, transform, g);
+        ellipse_from_to(
+            color,
+            center - point_radius,
+            center + point_radius,
+            transform,
+            g,
+        );
     }
 }
 
@@ -57,4 +95,3 @@ pub fn isoceles_triangle<G: Graphics>(
         g,
     );
 }
-
