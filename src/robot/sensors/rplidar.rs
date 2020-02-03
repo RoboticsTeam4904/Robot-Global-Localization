@@ -1,9 +1,9 @@
 use super::{LimitedSensor, Sensor};
 use crate::utility::{Point, Pose};
-use rplidar_drv::{RplidarDevice, RplidarHostProtocol, ScanPoint};
+use rplidar_drv::{RplidarDevice, ScanPoint};
 use serialport::prelude::*;
 use std::{
-    ops::{Range, RangeBounds},
+    ops::Range,
     time::Duration,
 };
 
@@ -13,19 +13,19 @@ const DEFAULT_BUAD_RATE: u32 = 115200;
 
 /// An Rplidar wrapper.
 /// More info found here: https://www.robotshop.com/en/rplidar-a2m8-360-laser-scanner.html.
-pub struct RplidarSensor<T: RangeBounds<f64> + Clone> {
+pub struct RplidarSensor {
     pub device: RplidarDevice<dyn serialport::SerialPort>,
     pub latest_scan: Vec<ScanPoint>,
     pub relative_pose: Pose,
-    pub sense_range: Option<T>,
+    pub sense_range: Option<Range<f64>>,
 }
 
-impl<T: RangeBounds<f64> + Clone> RplidarSensor<T> {
+impl RplidarSensor {
     pub fn new(
         serial_port: &str,
         relative_pose: Pose,
         baud_rate: Option<u32>,
-    ) -> RplidarSensor<Range<f64>> {
+    ) -> RplidarSensor {
         let mut sensor = Self::with_range(serial_port, relative_pose, None, baud_rate);
         let typical_mode = sensor.device.get_typical_scan_mode().unwrap();
         let sense_range = sensor
@@ -46,9 +46,9 @@ impl<T: RangeBounds<f64> + Clone> RplidarSensor<T> {
     pub fn with_range(
         serial_port: &str,
         relative_pose: Pose,
-        sense_range: Option<T>,
+        sense_range: Option<Range<f64>>,
         baud_rate: Option<u32>,
-    ) -> RplidarSensor<T> {
+    ) -> RplidarSensor {
         let s = SerialPortSettings {
             baud_rate: baud_rate.unwrap_or(DEFAULT_BUAD_RATE),
             data_bits: DataBits::Eight,
@@ -73,7 +73,7 @@ impl<T: RangeBounds<f64> + Clone> RplidarSensor<T> {
     }
 }
 
-impl<T: RangeBounds<f64> + Clone> Sensor for RplidarSensor<T> {
+impl Sensor for RplidarSensor {
     type Output = Vec<Point>;
 
     fn update(&mut self) {
@@ -97,8 +97,8 @@ impl<T: RangeBounds<f64> + Clone> Sensor for RplidarSensor<T> {
     }
 }
 
-impl<T: RangeBounds<f64> + Clone> LimitedSensor<T> for RplidarSensor<T> {
-    fn range(&self) -> Option<T> {
+impl LimitedSensor<Range<f64>> for RplidarSensor {
+    fn range(&self) -> Option<Range<f64>> {
         self.sense_range.clone()
     }
 }

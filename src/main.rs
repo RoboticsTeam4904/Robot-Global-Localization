@@ -17,7 +17,7 @@ use robot::{
     },
 };
 use std::{
-    f64::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_8, PI},
+    f64::consts::{FRAC_PI_2, FRAC_PI_8, PI},
     ops::Range,
     sync::Arc,
     thread::sleep,
