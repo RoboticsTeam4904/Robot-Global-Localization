@@ -9,7 +9,7 @@ use rand::{
     thread_rng,
 };
 use robot::{
-    ai::localization::{DistanceFinderMCL, KalmanFilter, DeathCondition},
+    ai::{localization::{DistanceFinderMCL, DeathCondition}, kalman_filter::KalmanFilter},
     map::{Map2D, Object2D},
     sensors::{
         dummy::{DummyDistanceSensor, DummyPositionSensor, DummyVelocitySensor},
@@ -20,8 +20,6 @@ use std::{
     f64::consts::{FRAC_PI_2, FRAC_PI_8, PI},
     ops::Range,
     sync::Arc,
-    thread::sleep,
-    time::Duration,
 };
 use utility::{KinematicState, Point, Pose};
 use replay::isoceles_triangle;
