@@ -20,6 +20,12 @@ impl Point {
         }
     }
 
+    pub fn rotate(self, angle: f64) -> Self {
+        let start_angle = self.angle(Point::default());
+        let mag = self.mag();
+        Self::polar(start_angle + angle, mag)
+    }
+
     pub fn clamp(self, lower: Point, upper: Point) -> Point {
         Point {
             x: if self.x > upper.x {

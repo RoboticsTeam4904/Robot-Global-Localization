@@ -1,14 +1,14 @@
 use global_robot_localization::{
-    replay::{draw_map, isoceles_triangle},
+    replay::{draw_map, isoceles_triangle, point_cloud},
     robot::{
         ai::{
             kalman_filter::KalmanFilter,
-            localization::{DeathCondition, DistanceFinderMCL},
+            localization::{DeathCondition, PoseMCL},
         },
         map::{Map2D, Object2D},
         sensors::{
-            dummy::{DummyDistanceSensor, DummyPositionSensor, DummyVelocitySensor},
-            Sensor,
+            dummy::{DummyLidar, DummyPositionSensor, DummyVelocitySensor},
+            LimitedSensor, Sensor,
         },
     },
     utility::{KinematicState, Point, Pose},
@@ -20,7 +20,10 @@ use rand::{
     thread_rng,
 };
 use std::{
-    f64::consts::{FRAC_PI_2, FRAC_PI_8, PI},
+    f64::{
+        consts::{FRAC_PI_2, FRAC_PI_8, PI},
+        INFINITY,
+    },
     ops::Range,
     sync::Arc,
 };
@@ -102,7 +105,22 @@ fn main() {
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
-
+    let mut filter = KalmanFilter::new(
+        Matrix6::from_diagonal(&Vector6::new(
+            ANGLE_NOISE.powi(2),
+            X_NOISE.powi(2),
+            Y_NOISE.powi(2),
+            0.,
+            0.,
+            0.,
+        )),
+        init_state.into(),
+        1e-5,
+        0.,
+        2.,
+        q,
+        r,
+    );
     let mut motion_sensor = DummyVelocitySensor::new(
         Pose {
             angle: ROTATIONAL_VELOCITY_SENSOR_NOISE,
@@ -126,54 +144,56 @@ fn main() {
             position: Point { x: 1., y: 1. },
         },
     );
-    let mut distance_sensors: Vec<DummyDistanceSensor> = (0..8)
-        .map(|i| {
-            DummyDistanceSensor::new(
-                0.,
-                Pose {
-                    angle: FRAC_PI_2 * i as f64,
-                    ..Pose::default()
-                },
-                map.clone(),
-                robot_state.pose(),
-                None,
-            )
-        })
-        .collect();
-
-    let mut filter = KalmanFilter::new(
-        Matrix6::from_diagonal(&Vector6::new(
-            ANGLE_NOISE.powi(2),
-            X_NOISE.powi(2),
-            Y_NOISE.powi(2),
-            0.,
-            0.,
-            0.,
-        )),
-        init_state.into(),
-        1e-5,
-        0.,
-        2.,
-        q,
-        r,
+    let mut lidar = DummyLidar::new(
+        map.clone(),
+        robot_state.pose(),
+        Normal::new(0., 0.001),
+        Normal::new(0., 0.0001),
+        180,
+        Pose::default(),
+        None,
     );
     let mut mcl = {
         let particle_count = 40_000;
-        let weight_sum_threshold = 400.;
+        let weight_sum_threshold = 200.;
         let death_threshold = DeathCondition {
             particle_count_threshold: 4_000,
             particle_concentration_threshold: 300.,
         };
-        DistanceFinderMCL::new(
+        PoseMCL::<DummyLidar>::new(
             particle_count,
             weight_sum_threshold,
             death_threshold,
             map.clone(),
             Box::new(|e| 1.05f64.powf(-e)),
+            Box::new(|&sample, lidar, map| {
+                let sample = sample + lidar.relative_pose();
+                let lidar_scan = lidar.sense();
+                let len = lidar_scan.len() as f64;
+                let lidar_range = lidar.range().unwrap_or(0.0..INFINITY);
+                let mut error = 0.;
+                for scan_point in lidar_scan {
+                    error += match map.raycast(
+                        sample
+                            + Pose {
+                                angle: scan_point.angle(Point::default()),
+                                ..Pose::default()
+                            },
+                    ) {
+                        Some(predicted_point)
+                            if lidar_range.contains(&predicted_point.dist(sample.position)) =>
+                        {
+                            (scan_point.mag() - predicted_point.dist(sample.position)).abs()
+                        }
+                        _ => 5.,
+                    };
+                }
+                error / len
+            }),
             Box::new(move |_| {
                 Pose::random_from_range(Pose {
                     angle: 0.001,
-                    position: (0.5, 0.5).into(),
+                    position: (0.7, 0.7).into(),
                 })
             }),
         )
@@ -219,7 +239,7 @@ fn main() {
                 MAP_SCALE,
                 map_visual_margins,
                 c.transform,
-                g
+                g,
             );
             for particle in &mcl.belief {
                 isoceles_triangle(
@@ -253,16 +273,16 @@ fn main() {
                 c.transform,
                 g,
             );
-            let filter_prediction: KinematicState = filter.known_state.into();
-            isoceles_triangle(
-                [0., 1., 0., 1.],
-                map_visual_margins,
-                MAP_SCALE,
-                0.5,
-                filter_prediction.pose(),
-                c.transform,
-                g,
-            );
+            // let filter_prediction: KinematicState = filter.known_state.into();
+            // isoceles_triangle(
+            //     [0., 1., 0., 1.],
+            //     map_visual_margins,
+            //     MAP_SCALE,
+            //     0.5,
+            //     filter_prediction.pose(),
+            //     c.transform,
+            //     g,
+            // );
         });
 
         // Update the physics simulation
@@ -304,15 +324,14 @@ fn main() {
             angle: robot_state.vel_angle,
             position: robot_state.velocity,
         });
-        position_sensor.update_pose(robot_state.pose());
-        distance_sensors
-            .iter_mut()
-            .for_each(|d| d.update_pose(robot_state.pose()));
+        let robot_pose = robot_state.pose();
+        position_sensor.update_pose(robot_pose);
+        lidar.update_pose(robot_pose);
 
         println!("\tP = {}", mcl.belief.len());
         // update localization
         mcl.control_update(&position_sensor);
-        mcl.observation_update(&distance_sensors);
+        mcl.observation_update(&lidar);
         filter.prediction_update(TIME_SCALE.recip(), control);
         filter.measurement_update(motion_sensor.sense(), mcl.get_prediction());
 

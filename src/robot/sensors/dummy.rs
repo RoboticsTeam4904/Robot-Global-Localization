@@ -1,10 +1,20 @@
-use super::{LimitedSensor, Sensor};
-use crate::robot::map::Map2D;
-use crate::utility::{Point, Pose};
-use rand::distributions::{Distribution, Normal};
-use rand::thread_rng;
-use std::sync::Arc;
-use std::time::Instant;
+use crate::{
+    robot::{
+        map::Map2D,
+        sensors::{LimitedSensor, Sensor},
+    },
+    utility::{Point, Pose},
+};
+use rand::{
+    distributions::{Distribution, Normal},
+    thread_rng,
+};
+use std::{
+    f64::{consts::PI, INFINITY},
+    ops::Range,
+    sync::Arc,
+    time::Instant,
+};
 
 /// A sensor which senses all objects' relative positions within a certain fov
 pub struct DummyObjectSensor {
@@ -133,6 +143,89 @@ impl Sensor for DummyDistanceSensor {
 }
 
 impl LimitedSensor<f64> for DummyDistanceSensor {}
+
+pub struct DummyLidar {
+    pub map: Arc<Map2D>,
+    pub robot_pose: Pose,
+    pub range: Option<Range<f64>>,
+    dist_noise: Normal,
+    angle_noise: Normal,
+    resolution: usize,
+    relative_pose: Pose,
+}
+
+impl DummyLidar {
+    pub fn new(
+        map: Arc<Map2D>,
+        robot_pose: Pose,
+        dist_noise: Normal,
+        angle_noise: Normal,
+        resolution: usize,
+        relative_pose: Pose,
+        range: Option<Range<f64>>,
+    ) -> Self {
+        Self {
+            map,
+            robot_pose,
+            dist_noise,
+            angle_noise,
+            resolution,
+            relative_pose,
+            range,
+        }
+    }
+
+    pub fn update_pose(&mut self, new_pose: Pose) {
+        self.robot_pose = new_pose;
+    }
+}
+
+impl Sensor for DummyLidar {
+    type Output = Vec<Point>;
+
+    fn sense(&self) -> Self::Output {
+        let mut rng = thread_rng();
+        let mut scan = vec![];
+        let increment = 2. * PI / self.resolution as f64;
+        for i in 0..self.resolution {
+            match self.map.raycast(
+                self.robot_pose
+                    + Pose {
+                        angle: increment * i as f64,
+                        ..Pose::default()
+                    },
+            ) {
+                Some(scan_point)
+                    if self
+                        .range
+                        .clone()
+                        .unwrap_or(0.0..INFINITY)
+                        .contains(&scan_point.dist(self.robot_pose.position)) =>
+                {
+                    scan.push(
+                        Point::polar(
+                            scan_point.angle(self.robot_pose.position) - self.robot_pose.angle + self.angle_noise.sample(&mut rng),
+                            scan_point.dist(self.robot_pose.position) + self.dist_noise.sample(&mut rng),
+                        )
+                    )
+                }
+                _ => (),
+            }
+        }
+        scan
+    }
+
+    fn relative_pose(&self) -> Pose {
+        self.relative_pose
+    }
+}
+
+impl LimitedSensor<Range<f64>> for DummyLidar {
+    fn range(&self) -> Option<Range<f64>> {
+        self.range.clone()
+    }
+}
+
 #[derive(Clone)]
 pub struct DummyVelocitySensor {
     x_noise_distr: Normal,
@@ -140,6 +233,7 @@ pub struct DummyVelocitySensor {
     angle_noise_distr: Normal,
     real_velocity: Pose,
 }
+
 impl DummyVelocitySensor {
     pub fn new(noise_margins: Pose, real_velocity: Pose) -> Self {
         Self {

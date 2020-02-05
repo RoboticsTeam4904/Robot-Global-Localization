@@ -196,6 +196,7 @@ impl<Z> PoseMCL<Z> {
             sum_weights += weights[idx];
             new_particles.push(self.belief[idx]);
         }
+        println!("\tΣ = {}", sum_weights);
         self.belief = if self.death_condition.triggered(&new_particles) {
             PoseBelief::new(
                 self.max_particle_count,
