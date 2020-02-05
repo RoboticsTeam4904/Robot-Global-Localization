@@ -4,6 +4,7 @@ use crate::robot::sensors::Sensor;
 use crate::utility::{Point, Pose};
 use rand::distributions::WeightedIndex;
 use rand::prelude::*;
+use rayon::prelude::*;
 use std::f64::consts::*;
 use std::sync::Arc;
 
@@ -48,9 +49,9 @@ impl PoseBelief {
     }
 }
 
-pub type WeightCalculator = Box<dyn FnMut(&f64) -> f64 + Send + Sync>;
-pub type ErrorCalculator<Z> = Box<dyn FnMut(&Pose, &Z, Arc<Map2D>) -> f64 + Send + Sync>;
-pub type ResampleNoiseCalculator = Box<dyn FnMut(usize) -> Pose + Send + Sync>;
+pub type WeightCalculator = Box<dyn Fn(&f64) -> f64 + Send + Sync>;
+pub type ErrorCalculator<Z> = Box<dyn Fn(&Pose, &Z, Arc<Map2D>) -> f64 + Send + Sync>;
+pub type ResampleNoiseCalculator = Box<dyn Fn(usize) -> Pose + Send + Sync>;
 
 pub struct DeathCondition {
     pub particle_count_threshold: usize,
@@ -97,7 +98,7 @@ impl DeathCondition {
 /// `errors_from_sense` calculates the error of each particle from its sensor data
 ///
 /// `resampling_noise` calculates the amount of noise to add to each particle during resampling
-pub struct PoseMCL<Z> {
+pub struct PoseMCL<Z: Sync + Send> {
     pub map: Arc<Map2D>,
     pub belief: Vec<Pose>,
     max_particle_count: usize,
@@ -108,7 +109,7 @@ pub struct PoseMCL<Z> {
     resampling_noise: ResampleNoiseCalculator,
 }
 
-impl<Z> PoseMCL<Z> {
+impl<Z: Sync + Send> PoseMCL<Z> {
     pub fn new(
         max_particle_count: usize,
         weight_sum_threshold: f64,
@@ -166,10 +167,7 @@ impl<Z> PoseMCL<Z> {
 
     /// Takes in a vector of distance finder sensors (e.g. laser range finder)
     pub fn observation_update(&mut self, z: &Z) {
-        let mut errors: Vec<f64> = Vec::with_capacity(self.belief.len());
-        for sample in &self.belief {
-            errors.push((self.errors_from_sense)(sample, z, self.map.clone()))
-        }
+        let errors: Vec<_> = self.belief.par_iter().map(|sample| (&self.errors_from_sense)(sample, z, self.map.clone())).collect();
 
         let mut new_particles = Vec::new();
         #[allow(clippy::float_cmp)]

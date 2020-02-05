@@ -1,5 +1,5 @@
 use global_robot_localization::{
-    replay::{draw_map, isoceles_triangle, point_cloud},
+    replay::{draw_map, isoceles_triangle},
     robot::{
         ai::{
             kalman_filter::KalmanFilter,
@@ -24,6 +24,7 @@ use std::{
         consts::{FRAC_PI_2, FRAC_PI_8, PI},
         INFINITY,
     },
+    time::Instant,
     ops::Range,
     sync::Arc,
 };
@@ -209,7 +210,13 @@ fn main() {
     let control_noise_x = Normal::new(0., CONTROL_X_NOISE * TIME_SCALE);
     let control_noise_y = Normal::new(0., CONTROL_Y_NOISE * TIME_SCALE);
 
+    let start = Instant::now();
     while let Some(e) = window.next() {
+        if tick >= 250 {
+            let elapsed = start.elapsed();
+            println!("{}t in {:?} at {}t/s", tick, elapsed, tick as f64 / elapsed.as_secs_f64());
+            break;
+        }
         println!("T = {}", tick);
         // User input
         let mut control = Pose::default();
