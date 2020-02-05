@@ -21,7 +21,7 @@ impl Point {
     }
 
     pub fn rotate(self, angle: f64) -> Self {
-        let start_angle = self.angle(Point::default());
+        let start_angle = self.angle();
         let mag = self.mag();
         Self::polar(start_angle + angle, mag)
     }
@@ -45,8 +45,13 @@ impl Point {
         }
     }
 
+    /// Angle of `self` relative to origin
+    pub fn angle(&self) -> f64 {
+        self.angle_to(Point::default())
+    }
+
     /// Angle of `self` relative to `other`
-    pub fn angle(&self, other: Point) -> f64 {
+    pub fn angle_to(&self, other: Point) -> f64 {
         let dif = other - *self;
         if dif.x == 0. {
             if other.y > self.y {

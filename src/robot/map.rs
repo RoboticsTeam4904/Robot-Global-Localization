@@ -184,11 +184,10 @@ impl Map2D {
                 }
             }
         }
-        #[allow(clippy::float_cmp)]
         for point in &self.points {
             let point = self.get_vertex(*point);
             // TODO: tune? fuzzy comparison for slope comparison
-            if (start.position.angle(point) - start.angle).abs() < 0.01 {
+            if (start.position.angle_to(point) - start.angle).abs() < 0.01 {
                 let dist = point.dist(start.position);
                 if closest_intersection == None || closest_intersection_dist > dist {
                     closest_intersection = Some(point);
@@ -204,7 +203,7 @@ impl Map2D {
         let mut sensed_objects = Vec::new();
         for object in &self.points {
             let object = self.get_vertex(*object);
-            let object_angle = start.position.angle(object);
+            let object_angle = start.position.angle_to(object);
             let rel_angle = PI - (PI - (start.angle - object_angle).abs()).abs();
             if fov / 2. >= rel_angle
                 && self

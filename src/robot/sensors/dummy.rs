@@ -204,7 +204,7 @@ impl Sensor for DummyLidar {
                 {
                     scan.push(
                         Point::polar(
-                            scan_point.angle(self.robot_pose.position) - self.robot_pose.angle + self.angle_noise.sample(&mut rng),
+                            scan_point.angle_to(self.robot_pose.position) - self.robot_pose.angle + self.angle_noise.sample(&mut rng),
                             scan_point.dist(self.robot_pose.position) + self.dist_noise.sample(&mut rng),
                         )
                     )

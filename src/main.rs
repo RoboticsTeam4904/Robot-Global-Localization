@@ -176,7 +176,7 @@ fn main() {
                     error += match map.raycast(
                         sample
                             + Pose {
-                                angle: scan_point.angle(Point::default()),
+                                angle: scan_point.angle(),
                                 ..Pose::default()
                             },
                     ) {
