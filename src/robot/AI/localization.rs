@@ -111,7 +111,6 @@ impl KalmanFilter {
 
     pub fn prediction_update(&mut self, time: f64, control: Pose) {
         self.gen_sigma_matrix();
-
         self.sigma_matrix.row_iter_mut().for_each(|mut e| {
             e[1] += e[4] * time;
             e[2] += e[5] * time;
@@ -147,8 +146,6 @@ impl KalmanFilter {
     }
 
     pub fn measurement_update(&mut self, velocity_sensor_data: Pose, mcl_pose: Pose) {
-        let mut sensor_data: Vec<f64> = Vec::new();
-
         let sensor_update_vector = vec![
             mcl_pose.angle,
             mcl_pose.position.x,
@@ -162,6 +159,7 @@ impl KalmanFilter {
             self.sigma_matrix
                 .row_iter()
                 .map(|e| {
+                    let mut sensor_data: Vec<f64> = Vec::new();
                     sensor_data.extend(vec![e[0], e[1], e[2], e[3], e[4], e[5]]);
                     RowVector6::from_vec(sensor_data.clone())
                 })
@@ -281,9 +279,7 @@ impl<Z> PoseMCL<Z> {
     pub fn observation_update(&mut self, z: &Z) {
         let mut errors: Vec<f64> = Vec::with_capacity(self.belief.len());
         for sample in &self.belief {
-            errors.push(
-                (self.errors_from_sense)(sample, z, self.map.clone())
-            )
+            errors.push((self.errors_from_sense)(sample, z, self.map.clone()))
         }
 
         let mut new_particles = Vec::new();
@@ -419,7 +415,7 @@ impl DistanceFinderMCL {
         }
 
         let mut new_particles = Vec::new();
-         let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
+        let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
             errors
                 .iter()
                 .map(|_| 2. * self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
@@ -442,7 +438,7 @@ impl DistanceFinderMCL {
             sum_weights += weights[idx];
             new_particles.push(self.belief[idx] + Pose::random_from_range(self.resampling_noise));
         }
-        println!("S = {}", sum_weights);
+        // println!("S = {}", sum_weights);
         self.belief = new_particles;
     }
 

@@ -139,6 +139,7 @@ pub struct DummyVelocitySensor {
     y_noise_distr: Normal,
     angle_noise_distr: Normal,
     real_velocity: Pose,
+    last_update: Instant,
 }
 impl DummyVelocitySensor {
     pub fn new(noise_margins: Pose, real_velocity: Pose) -> Self {
@@ -147,11 +148,13 @@ impl DummyVelocitySensor {
             y_noise_distr: Normal::new(0., noise_margins.position.y),
             angle_noise_distr: Normal::new(0., noise_margins.angle),
             real_velocity,
+            last_update: Instant::now(),
         }
     }
 
     pub fn update_pose(&mut self, pose: Pose) {
         self.real_velocity = pose;
+        self.last_update = Instant::now();
     }
 }
 
@@ -160,12 +163,13 @@ impl Sensor for DummyVelocitySensor {
 
     fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
+        let elapsed = self.last_update.elapsed().as_secs_f64();
         Pose {
-            angle: self.real_velocity.angle + self.angle_noise_distr.sample(&mut rng),
+            angle: self.real_velocity.angle + self.angle_noise_distr.sample(&mut rng) * elapsed,
             position: Point {
                 x: self.real_velocity.position.x + self.x_noise_distr.sample(&mut rng),
                 y: self.real_velocity.position.y + self.y_noise_distr.sample(&mut rng),
-            },
+            } * elapsed,
         }
     }
 }
@@ -237,7 +241,7 @@ impl Sensor for DummyMotionSensor {
             / self
                 .prev_measurement_timestep
                 .duration_since(Instant::now())
-                .as_millis() as f64
+                .as_secs_f64()
             / 1000.
             + Point {
                 x: self.left_noise_distr.sample(&mut rng),
