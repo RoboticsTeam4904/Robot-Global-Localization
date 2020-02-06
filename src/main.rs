@@ -19,26 +19,14 @@ use rand::{
     distributions::{Distribution, Normal},
     thread_rng,
 };
-<<<<<<< HEAD
-use robot::{
-    ai::localization::{DistanceFinderMCL, KalmanFilter},
-    map::{Map2D, Object2D},
-    sensors::{
-        dummy::{DummyDistanceSensor, DummyPositionSensor, DummyVelocitySensor},
-        Sensor,
-    },
-};
-use std::time::Instant;
-=======
->>>>>>> refs/remotes/origin/mcl_kalman_filter
 use std::{
     f64::{
         consts::{FRAC_PI_2, FRAC_PI_8, PI},
         INFINITY,
     },
-    time::Instant,
     ops::Range,
     sync::Arc,
+    time::Instant,
 };
 
 const ANGLE_NOISE: f64 = 0.;
@@ -54,8 +42,8 @@ const VELOCITY_X_SENSOR_NOISE: f64 = 0.05;
 const VELOCITY_Y_SENSOR_NOISE: f64 = 0.05;
 const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.05;
 const MAP_SCALE: f64 = 2.;
-const ROBOT_ACCEL: f64 = 3.;
-const ROBOT_ANGLE_ACCEL: f64 = 0.1;
+const ROBOT_ACCEL: f64 = 3. / 1000.;
+const ROBOT_ANGLE_ACCEL: f64 = 0.1 / 1000.;
 
 fn main() {
     let mut rng = thread_rng();
@@ -158,20 +146,12 @@ fn main() {
     );
     let mut lidar = DummyLidar::new(
         map.clone(),
-<<<<<<< HEAD
-        Box::new(|e| 1.05f64.powf(-e)),
-        Pose {
-            angle: 0.001,
-            position: (0.5, 0.5).into(),
-        },
-=======
         robot_state.pose(),
         Normal::new(0., 0.001),
         Normal::new(0., 0.0001),
         180,
         Pose::default(),
         None,
->>>>>>> refs/remotes/origin/mcl_kalman_filter
     );
     let mut mcl = {
         let particle_count = 40_000;
@@ -225,7 +205,6 @@ fn main() {
         .build()
         .unwrap();
     let mut tick: u32 = 0;
-<<<<<<< HEAD
     let control_noise_angle = Normal::new(0., CONTROL_ANGLE_NOISE);
     let control_noise_x = Normal::new(0., CONTROL_X_NOISE);
     let control_noise_y = Normal::new(0., CONTROL_Y_NOISE);
@@ -233,22 +212,21 @@ fn main() {
     let mut mcl_error: Pose = Pose::default();
     let mut last_time: Instant = Instant::now();
     let mut delta_t;
-    while let Some(e) = window.next() {
-        delta_t = last_time.elapsed().as_secs_f64();
-=======
-    let control_noise_angle = Normal::new(0., CONTROL_ANGLE_NOISE * TIME_SCALE);
-    let control_noise_x = Normal::new(0., CONTROL_X_NOISE * TIME_SCALE);
-    let control_noise_y = Normal::new(0., CONTROL_Y_NOISE * TIME_SCALE);
-
     let start = Instant::now();
     while let Some(e) = window.next() {
+        delta_t = last_time.elapsed().as_secs_f64();
+
         if tick >= 250 {
             let elapsed = start.elapsed();
-            println!("{}t in {:?} at {}t/s", tick, elapsed, tick as f64 / elapsed.as_secs_f64());
+            println!(
+                "{}t in {:?} at {}t/s",
+                tick,
+                elapsed,
+                tick as f64 / elapsed.as_secs_f64()
+            );
             break;
         }
         println!("T = {}", tick);
->>>>>>> refs/remotes/origin/mcl_kalman_filter
         // User input
         let mut control = Pose::default();
         if let Some(Button::Keyboard(key)) = e.press_args() {
@@ -312,8 +290,7 @@ fn main() {
                 c.transform,
                 g,
             );
-<<<<<<< HEAD
-
+            let filter_prediction: KinematicState = filter.known_state.into();
             isoceles_triangle(
                 [0., 1., 0., 1.],
                 map_visual_margins,
@@ -323,18 +300,6 @@ fn main() {
                 c.transform,
                 g,
             );
-=======
-            // let filter_prediction: KinematicState = filter.known_state.into();
-            // isoceles_triangle(
-            //     [0., 1., 0., 1.],
-            //     map_visual_margins,
-            //     MAP_SCALE,
-            //     0.5,
-            //     filter_prediction.pose(),
-            //     c.transform,
-            //     g,
-            // );
->>>>>>> refs/remotes/origin/mcl_kalman_filter
         });
 
         // Update the physics simulation
@@ -374,34 +339,18 @@ fn main() {
             angle: robot_state.vel_angle,
             position: robot_state.velocity,
         });
-<<<<<<< HEAD
-        position_sensor.update_pose(robot_state.pose());
-        distance_sensors
-            .iter_mut()
-            .for_each(|d| d.update_pose(robot_state.pose()));
-
-        // println!("P = {}", mcl.belief.len());
-=======
         let robot_pose = robot_state.pose();
         position_sensor.update_pose(robot_pose);
         lidar.update_pose(robot_pose);
 
         println!("\tP = {}", mcl.belief.len());
->>>>>>> refs/remotes/origin/mcl_kalman_filter
         // update localization
         let mcl_pred = mcl.get_prediction();
 
         mcl.control_update(&position_sensor);
-<<<<<<< HEAD
-        mcl.observation_update(&distance_sensors);
-        filter.prediction_update(delta_t, control);
-        filter.measurement_update(motion_sensor.sense(), mcl_pred);
-        last_time = Instant::now();
-=======
         mcl.observation_update(&lidar);
-        filter.prediction_update(TIME_SCALE.recip(), control);
+        filter.prediction_update(delta_t, control);
         filter.measurement_update(motion_sensor.sense(), mcl.get_prediction());
->>>>>>> refs/remotes/origin/mcl_kalman_filter
 
         tick += 1;
 

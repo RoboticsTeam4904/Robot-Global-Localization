@@ -121,7 +121,6 @@ impl std::ops::Sub for Point {
         }
     }
 }
-p_cond = [elem + radiation_transfer_const * (average_temperatures[j-5]**4 + average_temperatures[j+5]**4 - 2*average_temperatures[j]**4) if (j >= 5 and j < N-5) else radiation_transfer_const * (average_temperatures[-6]**4 - average_temperatures[-1]**4) if j > N-6 else (average_temperatures[5]**4-average_temperatures[0]**4)*radiation_transfer_const + radiation_gone for j, elem in enumerate(p_cond)]
 
 impl std::ops::Mul for Point {
     type Output = Point;

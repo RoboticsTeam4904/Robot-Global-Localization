@@ -167,14 +167,11 @@ impl<Z: Sync + Send> PoseMCL<Z> {
 
     /// Takes in a vector of distance finder sensors (e.g. laser range finder)
     pub fn observation_update(&mut self, z: &Z) {
-<<<<<<< HEAD
-        let mut errors: Vec<f64> = Vec::with_capacity(self.belief.len());
-        for sample in &self.belief {
-            errors.push((self.errors_from_sense)(sample, z, self.map.clone()))
-        }
-=======
-        let errors: Vec<_> = self.belief.par_iter().map(|sample| (&self.errors_from_sense)(sample, z, self.map.clone())).collect();
->>>>>>> refs/remotes/origin/mcl_kalman_filter
+        let errors: Vec<_> = self
+            .belief
+            .par_iter()
+            .map(|sample| (&self.errors_from_sense)(sample, z, self.map.clone()))
+            .collect();
 
         let mut new_particles = Vec::new();
         #[allow(clippy::float_cmp)]
@@ -364,10 +361,6 @@ impl DistanceFinderMCL {
             sum_weights += weights[idx];
             new_particles.push(self.belief[idx]);
         }
-<<<<<<< HEAD
-        // println!("S = {}", sum_weights);
-        self.belief = new_particles;
-=======
         println!("\tΣ = {}", sum_weights);
         self.belief = if self.death_condition.triggered(&new_particles) {
             PoseBelief::new(
@@ -380,7 +373,6 @@ impl DistanceFinderMCL {
                 .map(|&p| p + (self.resampling_noise)(self.belief.len()))
                 .collect()
         };
->>>>>>> refs/remotes/origin/mcl_kalman_filter
     }
 
     pub fn get_prediction(&self) -> Pose {
