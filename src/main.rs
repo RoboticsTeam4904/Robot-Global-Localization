@@ -1,13 +1,25 @@
-#![allow(dead_code)] // TODO: This will be removed after organizational overhall and a lib.rs
-mod replay;
-mod robot;
-mod utility;
-use nalgebra::{Matrix, Matrix5, Matrix6, RowVector5, Vector5, Vector6, U1, U7};
+use global_robot_localization::{
+    replay::{draw_map, isoceles_triangle},
+    robot::{
+        ai::{
+            kalman_filter::KalmanFilter,
+            localization::{DeathCondition, PoseMCL},
+        },
+        map::{Map2D, Object2D},
+        sensors::{
+            dummy::{DummyLidar, DummyPositionSensor, DummyVelocitySensor},
+            LimitedSensor, Sensor,
+        },
+    },
+    utility::{KinematicState, Point, Pose},
+};
+use nalgebra::{Matrix6, Vector6};
 use piston_window::*;
 use rand::{
     distributions::{Distribution, Normal},
     thread_rng,
 };
+<<<<<<< HEAD
 use robot::{
     ai::localization::{DistanceFinderMCL, KalmanFilter},
     map::{Map2D, Object2D},
@@ -17,14 +29,17 @@ use robot::{
     },
 };
 use std::time::Instant;
+=======
+>>>>>>> refs/remotes/origin/mcl_kalman_filter
 use std::{
-    f64::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_8, PI},
+    f64::{
+        consts::{FRAC_PI_2, FRAC_PI_8, PI},
+        INFINITY,
+    },
+    time::Instant,
     ops::Range,
     sync::Arc,
-    thread::sleep,
-    time::Duration,
 };
-use utility::{KinematicState, Point, Pose};
 
 const ANGLE_NOISE: f64 = 0.;
 const X_NOISE: f64 = 25.;
@@ -102,7 +117,22 @@ fn main() {
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
-
+    let mut filter = KalmanFilter::new(
+        Matrix6::from_diagonal(&Vector6::new(
+            ANGLE_NOISE.powi(2),
+            X_NOISE.powi(2),
+            Y_NOISE.powi(2),
+            0.,
+            0.,
+            0.,
+        )),
+        init_state.into(),
+        1e-5,
+        0.,
+        2.,
+        q,
+        r,
+    );
     let mut motion_sensor = DummyVelocitySensor::new(
         Pose {
             angle: ROTATIONAL_VELOCITY_SENSOR_NOISE,
@@ -126,47 +156,68 @@ fn main() {
             position: Point { x: 1., y: 1. },
         },
     );
-    let mut distance_sensors: Vec<DummyDistanceSensor> = (0..8)
-        .map(|i| {
-            DummyDistanceSensor::new(
-                0.,
-                Pose {
-                    angle: FRAC_PI_2 * i as f64,
-                    ..Pose::default()
-                },
-                map.clone(),
-                robot_state.pose(),
-                None,
-            )
-        })
-        .collect();
-
-    let mut filter = KalmanFilter::new(
-        Matrix6::from_diagonal(&Vector6::new(
-            ANGLE_NOISE.powi(2),
-            X_NOISE.powi(2),
-            Y_NOISE.powi(2),
-            0.,
-            0.,
-            0.,
-        )),
-        init_state.into(),
-        1e-5,
-        0.,
-        2.,
-        q,
-        r,
-    );
-    let mut mcl = DistanceFinderMCL::new(
-        40_000,
-        200.,
+    let mut lidar = DummyLidar::new(
         map.clone(),
+<<<<<<< HEAD
         Box::new(|e| 1.05f64.powf(-e)),
         Pose {
             angle: 0.001,
             position: (0.5, 0.5).into(),
         },
+=======
+        robot_state.pose(),
+        Normal::new(0., 0.001),
+        Normal::new(0., 0.0001),
+        180,
+        Pose::default(),
+        None,
+>>>>>>> refs/remotes/origin/mcl_kalman_filter
     );
+    let mut mcl = {
+        let particle_count = 40_000;
+        let weight_sum_threshold = 200.;
+        let death_threshold = DeathCondition {
+            particle_count_threshold: 4_000,
+            particle_concentration_threshold: 300.,
+        };
+        PoseMCL::<DummyLidar>::new(
+            particle_count,
+            weight_sum_threshold,
+            death_threshold,
+            map.clone(),
+            Box::new(|e| 1.05f64.powf(-e)),
+            Box::new(|&sample, lidar, map| {
+                let sample = sample + lidar.relative_pose();
+                let lidar_scan = lidar.sense();
+                let len = lidar_scan.len() as f64;
+                let lidar_range = lidar.range().unwrap_or(0.0..INFINITY);
+                let mut error = 0.;
+                for scan_point in lidar_scan {
+                    error += match map.raycast(
+                        sample
+                            + Pose {
+                                angle: scan_point.angle(),
+                                ..Pose::default()
+                            },
+                    ) {
+                        Some(predicted_point)
+                            if lidar_range.contains(&predicted_point.dist(sample.position)) =>
+                        {
+                            (scan_point.mag() - predicted_point.dist(sample.position)).abs()
+                        }
+                        _ => 5.,
+                    };
+                }
+                error / len
+            }),
+            Box::new(move |_| {
+                Pose::random_from_range(Pose {
+                    angle: 0.001,
+                    position: (0.7, 0.7).into(),
+                })
+            }),
+        )
+    };
 
     let map_visual_margins: Point = (25., 25.).into();
     let mut window: PistonWindow = WindowSettings::new("😎", [1000, 1000])
@@ -174,6 +225,7 @@ fn main() {
         .build()
         .unwrap();
     let mut tick: u32 = 0;
+<<<<<<< HEAD
     let control_noise_angle = Normal::new(0., CONTROL_ANGLE_NOISE);
     let control_noise_x = Normal::new(0., CONTROL_X_NOISE);
     let control_noise_y = Normal::new(0., CONTROL_Y_NOISE);
@@ -183,6 +235,20 @@ fn main() {
     let mut delta_t;
     while let Some(e) = window.next() {
         delta_t = last_time.elapsed().as_secs_f64();
+=======
+    let control_noise_angle = Normal::new(0., CONTROL_ANGLE_NOISE * TIME_SCALE);
+    let control_noise_x = Normal::new(0., CONTROL_X_NOISE * TIME_SCALE);
+    let control_noise_y = Normal::new(0., CONTROL_Y_NOISE * TIME_SCALE);
+
+    let start = Instant::now();
+    while let Some(e) = window.next() {
+        if tick >= 250 {
+            let elapsed = start.elapsed();
+            println!("{}t in {:?} at {}t/s", tick, elapsed, tick as f64 / elapsed.as_secs_f64());
+            break;
+        }
+        println!("T = {}", tick);
+>>>>>>> refs/remotes/origin/mcl_kalman_filter
         // User input
         let mut control = Pose::default();
         if let Some(Button::Keyboard(key)) = e.press_args() {
@@ -204,21 +270,16 @@ fn main() {
         // Rendering
         window.draw_2d(&e, |c, g, _device| {
             clear([1.0; 4], g);
-            for line in map.lines.clone() {
-                line_from_to(
-                    [0., 0., 0., 1.],
-                    1.,
-                    map.vertices[line.0] * MAP_SCALE + map_visual_margins,
-                    map.vertices[line.1] * MAP_SCALE + map_visual_margins,
-                    c.transform,
-                    g,
-                );
-            }
-            for point in map.points.clone() {
-                let v: Point = map.vertices[point] * MAP_SCALE + map_visual_margins;
-                let size: Point = (5., 5.).into();
-                ellipse_from_to([0.7, 0.3, 0.3, 1.], v + size, v - size, c.transform, g);
-            }
+            draw_map(
+                map.clone(),
+                [0., 0., 0., 1.],
+                0.5,
+                1.,
+                MAP_SCALE,
+                map_visual_margins,
+                c.transform,
+                g,
+            );
             for particle in &mcl.belief {
                 isoceles_triangle(
                     [1., 0., 0., 1.],
@@ -251,6 +312,7 @@ fn main() {
                 c.transform,
                 g,
             );
+<<<<<<< HEAD
 
             isoceles_triangle(
                 [0., 1., 0., 1.],
@@ -261,6 +323,18 @@ fn main() {
                 c.transform,
                 g,
             );
+=======
+            // let filter_prediction: KinematicState = filter.known_state.into();
+            // isoceles_triangle(
+            //     [0., 1., 0., 1.],
+            //     map_visual_margins,
+            //     MAP_SCALE,
+            //     0.5,
+            //     filter_prediction.pose(),
+            //     c.transform,
+            //     g,
+            // );
+>>>>>>> refs/remotes/origin/mcl_kalman_filter
         });
 
         // Update the physics simulation
@@ -300,20 +374,34 @@ fn main() {
             angle: robot_state.vel_angle,
             position: robot_state.velocity,
         });
+<<<<<<< HEAD
         position_sensor.update_pose(robot_state.pose());
         distance_sensors
             .iter_mut()
             .for_each(|d| d.update_pose(robot_state.pose()));
 
         // println!("P = {}", mcl.belief.len());
+=======
+        let robot_pose = robot_state.pose();
+        position_sensor.update_pose(robot_pose);
+        lidar.update_pose(robot_pose);
+
+        println!("\tP = {}", mcl.belief.len());
+>>>>>>> refs/remotes/origin/mcl_kalman_filter
         // update localization
         let mcl_pred = mcl.get_prediction();
 
         mcl.control_update(&position_sensor);
+<<<<<<< HEAD
         mcl.observation_update(&distance_sensors);
         filter.prediction_update(delta_t, control);
         filter.measurement_update(motion_sensor.sense(), mcl_pred);
         last_time = Instant::now();
+=======
+        mcl.observation_update(&lidar);
+        filter.prediction_update(TIME_SCALE.recip(), control);
+        filter.measurement_update(motion_sensor.sense(), mcl.get_prediction());
+>>>>>>> refs/remotes/origin/mcl_kalman_filter
 
         tick += 1;
 
@@ -339,42 +427,4 @@ fn main() {
             );
         }
     }
-}
-
-fn isoceles_triangle<G: Graphics>(
-    color: [f32; 4],
-    margin: Point,
-    pose_scale: f64,
-    triangle_scale: f64,
-    pose: Pose,
-    transform: math::Matrix2d,
-    g: &mut G,
-) {
-    polygon(
-        color,
-        &[
-            [
-                pose.position.x * pose_scale + margin.x + triangle_scale * 15. * pose.angle.cos(),
-                pose.position.y * pose_scale + margin.y + triangle_scale * 15. * pose.angle.sin(),
-            ],
-            [
-                pose.position.x * pose_scale
-                    + margin.x
-                    + triangle_scale * 10. * (pose.angle + 2. * FRAC_PI_3).cos(),
-                pose.position.y * pose_scale
-                    + margin.y
-                    + triangle_scale * 10. * (pose.angle + 2. * FRAC_PI_3).sin(),
-            ],
-            [
-                pose.position.x * pose_scale
-                    + margin.x
-                    + triangle_scale * 10. * (pose.angle + 4. * FRAC_PI_3).cos(),
-                pose.position.y * pose_scale
-                    + margin.y
-                    + triangle_scale * 10. * (pose.angle + 4. * FRAC_PI_3).sin(),
-            ],
-        ],
-        transform,
-        g,
-    );
 }

@@ -1,7 +1,9 @@
 use nalgebra::RowVector6;
 use rand::prelude::*;
-use std::f64::consts::{FRAC_PI_2, PI};
-use std::ops::Range;
+use std::{
+    f64::consts::{FRAC_PI_2, PI},
+    ops::Range,
+};
 
 /// Generic 2d point
 #[derive(Default, Debug, PartialEq, Clone, Copy)]
@@ -16,6 +18,12 @@ impl Point {
             x: radius * angle.cos(),
             y: radius * angle.sin(),
         }
+    }
+
+    pub fn rotate(self, angle: f64) -> Self {
+        let start_angle = self.angle();
+        let mag = self.mag();
+        Self::polar(start_angle + angle, mag)
     }
 
     pub fn clamp(self, lower: Point, upper: Point) -> Point {
@@ -37,8 +45,13 @@ impl Point {
         }
     }
 
+    /// Angle of `self` relative to origin
+    pub fn angle(&self) -> f64 {
+        self.angle_to(Point::default())
+    }
+
     /// Angle of `self` relative to `other`
-    pub fn angle(&self, other: Point) -> f64 {
+    pub fn angle_to(&self, other: Point) -> f64 {
         let dif = other - *self;
         if dif.x == 0. {
             if other.y > self.y {
@@ -179,6 +192,26 @@ impl std::ops::Div<f64> for Point {
         Point {
             x: self.x / other,
             y: self.y / other,
+        }
+    }
+}
+
+impl std::ops::AddAssign for Point {
+    /// Does not normalize angle
+    fn add_assign(&mut self, other: Point) {
+        *self = Point {
+            x: self.x + other.x,
+            y: self.y + other.y,
+        }
+    }
+}
+
+impl std::ops::SubAssign for Point {
+    /// Does not normalize angle
+    fn sub_assign(&mut self, other: Point) {
+        *self = Point {
+            x: self.x - other.x,
+            y: self.y - other.y,
         }
     }
 }
@@ -495,17 +528,19 @@ where
 }
 
 pub fn clamp_to_range<T>(num: f64, range: T) -> f64
-    where T: std::ops::RangeBounds<f64>,
+where
+    T: std::ops::RangeBounds<f64>,
 {
     let num = num.into();
     let num = match range.start_bound() {
         std::ops::Bound::Excluded(lower) if num <= *lower => *lower + 1.,
         std::ops::Bound::Included(lower) if num < *lower => *lower,
-        _ => num
+        _ => num,
     };
     match range.end_bound() {
         std::ops::Bound::Excluded(upper) if num >= *upper => *upper - 1.,
         std::ops::Bound::Included(upper) if num > *upper => *upper,
-        _ => num
-    }.into()
+        _ => num,
+    }
+    .into()
 }
