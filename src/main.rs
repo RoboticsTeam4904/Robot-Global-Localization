@@ -1,5 +1,5 @@
 use global_robot_localization::{
-    replay::{draw_map, isoceles_triangle},
+    replay::{draw_map, isoceles_triangle, point_cloud},
     robot::{
         ai::{
             kalman_filter::KalmanFilter,
@@ -147,8 +147,8 @@ fn main() {
     let mut lidar = DummyLidar::new(
         map.clone(),
         robot_state.pose(),
-        Normal::new(0., 0.001),
-        Normal::new(0., 0.0001),
+        Normal::new(0., 0.2),
+        Normal::new(0., 0.01),
         180,
         Pose::default(),
         None,
@@ -210,13 +210,13 @@ fn main() {
     let control_noise_y = Normal::new(0., CONTROL_Y_NOISE);
     let mut kalman_error: Pose = Pose::default();
     let mut mcl_error: Pose = Pose::default();
-    let mut last_time: Instant = Instant::now();
+    let last_time: Instant = Instant::now();
     let mut delta_t;
     let start = Instant::now();
     while let Some(e) = window.next() {
         delta_t = last_time.elapsed().as_secs_f64();
 
-        if tick >= 250 {
+        if tick >= 3000 {
             let elapsed = start.elapsed();
             println!(
                 "{}t in {:?} at {}t/s",
@@ -258,6 +258,15 @@ fn main() {
                 c.transform,
                 g,
             );
+            point_cloud(
+                &lidar.sense().iter().map(|p| p.rotate(robot_state.angle)).collect::<Vec<_>>(),
+                [0., 1., 0., 1.],
+                1.,
+                MAP_SCALE,
+                map_visual_margins + robot_state.position * MAP_SCALE,
+                c.transform,
+                g,
+            );
             for particle in &mcl.belief {
                 isoceles_triangle(
                     [1., 0., 0., 1.],
@@ -274,10 +283,7 @@ fn main() {
                 map_visual_margins,
                 MAP_SCALE,
                 0.75,
-                Pose {
-                    angle: robot_state.angle,
-                    position: robot_state.position,
-                },
+                robot_state.pose(),
                 c.transform,
                 g,
             );

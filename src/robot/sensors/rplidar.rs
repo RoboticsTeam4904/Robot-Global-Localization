@@ -1,46 +1,34 @@
-use super::{LimitedSensor, Sensor};
-use crate::utility::{Point, Pose};
-use rplidar_drv::{RplidarDevice, ScanPoint};
+use crate::{
+    robot::sensors::{LimitedSensor, Sensor},
+    utility::{Point, Pose},
+};
+use rplidar_drv::RplidarDevice;
 use serialport::prelude::*;
 use std::{
     ops::Range,
+    sync::{Arc, Mutex},
     time::Duration,
 };
 
 const DEFAULT_BUAD_RATE: u32 = 115200;
-
-// TODO: untested
+const DEFAULT_RANGE: Option<Range<f64>> = Some(150.0..8000.);
 
 /// An Rplidar wrapper.
 /// More info found here: https://www.robotshop.com/en/rplidar-a2m8-360-laser-scanner.html.
 pub struct RplidarSensor {
-    pub device: RplidarDevice<dyn serialport::SerialPort>,
-    pub latest_scan: Vec<ScanPoint>,
+    pub device: Arc<Mutex<RplidarDevice<Box<dyn serialport::SerialPort>>>>,
+    pub latest_scan: Vec<Point>,
     pub relative_pose: Pose,
     pub sense_range: Option<Range<f64>>,
 }
 
+unsafe impl Send for RplidarSensor {}
+unsafe impl Sync for RplidarSensor {}
+
 impl RplidarSensor {
-    pub fn new(
-        serial_port: &str,
-        relative_pose: Pose,
-        baud_rate: Option<u32>,
-    ) -> RplidarSensor {
-        let mut sensor = Self::with_range(serial_port, relative_pose, None, baud_rate);
-        let typical_mode = sensor.device.get_typical_scan_mode().unwrap();
-        let sense_range = sensor
-            .device
-            .get_all_supported_scan_modes()
-            .unwrap()
-            .iter()
-            .find(|mode| mode.id == typical_mode)
-            .map(|mode| 0.0..mode.max_distance as f64);
-        RplidarSensor {
-            device: sensor.device,
-            latest_scan: vec![],
-            relative_pose,
-            sense_range,
-        }
+    pub fn new(serial_port: &str, relative_pose: Pose, baud_rate: Option<u32>) -> RplidarSensor {
+        Self::with_range(serial_port, relative_pose, DEFAULT_RANGE, baud_rate)
+        // TODO: automatically grab range from lidar instead of using DEFAULT_RANGE (sdk's implementation of getting range from firmware doesn't always work)
     }
 
     pub fn with_range(
@@ -65,7 +53,7 @@ impl RplidarSensor {
         let mut device = RplidarDevice::with_stream(serial_port);
         device.start_scan().expect("Failed to start scan");
         RplidarSensor {
-            device,
+            device: Arc::new(Mutex::new(device)),
             latest_scan: vec![],
             relative_pose,
             sense_range,
@@ -77,19 +65,24 @@ impl Sensor for RplidarSensor {
     type Output = Vec<Point>;
 
     fn update(&mut self) {
-        self.latest_scan = self.device.grab_scan().unwrap(); // TODO: pass error upward
+        match self.device.lock().unwrap().grab_scan() {
+            Ok(scan) => {
+                self.latest_scan = scan
+                    .iter()
+                    .map(|rp_point| {
+                        Point::polar(
+                            rp_point.raw_angle() as f64,
+                            rp_point.raw_distance() as f64,
+                        )
+                    })
+                    .collect()
+            }
+            Err(e) => println!("{:?}", e),
+        };
     }
 
     fn sense(&self) -> Self::Output {
-        self.latest_scan
-            .iter()
-            .map(|rp_point| {
-                Point::polar(
-                    rp_point.angle() as f64 * std::f64::consts::PI / 180., // By default it returns milimeters and degrees ith
-                    rp_point.distance() as f64 / 1000.,
-                )
-            })
-            .collect()
+        self.latest_scan.clone()
     }
 
     fn relative_pose(&self) -> Pose {

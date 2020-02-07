@@ -10,7 +10,7 @@ bitvec = "0.10.0"
 nalgebra = "0.18.0"
 typenum = "1.5.1"
 piston_window = "0.105.0"
-rplidar_drv = { git = "https://github.com/RoboticsTeam4904/rplidar.rs" }
+rplidar_drv = { git = "https://github.com/RoboticsTeam4904/rplidar.rs", branch = "master" }
 serialport = { version = "3.3.0", default-features = false, features = [] }
 nt = "1.0.3"
 failure = "0.1.6"
