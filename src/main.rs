@@ -32,15 +32,15 @@ use std::{
 const ANGLE_NOISE: f64 = 0.;
 const X_NOISE: f64 = 25.;
 const Y_NOISE: f64 = 3.;
-const X_MCL_NOISE: f64 = 0.5;
-const Y_MCL_NOISE: f64 = 0.5;
-const ANGLE_MCL_NOISE: f64 = 0.005;
-const CONTROL_X_NOISE: f64 = 0.02;
-const CONTROL_Y_NOISE: f64 = 0.02;
-const CONTROL_ANGLE_NOISE: f64 = 0.002;
-const VELOCITY_X_SENSOR_NOISE: f64 = 0.05;
-const VELOCITY_Y_SENSOR_NOISE: f64 = 0.05;
-const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.05;
+const X_MCL_NOISE: f64 = 1.;
+const Y_MCL_NOISE: f64 = 1.;
+const ANGLE_MCL_NOISE: f64 = 0.05;
+const CONTROL_X_NOISE: f64 = 0.0005 / 10.;
+const CONTROL_Y_NOISE: f64 = 0.0005 / 10.;
+const CONTROL_ANGLE_NOISE: f64 = 0.000005 / 10.;
+const VELOCITY_X_SENSOR_NOISE: f64 = 0.0005;
+const VELOCITY_Y_SENSOR_NOISE: f64 = 0.0005;
+const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.0005;
 const MAP_SCALE: f64 = 2.;
 const ROBOT_ACCEL: f64 = 3. / 1000.;
 const ROBOT_ANGLE_ACCEL: f64 = 0.1 / 1000.;
@@ -216,7 +216,7 @@ fn main() {
     while let Some(e) = window.next() {
         delta_t = last_time.elapsed().as_secs_f64();
 
-        if tick >= 3000 {
+        if tick >= 2000 {
             let elapsed = start.elapsed();
             println!(
                 "{}t in {:?} at {}t/s",
@@ -339,6 +339,7 @@ fn main() {
             )
                 .into(),
         };
+
         control += control_noise;
         // update sensors
         motion_sensor.update_pose(Pose {

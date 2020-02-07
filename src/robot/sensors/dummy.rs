@@ -202,12 +202,12 @@ impl Sensor for DummyLidar {
                         .unwrap_or(0.0..INFINITY)
                         .contains(&scan_point.dist(self.robot_pose.position)) =>
                 {
-                    scan.push(
-                        Point::polar(
-                            scan_point.angle_to(self.robot_pose.position) - self.robot_pose.angle + self.angle_noise.sample(&mut rng),
-                            scan_point.dist(self.robot_pose.position) + self.dist_noise.sample(&mut rng),
-                        )
-                    )
+                    scan.push(Point::polar(
+                        scan_point.angle_to(self.robot_pose.position) - self.robot_pose.angle
+                            + self.angle_noise.sample(&mut rng),
+                        scan_point.dist(self.robot_pose.position)
+                            + self.dist_noise.sample(&mut rng),
+                    ))
                 }
                 _ => (),
             }
@@ -232,7 +232,6 @@ pub struct DummyVelocitySensor {
     y_noise_distr: Normal,
     angle_noise_distr: Normal,
     real_velocity: Pose,
-    last_update: Instant,
 }
 
 impl DummyVelocitySensor {
@@ -242,13 +241,11 @@ impl DummyVelocitySensor {
             y_noise_distr: Normal::new(0., noise_margins.position.y),
             angle_noise_distr: Normal::new(0., noise_margins.angle),
             real_velocity,
-            last_update: Instant::now(),
         }
     }
 
     pub fn update_pose(&mut self, pose: Pose) {
         self.real_velocity = pose;
-        self.last_update = Instant::now();
     }
 }
 
@@ -257,13 +254,12 @@ impl Sensor for DummyVelocitySensor {
 
     fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
-        let elapsed = self.last_update.elapsed().as_secs_f64();
         Pose {
-            angle: self.real_velocity.angle + self.angle_noise_distr.sample(&mut rng) * elapsed,
+            angle: self.real_velocity.angle + self.angle_noise_distr.sample(&mut rng),
             position: Point {
                 x: self.real_velocity.position.x + self.x_noise_distr.sample(&mut rng),
                 y: self.real_velocity.position.y + self.y_noise_distr.sample(&mut rng),
-            } * elapsed,
+            },
         }
     }
 }
