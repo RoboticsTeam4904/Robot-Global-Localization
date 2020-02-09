@@ -1,14 +1,11 @@
-use crate::robot::map::Map2D;
-use crate::robot::sensors::LimitedSensor;
-use crate::robot::sensors::Sensor;
-use crate::utility::{Point, Pose};
-use rand::distributions::WeightedIndex;
-use rand::prelude::*;
+use crate::{
+    robot::{map::Map2D, sensors::LimitedSensor, sensors::Sensor},
+    utility::{Point, Pose},
+};
+use rand::{distributions::WeightedIndex, prelude::*};
 use rayon::prelude::*;
-use std::f64::consts::*;
-use std::sync::Arc;
+use std::{f64::consts::*, sync::Arc};
 
-// TODO: c o d e d u p l i c a t i o n
 struct PoseBelief;
 
 impl PoseBelief {

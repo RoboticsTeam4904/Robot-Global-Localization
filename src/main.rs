@@ -4,11 +4,12 @@ use global_robot_localization::{
         ai::{
             kalman_filter::KalmanFilter,
             localization::{DeathCondition, PoseMCL},
+            presets,
         },
         map::{Map2D, Object2D},
         sensors::{
             dummy::{DummyLidar, DummyPositionSensor, DummyVelocitySensor},
-            LimitedSensor, Sensor,
+            Sensor,
         },
     },
     utility::{KinematicState, Point, Pose},
@@ -22,7 +23,6 @@ use rand::{
 use std::{
     f64::{
         consts::{FRAC_PI_2, FRAC_PI_8, PI},
-        INFINITY,
     },
     ops::Range,
     sync::Arc,
@@ -69,7 +69,7 @@ fn main() {
     let noise_x = Normal::new(0., X_NOISE);
     let noise_angle = Normal::new(0., ANGLE_NOISE);
     let noise_y = Normal::new(0., Y_NOISE);
-    let map = Arc::new(Map2D::new(
+    let percieved_map = Arc::new(Map2D::new(
         200.,
         200.,
         vec![
@@ -88,6 +88,28 @@ fn main() {
             Object2D::Line(((180., 120.).into(), (160., 90.).into())),
             Object2D::Line(((160., 90.).into(), (140., 100.).into())),
             Object2D::Line(((100., 40.).into(), (160., 80.).into())),
+        ],
+    ));
+    let real_map = Arc::new(Map2D::new(
+        200.,
+        200.,
+        vec![
+            Object2D::Point((0., 200.).into()),
+            Object2D::Point((200., 200.).into()),
+            Object2D::Point((200., 0.).into()),
+            Object2D::Point((0., 0.).into()),
+            Object2D::Line(((0., 0.).into(), (200., 0.).into())),
+            Object2D::Line(((0., 0.).into(), (0., 200.).into())),
+            Object2D::Line(((200., 0.).into(), (200., 200.).into())),
+            Object2D::Line(((0., 200.).into(), (200., 200.).into())),
+            Object2D::Line(((20., 60.).into(), (50., 100.).into())),
+            Object2D::Line(((50., 100.).into(), (80., 50.).into())),
+            Object2D::Line(((80., 50.).into(), (20., 60.).into())),
+            Object2D::Line(((140., 100.).into(), (180., 120.).into())),
+            Object2D::Line(((180., 120.).into(), (160., 90.).into())),
+            Object2D::Line(((160., 90.).into(), (140., 100.).into())),
+            Object2D::Line(((100., 40.).into(), (160., 80.).into())),
+            Object2D::Triangle(((10., 10.).into(), (30., 30.).into(), (40., 20.).into())),
         ],
     ));
     let init_state = KinematicState {
@@ -145,7 +167,7 @@ fn main() {
         },
     );
     let mut lidar = DummyLidar::new(
-        map.clone(),
+        real_map.clone(),
         robot_state.pose(),
         Normal::new(0., 0.2),
         Normal::new(0., 0.01),
@@ -164,38 +186,10 @@ fn main() {
             particle_count,
             weight_sum_threshold,
             death_threshold,
-            map.clone(),
-            Box::new(|e| 1.05f64.powf(-e)),
-            Box::new(|&sample, lidar, map| {
-                let sample = sample + lidar.relative_pose();
-                let lidar_scan = lidar.sense();
-                let len = lidar_scan.len() as f64;
-                let lidar_range = lidar.range().unwrap_or(0.0..INFINITY);
-                let mut error = 0.;
-                for scan_point in lidar_scan {
-                    error += match map.raycast(
-                        sample
-                            + Pose {
-                                angle: scan_point.angle(),
-                                ..Pose::default()
-                            },
-                    ) {
-                        Some(predicted_point)
-                            if lidar_range.contains(&predicted_point.dist(sample.position)) =>
-                        {
-                            (scan_point.mag() - predicted_point.dist(sample.position)).abs()
-                        }
-                        _ => 5.,
-                    };
-                }
-                error / len
-            }),
-            Box::new(move |_| {
-                Pose::random_from_range(Pose {
-                    angle: 0.001,
-                    position: (0.7, 0.7).into(),
-                })
-            }),
+            percieved_map.clone(),
+            presets::exp_weight(1.05),
+            presets::lidar_error(1.2, 1.),
+            presets::uniform_resampler(0.0001, 0.7),
         )
     };
 
@@ -212,20 +206,9 @@ fn main() {
     let mut mcl_error: Pose = Pose::default();
     let last_time: Instant = Instant::now();
     let mut delta_t;
-    let start = Instant::now();
     while let Some(e) = window.next() {
         delta_t = last_time.elapsed().as_secs_f64();
 
-        if tick >= 2000 {
-            let elapsed = start.elapsed();
-            println!(
-                "{}t in {:?} at {}t/s",
-                tick,
-                elapsed,
-                tick as f64 / elapsed.as_secs_f64()
-            );
-            break;
-        }
         println!("T = {}", tick);
         // User input
         let mut control = Pose::default();
@@ -249,7 +232,17 @@ fn main() {
         window.draw_2d(&e, |c, g, _device| {
             clear([1.0; 4], g);
             draw_map(
-                map.clone(),
+                real_map.clone(),
+                [1., 0., 1., 1.],
+                0.5,
+                1.,
+                MAP_SCALE,
+                map_visual_margins,
+                c.transform,
+                g,
+            );
+            draw_map(
+                percieved_map.clone(),
                 [0., 0., 0., 1.],
                 0.5,
                 1.,
@@ -259,7 +252,11 @@ fn main() {
                 g,
             );
             point_cloud(
-                &lidar.sense().iter().map(|p| p.rotate(robot_state.angle)).collect::<Vec<_>>(),
+                &lidar
+                    .sense()
+                    .iter()
+                    .map(|p| p.rotate(robot_state.angle))
+                    .collect::<Vec<_>>(),
                 [0., 1., 0., 1.],
                 1.,
                 MAP_SCALE,
