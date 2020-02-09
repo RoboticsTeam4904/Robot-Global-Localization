@@ -70,10 +70,7 @@ impl Sensor for RplidarSensor {
                 self.latest_scan = scan
                     .iter()
                     .map(|rp_point| {
-                        Point::polar(
-                            rp_point.raw_angle() as f64,
-                            rp_point.raw_distance() as f64,
-                        )
+                        Point::polar(rp_point.raw_angle() as f64, rp_point.raw_distance() as f64)
                     })
                     .collect()
             }

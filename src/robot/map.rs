@@ -1,4 +1,4 @@
-use crate::utility::{Pose, Point};
+use crate::utility::{Point, Pose};
 use std::f64::consts::PI;
 
 // TODO: this file is lazy

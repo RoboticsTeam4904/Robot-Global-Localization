@@ -8,6 +8,7 @@ use crate::{
 use rand::{distributions::Normal, prelude::*};
 use std::{f64::INFINITY, ops::Range};
 
+/// Creates a `ResampleNoiseCalculator` which produces uniform noise within the range ±`angle_margin` ±`position_margin`
 pub fn uniform_resampler(angle_margin: f64, position_margin: f64) -> ResampleNoiseCalculator {
     Box::new(move |_| {
         Pose::random_from_range(Pose {
@@ -17,6 +18,7 @@ pub fn uniform_resampler(angle_margin: f64, position_margin: f64) -> ResampleNoi
     })
 }
 
+/// Creates a `ResmapleNoiseCalculator` which produces noise normally distributed with the standard deviations provided
 pub fn normal_resampler(angle_dev: f64, position_dev: f64) -> ResampleNoiseCalculator {
     let angle_dist = Normal::new(0., angle_dev);
     let pos_dist = Normal::new(0., position_dev);
@@ -29,10 +31,21 @@ pub fn normal_resampler(angle_dev: f64, position_dev: f64) -> ResampleNoiseCalcu
     })
 }
 
+/// Creates a `WeightCalculator` which takes `base` to the power of negative error
 pub fn exp_weight(base: f64) -> WeightCalculator {
     Box::new(move |error| base.powf(-error))
 }
 
+/// Creates a `ErrorCalculator` which follows the following algorithm:
+///
+/// For each scan point in the observed scan, predict what the scan point would look like at that angle for the sample.
+///
+/// The first part of the error is
+/// the sum of the differences between the observed scan point and the predicted scan point divided by the number of scan points
+///
+/// The second part of the error is the number of predicted scan points that did not exist put to the power of `discrepancy_pow`.
+///
+/// Total error is the first part plus the second part multiplied by `error_scale`
 pub fn lidar_error<S>(discrepancy_pow: f64, error_scale: f64) -> ErrorCalculator<S>
 where
     S: Sensor<Output = Vec<Point>> + LimitedSensor<Range<f64>>,

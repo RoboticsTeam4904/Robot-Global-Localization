@@ -1,6 +1,6 @@
+pub mod ai;
 pub mod map;
 pub mod sensors;
-pub mod ai;
 
 /// The generic robot trait
 pub trait Robot {

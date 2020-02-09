@@ -21,9 +21,7 @@ use rand::{
     thread_rng,
 };
 use std::{
-    f64::{
-        consts::{FRAC_PI_2, FRAC_PI_8, PI},
-    },
+    f64::consts::{FRAC_PI_2, FRAC_PI_8, PI},
     ops::Range,
     sync::Arc,
     time::Instant,
