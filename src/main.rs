@@ -167,7 +167,7 @@ fn main() {
     let mut lidar = DummyLidar::new(
         real_map.clone(),
         robot_state.pose(),
-        Normal::new(0., 0.2),
+        Normal::new(0., 0.01),
         Normal::new(0., 0.01),
         180,
         Pose::default(),
@@ -187,7 +187,7 @@ fn main() {
             percieved_map.clone(),
             presets::exp_weight(1.05),
             presets::lidar_error(1.2, 1.),
-            presets::uniform_resampler(0.0001, 0.7),
+            presets::uniform_resampler(0.001, 0.7),
         )
     };
 
@@ -204,9 +204,14 @@ fn main() {
     let mut mcl_error: Pose = Pose::default();
     let last_time: Instant = Instant::now();
     let mut delta_t;
+    let start = Instant::now();
     while let Some(e) = window.next() {
         delta_t = last_time.elapsed().as_secs_f64();
-
+        if tick >= 500 {
+            let elapsed = start.elapsed();
+            println!("{}t in {:?}, {}tps", tick, elapsed, tick as f64 / elapsed.as_secs_f64());
+            break
+        }
         println!("T = {}", tick);
         // User input
         let mut control = Pose::default();

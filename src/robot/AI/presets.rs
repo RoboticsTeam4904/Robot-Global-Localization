@@ -6,6 +6,7 @@ use crate::{
     utility::{Point, Pose},
 };
 use rand::{distributions::Normal, prelude::*};
+use rayon::prelude::*;
 use std::{f64::INFINITY, ops::Range};
 
 /// Creates a `ResampleNoiseCalculator` which produces uniform noise within the range ±`angle_margin` ±`position_margin`
@@ -55,24 +56,28 @@ where
         let lidar_scan = lidar.sense();
         let len = lidar_scan.len() as f64;
         let lidar_range = lidar.range().unwrap_or(0.0..INFINITY);
-        let mut error = 0.;
-        let mut discrepancy_count: i32 = 0;
-        for scan_point in lidar_scan {
-            match map.raycast(
-                sample
-                    + Pose {
-                        angle: scan_point.angle(),
-                        ..Pose::default()
-                    },
-            ) {
-                Some(predicted_point)
-                    if lidar_range.contains(&predicted_point.dist(sample.position)) =>
-                {
-                    error += (scan_point.mag() - predicted_point.dist(sample.position)).abs()
+        let error: (f64, f64) = lidar_scan // TODO; this parralelization could be better ith
+            .par_iter()
+            .map(|scan_point| {
+                match map.raycast(
+                    sample
+                        + Pose {
+                            angle: scan_point.angle(),
+                            ..Pose::default()
+                        },
+                ) {
+                    Some(predicted_point)
+                        if lidar_range.contains(&predicted_point.dist(sample.position)) =>
+                    {
+                        (
+                            (scan_point.mag() - predicted_point.dist(sample.position)).abs(),
+                            0.,
+                        )
+                    }
+                    _ => (0., 1.),
                 }
-                _ => discrepancy_count += 1,
-            };
-        }
-        error_scale * (error + (discrepancy_count as f64).powf(discrepancy_pow)) / len
+            })
+            .reduce(|| (0., 0.), |a, b| (a.0 + b.0, a.1 + b.1));
+        error_scale * (error.0 + error.1.powf(discrepancy_pow)) / len
     })
 }
