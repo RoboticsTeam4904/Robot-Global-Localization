@@ -5,6 +5,10 @@ authors = ["Codadillo <leoconr@nuevaschool.org>"]
 edition = "2018"
 
 [[bin]]
+name = "simulation"
+path = "src/main.rs"
+
+[[bin]]
 name = "tegra"
 path = "src/tegra.rs"
 
