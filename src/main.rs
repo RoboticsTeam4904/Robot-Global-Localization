@@ -209,8 +209,13 @@ fn main() {
         delta_t = last_time.elapsed().as_secs_f64();
         if tick >= 500 {
             let elapsed = start.elapsed();
-            println!("{}t in {:?}, {}tps", tick, elapsed, tick as f64 / elapsed.as_secs_f64());
-            break
+            println!(
+                "{}t in {:?}, {}tps",
+                tick,
+                elapsed,
+                tick as f64 / elapsed.as_secs_f64()
+            );
+            break;
         }
         println!("T = {}", tick);
         // User input

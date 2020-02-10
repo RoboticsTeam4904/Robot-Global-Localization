@@ -34,7 +34,7 @@ pub trait LimitedSensor<T>: Sensor {
 
 /// A wrapper sensor that applies that applies the the `map`
 /// function to the output of `internal_sensor.sense()` in `MappedSensor::sense`.
-/// 
+///
 /// The rest of the implementation of `Sense` and `LimitedSensor` is reflected upward
 /// from `internal_sensor`.
 pub struct MappedSensor<S, O, M>
