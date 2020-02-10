@@ -67,9 +67,8 @@ fn main() {
     let noise_x = Normal::new(0., X_NOISE);
     let noise_angle = Normal::new(0., ANGLE_NOISE);
     let noise_y = Normal::new(0., Y_NOISE);
-    let percieved_map = Arc::new(Map2D::new(
-        200.,
-        200.,
+    let percieved_map = Arc::new(Map2D::with_size(
+        (200., 200.).into(),
         vec![
             Object2D::Point((0., 200.).into()),
             Object2D::Point((200., 200.).into()),
@@ -88,9 +87,8 @@ fn main() {
             Object2D::Line(((100., 40.).into(), (160., 80.).into())),
         ],
     ));
-    let real_map = Arc::new(Map2D::new(
-        200.,
-        200.,
+    let real_map = Arc::new(Map2D::with_size(
+        (200., 200.).into(),
         vec![
             Object2D::Point((0., 200.).into()),
             Object2D::Point((200., 200.).into()),

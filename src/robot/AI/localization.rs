@@ -116,7 +116,7 @@ impl<Z: Sync + Send> PoseMCL<Z> {
         errors_from_sense: ErrorCalculator<Z>,
         resampling_noise: ResampleNoiseCalculator,
     ) -> Self {
-        let belief = PoseBelief::new(max_particle_count, (map.width, map.height).into());
+        let belief = PoseBelief::new(max_particle_count, map.size);
         Self {
             max_particle_count,
             map,
@@ -197,10 +197,7 @@ impl<Z: Sync + Send> PoseMCL<Z> {
         }
         println!("\tΣ = {}", sum_weights);
         self.belief = if self.death_condition.triggered(&new_particles) {
-            PoseBelief::new(
-                self.max_particle_count,
-                (self.map.width, self.map.height).into(),
-            )
+            PoseBelief::new(self.max_particle_count, self.map.size)
         } else {
             new_particles
                 .iter()
@@ -257,8 +254,7 @@ impl DistanceFinderMCL {
         weight_from_error: WeightCalculator,
         resampling_noise: ResampleNoiseCalculator,
     ) -> Self {
-        let max_position = (map.width, map.height);
-        let belief = PoseBelief::new(max_particle_count, max_position.into());
+        let belief = PoseBelief::new(max_particle_count, map.size);
         Self {
             max_particle_count,
             weight_sum_threshold,
@@ -360,10 +356,7 @@ impl DistanceFinderMCL {
         }
         println!("\tΣ = {}", sum_weights);
         self.belief = if self.death_condition.triggered(&new_particles) {
-            PoseBelief::new(
-                self.max_particle_count,
-                (self.map.width, self.map.height).into(),
-            )
+            PoseBelief::new(self.max_particle_count, self.map.size)
         } else {
             new_particles
                 .iter()
@@ -420,8 +413,7 @@ impl ObjectDetectorMCL {
         weight_from_error: WeightCalculator,
         resampling_noise: ResampleNoiseCalculator,
     ) -> Self {
-        let max_position = (map.width, map.height);
-        let belief = PoseBelief::new(max_particle_count, max_position.into());
+        let belief = PoseBelief::new(max_particle_count, map.size);
         Self {
             max_particle_count,
             weight_sum_threshold,
@@ -529,10 +521,7 @@ impl ObjectDetectorMCL {
             new_particles.push(self.belief[idx]);
         }
         self.belief = if self.death_condition.triggered(&new_particles) {
-            PoseBelief::new(
-                self.max_particle_count,
-                (self.map.width, self.map.height).into(),
-            )
+            PoseBelief::new(self.max_particle_count, self.map.size)
         } else {
             new_particles
                 .iter()

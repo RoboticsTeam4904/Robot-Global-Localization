@@ -20,14 +20,10 @@ const LIDAR_PORT: &'static str = "/dev/ttyUSB0";
 
 fn main() {
     // Cartograph the map
-    let map = Arc::new(Map2D::new(
-        7000.,
-        2000.,
-        vec![Object2D::Rectangle((
-            (0., 0.).into(),
-            (7000., 2000.).into(),
-        ))],
-    ));
+    let map = Arc::new(Map2D::new(vec![Object2D::Rectangle((
+        (0., 0.).into(),
+        (7000., 2000.).into(),
+    ))]));
     // Initialize networktables connection for output
     let inst = NetworkTables::connect(network::DEFAULT_ROBORIO_IP, "😎leo😎")
         .expect("Failed to initialize networktables connection");

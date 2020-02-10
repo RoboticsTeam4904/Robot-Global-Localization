@@ -13,15 +13,32 @@ pub enum Object2D {
 /// A Simple 2D map of line segments
 #[derive(Debug)]
 pub struct Map2D {
-    pub width: f64,
-    pub height: f64,
+    pub size: Point,
     pub vertices: Vec<Point>,
     pub lines: Vec<(usize, usize)>,
     pub points: Vec<usize>,
 }
 
 impl Map2D {
-    pub fn new<U>(width: f64, height: f64, objects: U) -> Self
+    pub fn new<U>(objects: U) -> Self
+    where
+        U: IntoIterator<Item = Object2D>,
+    {
+        let mut map = Self::with_size(Point::default(), objects);
+        let mut max = Point::default();
+        for vertex in &map.vertices {
+            if vertex.x > max.x {
+                max.x = vertex.x;
+            }
+            if vertex.y > max.y {
+                max.y = vertex.y;
+            }
+        }
+        map.size = max;
+        map
+    }
+
+    pub fn with_size<U>(size: Point, objects: U) -> Self
     where
         U: IntoIterator<Item = Object2D>,
     {
@@ -65,8 +82,7 @@ impl Map2D {
         }
 
         Self {
-            width,
-            height,
+            size,
             vertices,
             lines,
             points,
@@ -143,9 +159,8 @@ impl Map2D {
                 },
             ));
         }
-        Ok(Self::new(
-            width,
-            height,
+        Ok(Self::with_size(
+            (width, height).into(),
             lines.iter().map(|l| Object2D::Line(*l)),
         ))
     }
