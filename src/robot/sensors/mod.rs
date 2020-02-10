@@ -3,7 +3,7 @@ use std::ops::Sub;
 
 // pub mod gpio;
 pub mod dummy;
-pub mod nt;
+pub mod network;
 pub mod rplidar;
 
 /// The generic trait for any sensor.

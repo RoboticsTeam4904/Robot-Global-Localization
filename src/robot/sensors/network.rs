@@ -3,6 +3,7 @@ use crate::utility::{Point, Pose};
 use failure;
 use nt::{Client, EntryData, EntryValue, NetworkTables};
 
+pub const DEFAULT_ROBORIO_IP: &'static str = "10.1.42.2:1735";
 pub const DEFAULT_PORT: u32 = 1735;
 
 pub struct NTSensor {
