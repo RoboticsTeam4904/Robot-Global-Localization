@@ -3,6 +3,8 @@ use crate::utility::{Point, Pose};
 use failure;
 use nt::{Client, EntryData, EntryValue, NetworkTables};
 
+pub const DEFAULT_PORT: u32 = 1735;
+
 pub struct NTSensor {
     inst: NetworkTables<Client>,
     entry_id: u16,

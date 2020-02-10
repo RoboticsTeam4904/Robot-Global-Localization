@@ -56,7 +56,7 @@ where
         let lidar_scan = lidar.sense();
         let len = lidar_scan.len() as f64;
         let lidar_range = lidar.range().unwrap_or(0.0..INFINITY);
-        let error: (f64, f64) = lidar_scan // TODO; this parralelization could be better ith
+        let error: (f64, f64) = lidar_scan // TODO: this parallelization could be better ith
             .par_iter()
             .map(|scan_point| {
                 match map.raycast(
