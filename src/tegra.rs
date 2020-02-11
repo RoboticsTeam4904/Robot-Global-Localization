@@ -1,66 +1,56 @@
 use global_robot_localization::{
+    networktables,
     robot::{
         ai::{
             localization::{DeathCondition, PoseMCL},
             presets::{exp_weight, lidar_error, uniform_resampler},
         },
         map::{Map2D, Object2D},
-        sensors::{
-            network::{self, PoseNTSensor},
-            rplidar::RplidarSensor,
-            DeltaSensor, Sensor,
-        },
+        sensors::{network::PoseNTSensor, rplidar::RplidarSensor, DeltaSensor, Sensor},
     },
     utility::Pose,
 };
-use nt::{EntryData, EntryValue, NetworkTables};
+use nt::{EntryValue, NetworkTables};
 use std::sync::Arc;
 
 const LIDAR_PORT: &'static str = "/dev/ttyUSB0";
 
-fn main() {
+#[tokio::main]
+async fn main() -> Result<(), ()> {
     // Cartograph the map
     let map = Arc::new(Map2D::new(vec![Object2D::Rectangle((
         (0., 0.).into(),
         (7000., 2000.).into(),
     ))]));
     // Initialize networktables connection for output
-    let inst = NetworkTables::connect(network::DEFAULT_ROBORIO_IP, "😎leo😎")
-        .expect("Failed to initialize networktables connection");
-    let mut angle_entry = {
-        let id = inst.create_entry(EntryData::new(
-            "localization/angle".to_owned(),
-            0,
-            EntryValue::Double(0.),
+    let inst = NetworkTables::connect(networktables::DEFAULT_ROBORIO_IP, "😎leo😎")
+        .await
+        .expect(&format!(
+            "Failed to initialize networktables connection at {}",
+            networktables::DEFAULT_ROBORIO_IP
         ));
-        inst.get_entry(id)
-    };
-    let mut x_entry = {
-        let id = inst.create_entry(EntryData::new(
-            "localization/x".to_owned(),
-            0,
-            EntryValue::Double(0.),
-        ));
-        inst.get_entry(id)
-    };
-    let mut y_entry = {
-        let id = inst.create_entry(EntryData::new(
-            "localization/y".to_owned(),
-            0,
-            EntryValue::Double(0.),
-        ));
-        inst.get_entry(id)
-    };
+    let mut angle_entry = networktables::get_entry(
+        &inst,
+        "localization/angle".to_owned(),
+        EntryValue::Double(0.),
+    )
+    .await;
+    let mut x_entry =
+        networktables::get_entry(&inst, "localization/x".to_owned(), EntryValue::Double(0.)).await;
+    let mut y_entry =
+        networktables::get_entry(&inst, "localization/y".to_owned(), EntryValue::Double(0.)).await;
+
     // Initialize sensors
     let mut lidar = RplidarSensor::new(LIDAR_PORT, Pose::default(), None);
     let mut nt_navx = DeltaSensor::new(
         PoseNTSensor::new(
             Pose::default(),
-            network::DEFAULT_ROBORIO_IP,
+            networktables::DEFAULT_ROBORIO_IP,
             "navx/yaw".to_owned(),
             "navx/displacementX".to_owned(),
             "navx/displacementY".to_owned(),
         )
+        .await
         .expect("Failed to initialized networktables sensor"),
     );
     // Initialize mcl

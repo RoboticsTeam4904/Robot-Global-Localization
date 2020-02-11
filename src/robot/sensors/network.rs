@@ -1,10 +1,10 @@
 use super::Sensor;
-use crate::utility::{Point, Pose};
+use crate::{
+    networktables,
+    utility::{Point, Pose},
+};
 use failure;
-use nt::{Client, EntryData, EntryValue, NetworkTables};
-
-pub const DEFAULT_ROBORIO_IP: &'static str = "10.1.42.2:1735";
-pub const DEFAULT_PORT: u32 = 1735;
+use nt::{Client, EntryValue, NetworkTables};
 
 pub struct NTSensor {
     inst: NetworkTables<Client>,
@@ -13,9 +13,11 @@ pub struct NTSensor {
 }
 
 impl NTSensor {
-    fn new(relative_pose: Pose, ip: &str, path: String) -> Result<Self, failure::Error> {
-        let inst = NetworkTables::connect(ip, "sensor")?;
-        let entry_id = inst.create_entry(EntryData::new(path, 0, EntryValue::Double(0.)));
+    pub async fn new(relative_pose: Pose, ip: &str, path: String) -> Result<Self, failure::Error> {
+        let inst = NetworkTables::connect(ip, "sensor").await?;
+        let entry_id = *networktables::get_entry(&inst, path, EntryValue::Double(0.))
+            .await
+            .id();
         Ok(Self {
             inst,
             entry_id,
@@ -46,7 +48,7 @@ pub struct PoseNTSensor {
 }
 
 impl PoseNTSensor {
-    pub fn new(
+    pub async fn new(
         relative_pose: Pose,
         ip: &str,
         x_path: String,
@@ -54,9 +56,9 @@ impl PoseNTSensor {
         angle_path: String,
     ) -> Result<Self, failure::Error> {
         Ok(Self {
-            x: NTSensor::new(relative_pose, ip, x_path)?,
-            y: NTSensor::new(relative_pose, ip, y_path)?,
-            angle: NTSensor::new(relative_pose, ip, angle_path)?,
+            x: NTSensor::new(relative_pose, ip, x_path).await?,
+            y: NTSensor::new(relative_pose, ip, y_path).await?,
+            angle: NTSensor::new(relative_pose, ip, angle_path).await?,
         })
     }
 }
