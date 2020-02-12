@@ -6,7 +6,7 @@ use global_robot_localization::{
             presets::{exp_weight, lidar_error, uniform_resampler},
         },
         map::{Map2D, Object2D},
-        sensors::{network::PoseNTSensor, rplidar::RplidarSensor, DeltaSensor, Sensor},
+        sensors::{*, network::PoseNTSensor, rplidar::RplidarSensor},
     },
     utility::Pose,
 };
@@ -18,6 +18,7 @@ const LIDAR_PORT: &'static str = "/dev/ttyUSB0";
 #[tokio::main]
 async fn main() -> Result<(), ()> {
     // Cartograph the map
+    // THE MAP IS IN MILLIMETERS
     let map = Arc::new(Map2D::new(vec![Object2D::Rectangle((
         (0., 0.).into(),
         (7000., 2000.).into(),
@@ -39,7 +40,6 @@ async fn main() -> Result<(), ()> {
         networktables::get_entry(&inst, "localization/x".to_owned(), EntryValue::Double(0.)).await;
     let mut y_entry =
         networktables::get_entry(&inst, "localization/y".to_owned(), EntryValue::Double(0.)).await;
-
     // Initialize sensors
     let mut lidar = RplidarSensor::new(LIDAR_PORT, Pose::default(), None);
     let mut nt_navx = DeltaSensor::new(
@@ -51,7 +51,11 @@ async fn main() -> Result<(), ()> {
             "navx/displacementY".to_owned(),
         )
         .await
-        .expect("Failed to initialized networktables sensor"),
+        .expect("Failed to initialized networktables sensor")
+        .map(Box::new(|pose| Pose {
+            angle: pose.angle,
+            position: pose.position * 1000. // Currently displacement is being given in meters ._.
+        })),
     );
     // Initialize mcl
     let mut mcl = {
@@ -65,7 +69,7 @@ async fn main() -> Result<(), ()> {
             max_particle_count,
             weight_sum_threshold,
             death_condition,
-            map.clone(),
+            map,
             exp_weight(1.05),
             lidar_error(1.3, 0.2),
             uniform_resampler(0.01, 7.),

@@ -32,6 +32,19 @@ pub trait LimitedSensor<T>: Sensor {
     }
 }
 
+/// Helper trait for mapping a `Sensor<Output = O>` to a `Sensor<Output = M>`
+pub trait MappableSensor: Sensor + Sized {
+    /// Maps `self` to a `Sensor<Output = M>`
+    fn map<M>(
+        self,
+        map: Box<dyn Fn(<Self as Sensor>::Output) -> M>,
+    ) -> MappedSensor<Self, <Self as Sensor>::Output, M> {
+        MappedSensor::new(self, map)
+    }
+}
+
+impl<S: Sensor + Sized> MappableSensor for S {}
+
 /// A wrapper sensor that applies that applies the the `map`
 /// function to the output of `internal_sensor.sense()` in `MappedSensor::sense`.
 ///
