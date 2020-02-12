@@ -4,6 +4,7 @@ use crate::{
 };
 use rand::{distributions::WeightedIndex, prelude::*};
 use rayon::prelude::*;
+use statrs::function::erf::erf;
 use std::{f64::consts::*, sync::Arc};
 
 struct PoseBelief;
@@ -214,6 +215,155 @@ impl<Z: Sync + Send> PoseMCL<Z> {
             angle += sample.angle;
         }
         average_pose.with_angle(angle) / self.belief.len() as f64
+    }
+}
+
+pub struct KLDPoseMCL<Z: Sync + Send> {
+    pub map: Arc<Map2D>,
+    pub belief: Vec<Pose>,
+    max_particle_count: usize,
+    min_particle_count: usize,
+    weight_sum_threshold: f64,
+    error_bound: f64,      // ε
+    error_confidence: f64, // δ
+    bin_size: Pose,        // ∆
+    death_condition: DeathCondition,
+    weight_from_error: WeightCalculator,
+    errors_from_sense: ErrorCalculator<Z>,
+    resampling_noise: ResampleNoiseCalculator,
+}
+
+impl<Z: Sync + Send> KLDPoseMCL<Z> {
+        pub fn new(
+        max_particle_count: usize,
+        min_particle_count: usize,
+        weight_sum_threshold: f64,
+        error_bound: f64,      // ε
+        error_confidence: f64, // δ
+        bin_size: Pose,        // ∆
+        death_condition: DeathCondition,
+        map: Arc<Map2D>,
+        weight_from_error: WeightCalculator,
+        errors_from_sense: ErrorCalculator<Z>,
+        resampling_noise: ResampleNoiseCalculator,
+    ) -> Self {
+        let belief = PoseBelief::new(max_particle_count, map.size);
+        Self {
+            max_particle_count,
+            map,
+            belief,
+            min_particle_count,
+            error_bound,
+            bin_size,
+            error_confidence,
+            death_condition,
+            weight_sum_threshold,
+            weight_from_error,
+            errors_from_sense,
+            resampling_noise,
+        }
+    }
+
+    pub fn from_distributions<U, V>(
+        belief_distr: (U, (U, U)),
+        max_particle_count: usize,
+        min_particle_count: usize,
+        weight_sum_threshold: f64,
+        error_bound: f64,      // ε
+        error_confidence: f64, // δ
+        bin_size: Pose,        // ∆
+        death_condition: DeathCondition,
+        map: Arc<Map2D>,
+        weight_from_error: WeightCalculator,
+        errors_from_sense: ErrorCalculator<Z>,
+        resampling_noise: ResampleNoiseCalculator,
+    ) -> Self
+    where
+        U: Distribution<V>,
+        V: Into<f64>,
+    {
+        let belief = PoseBelief::from_distributions(max_particle_count, belief_distr);
+         Self {
+            max_particle_count,
+            map,
+            belief,
+            min_particle_count,
+            error_bound,
+            bin_size,
+            error_confidence,
+            death_condition,
+            weight_sum_threshold,
+            weight_from_error,
+            errors_from_sense,
+            resampling_noise,
+        }
+    }
+
+    pub fn get_prediction(&self) -> Pose {
+        let mut average_pose = Pose::default();
+        let mut angle = 0.;
+        for sample in &self.belief {
+            average_pose += *sample;
+            angle += sample.angle;
+        }
+        average_pose.with_angle(angle) / self.belief.len() as f64
+    }
+
+    pub fn observation_update(&mut self, z: &Z) {
+        let errors: Vec<_> = self
+            .belief
+            .par_iter()
+            .map(|sample| (&self.errors_from_sense)(sample, z, self.map.clone()))
+            .collect();
+
+        let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
+            errors
+                .iter()
+                .map(|_| 2. * self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
+                .collect()
+        } else {
+            errors
+                .iter()
+                .map(|error| (self.weight_from_error)(error))
+                .collect()
+        };
+        let particles = WeightedIndex::new(weights.clone()).unwrap();
+        let mut rng = thread_rng();
+        let mut new_particles = vec![];
+        let mut desired_particles_count = 0.;
+        let mut non_empty_bins = vec![];
+        for n in 0.. {
+            let particle = self.belief[particles.sample(&mut rng)];
+            new_particles.push(particle);
+            let bin = Pose {
+                angle: (particle.angle / self.bin_size.angle).floor(),
+                position: (
+                    (particle.position.x / self.bin_size.position.x).floor(),
+                    (particle.position.y / self.bin_size.position.y).floor(),
+                )
+                    .into(),
+            };
+            if !non_empty_bins.contains(&bin) {
+                let k = non_empty_bins.len() as f64;
+                non_empty_bins.push(bin);
+                let normal_quantile =
+                    (1. - erf(4. * (1. - self.error_confidence) / 2f64.sqrt())) / 2.; // Take the upper (1 - self.error_confidence)% of the normal distribution
+                let a = 2. / (9. * k);
+                desired_particles_count =
+                    k / (2. * self.error_bound) * (1. - a + a.sqrt() * normal_quantile).powi(3);
+            }
+            if n as f64 >= desired_particles_count && n >= self.min_particle_count {
+                break;
+            }
+        }
+        self.belief = if self.death_condition.triggered(&new_particles) {
+            PoseBelief::new(self.max_particle_count, self.map.size)
+        } else {
+            new_particles
+                .iter()
+                .map(|&p| p + (self.resampling_noise)(self.belief.len()))
+                .collect()
+        };
     }
 }
 
