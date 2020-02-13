@@ -235,6 +235,26 @@ where
     }
 }
 
+/// A localizer that uses KLD-Sampling Monte Carlo Localization
+/// and takes in motion sensor data and `Z` as sensor data
+/// 
+/// Math and source for KLD-Sampling implementation found here: https://papers.nips.cc/paper/1998-kld-sampling-adaptive-particle-filters.pdf (Praise Dieter Fox)
+///
+/// `map` is the map on which the filter is localization
+///
+/// `belief` is the set of particles
+///
+/// `max_particle_count` is the max number of particles and starting number
+///
+/// `weight_sum_threshold` is cumulative weight of the belief used for likelyhood-based resampling
+///
+/// `death_condition` is the condition for the belief after resampling required to "restart" the algorithm
+///
+/// `weight_from_error` calculates the weight of each particle from its error
+///
+/// `errors_from_sense` calculates the error of each particle from its sensor data
+///
+/// `resampling_noise` calculates the amount of noise to add to each particle during resampling
 pub struct KLDPoseMCL<W, E, R, Z>
 where
     W: WeightCalculator,
