@@ -178,7 +178,7 @@ fn main() {
             particle_count_threshold: 4_000,
             particle_concentration_threshold: 300.,
         };
-        PoseMCL::<DummyLidar>::new(
+        PoseMCL::new(
             particle_count,
             weight_sum_threshold,
             death_threshold,

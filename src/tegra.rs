@@ -6,7 +6,7 @@ use global_robot_localization::{
             presets::{exp_weight, lidar_error, uniform_resampler},
         },
         map::{Map2D, Object2D},
-        sensors::{*, network::PoseNTSensor, rplidar::RplidarSensor},
+        sensors::{network::PoseNTSensor, rplidar::RplidarSensor, *},
     },
     utility::Pose,
 };
@@ -52,10 +52,10 @@ async fn main() -> Result<(), ()> {
         )
         .await
         .expect("Failed to initialized networktables sensor")
-        .map(Box::new(|pose| Pose {
+        .map(|pose: Pose| Pose {
             angle: pose.angle,
-            position: pose.position * 1000. // Currently displacement is being given in meters ._.
-        })),
+            position: pose.position * 1000., // Currently displacement is being given in meters ._.
+        }),
     );
     // Initialize mcl
     let mut mcl = {

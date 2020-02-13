@@ -33,37 +33,39 @@ pub trait LimitedSensor<T>: Sensor {
 }
 
 /// Helper trait for mapping a `Sensor<Output = O>` to a `Sensor<Output = M>`
-pub trait MappableSensor: Sensor + Sized {
+pub trait MappableSensor<M, O>: Sensor + Sized
+where
+    M: Fn(<Self as Sensor>::Output) -> O,
+{
     /// Maps `self` to a `Sensor<Output = M>`
-    fn map<M>(
-        self,
-        map: Box<dyn Fn(<Self as Sensor>::Output) -> M>,
-    ) -> MappedSensor<Self, <Self as Sensor>::Output, M> {
+    fn map(self, map: M) -> MappedSensor<Self, <Self as Sensor>::Output, M> {
         MappedSensor::new(self, map)
     }
 }
 
-impl<S: Sensor + Sized> MappableSensor for S {}
+impl<S: Sensor + Sized, M, O> MappableSensor<M, O> for S where M: Fn(<Self as Sensor>::Output) -> O {}
 
 /// A wrapper sensor that applies that applies the the `map`
 /// function to the output of `internal_sensor.sense()` in `MappedSensor::sense`.
 ///
 /// The rest of the implementation of `Sense` and `LimitedSensor` is reflected upward
 /// from `internal_sensor`.
-pub struct MappedSensor<S, O, M>
+pub struct MappedSensor<S, O, Map, MappedOut>
 where
     S: Sensor<Output = O>,
+    Map: Fn(O) -> MappedOut,
 {
     pub internal_sensor: S,
-    pub map: Box<dyn Fn(O) -> M>,
+    pub map: Map,
 }
 
-impl<S, O, M> MappedSensor<S, O, M>
+impl<S, O, Map, MappedOut> MappedSensor<S, O, Map, MappedOut>
 where
     S: Sensor<Output = O>,
+    Map: Fn(O) -> MappedOut,
 {
     /// Creates a new `MappedSensor` around `internal_sensor` using `map`.
-    pub fn new(internal_sensor: S, map: Box<dyn Fn(O) -> M>) -> Self {
+    pub fn new(internal_sensor: S, map: Map) -> Self {
         Self {
             internal_sensor,
             map,
@@ -71,11 +73,12 @@ where
     }
 }
 
-impl<S, O, M> Sensor for MappedSensor<S, O, M>
+impl<S, O, Map, MappedOut> Sensor for MappedSensor<S, O, Map, MappedOut>
 where
     S: Sensor<Output = O>,
+    Map: Fn(O) -> MappedOut,
 {
-    type Output = M;
+    type Output = MappedOut;
 
     fn update(&mut self) {
         self.internal_sensor.update()
@@ -90,9 +93,10 @@ where
     }
 }
 
-impl<S, O, M, R> LimitedSensor<R> for MappedSensor<S, O, M>
+impl<S, O, Map, MappedOut, R> LimitedSensor<R> for MappedSensor<S, O, Map, MappedOut>
 where
-    S: Sensor<Output = O> + LimitedSensor<R>,
+    S: Sensor<Output = O>,
+    Map: Fn(O) -> MappedOut,
 {
     fn range(&self) -> Option<R> {
         self.internal_sensor.range()
