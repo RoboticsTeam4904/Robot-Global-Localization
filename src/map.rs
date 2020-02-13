@@ -1,5 +1,5 @@
 use crate::utility::{Point, Pose};
-use std::f64::consts::{FRAC_PI_2, PI};
+use std::f64::consts::PI;
 
 // TODO: this file is lazy
 
@@ -11,16 +11,34 @@ pub enum Object2D {
 }
 
 /// A Simple 2D map of line segments
+#[derive(Debug)]
 pub struct Map2D {
-    pub width: f64,
-    pub height: f64,
+    pub size: Point,
     pub vertices: Vec<Point>,
     pub lines: Vec<(usize, usize)>,
     pub points: Vec<usize>,
 }
 
 impl Map2D {
-    pub fn new<U>(width: f64, height: f64, objects: U) -> Self
+    pub fn new<U>(objects: U) -> Self
+    where
+        U: IntoIterator<Item = Object2D>,
+    {
+        let mut map = Self::with_size(Point::default(), objects);
+        let mut max = Point::default();
+        for vertex in &map.vertices {
+            if vertex.x > max.x {
+                max.x = vertex.x;
+            }
+            if vertex.y > max.y {
+                max.y = vertex.y;
+            }
+        }
+        map.size = max;
+        map
+    }
+
+    pub fn with_size<U>(size: Point, objects: U) -> Self
     where
         U: IntoIterator<Item = Object2D>,
     {
@@ -64,8 +82,7 @@ impl Map2D {
         }
 
         Self {
-            width,
-            height,
+            size,
             vertices,
             lines,
             points,
@@ -142,9 +159,8 @@ impl Map2D {
                 },
             ));
         }
-        Ok(Self::new(
-            width,
-            height,
+        Ok(Self::with_size(
+            (width, height).into(),
             lines.iter().map(|l| Object2D::Line(*l)),
         ))
     }
@@ -183,12 +199,10 @@ impl Map2D {
                 }
             }
         }
-        #[allow(clippy::float_cmp)]
         for point in &self.points {
             let point = self.get_vertex(*point);
             // TODO: tune? fuzzy comparison for slope comparison
-            if (start.position.angle(point) - start.angle).abs() < 0.01
-            {
+            if (start.position.angle_to(point) - start.angle).abs() < 0.01 {
                 let dist = point.dist(start.position);
                 if closest_intersection == None || closest_intersection_dist > dist {
                     closest_intersection = Some(point);
@@ -204,7 +218,7 @@ impl Map2D {
         let mut sensed_objects = Vec::new();
         for object in &self.points {
             let object = self.get_vertex(*object);
-            let object_angle = start.position.angle(object);
+            let object_angle = start.position.angle_to(object);
             let rel_angle = PI - (PI - (start.angle - object_angle).abs()).abs();
             if fov / 2. >= rel_angle
                 && self
