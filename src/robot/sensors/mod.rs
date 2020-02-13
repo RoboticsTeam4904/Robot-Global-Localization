@@ -38,7 +38,7 @@ where
     M: Fn(<Self as Sensor>::Output) -> O,
 {
     /// Maps `self` to a `Sensor<Output = M>`
-    fn map(self, map: M) -> MappedSensor<Self, <Self as Sensor>::Output, M> {
+    fn map(self, map: M) -> MappedSensor<Self, <Self as Sensor>::Output, M, O> {
         MappedSensor::new(self, map)
     }
 }
@@ -95,7 +95,7 @@ where
 
 impl<S, O, Map, MappedOut, R> LimitedSensor<R> for MappedSensor<S, O, Map, MappedOut>
 where
-    S: Sensor<Output = O>,
+    S: Sensor<Output = O> + LimitedSensor<R>,
     Map: Fn(O) -> MappedOut,
 {
     fn range(&self) -> Option<R> {
