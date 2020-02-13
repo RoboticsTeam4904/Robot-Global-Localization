@@ -1,5 +1,6 @@
 use crate::{
-    robot::{map::Map2D, sensors::Sensor},
+    map::Map2D,
+    sensors::Sensor,
     utility::{Point, Pose},
 };
 use rand::{distributions::WeightedIndex, prelude::*};
@@ -237,7 +238,7 @@ where
 
 /// A localizer that uses KLD-Sampling Monte Carlo Localization
 /// and takes in motion sensor data and `Z` as sensor data
-/// 
+///
 /// Math and source for KLD-Sampling implementation found here: https://papers.nips.cc/paper/1998-kld-sampling-adaptive-particle-filters.pdf (Praise Dieter Fox)
 ///
 /// `map` is the map on which the filter is localization

@@ -1,13 +1,11 @@
 use global_robot_localization::{
-    networktables,
-    robot::{
-        ai::{
-            localization::{DeathCondition, PoseMCL},
-            presets::{exp_weight, lidar_error, uniform_resampler},
-        },
-        map::{Map2D, Object2D},
-        sensors::{network::PoseNTSensor, rplidar::RplidarSensor, *},
+    ai::{
+        localization::{DeathCondition, PoseMCL},
+        presets::{exp_weight, lidar_error, uniform_resampler},
     },
+    map::{Map2D, Object2D},
+    networktables,
+    sensors::{network::PoseNTSensor, rplidar::RplidarSensor, *},
     utility::Pose,
 };
 use nt::{EntryValue, NetworkTables};

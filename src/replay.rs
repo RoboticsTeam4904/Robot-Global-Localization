@@ -1,5 +1,5 @@
 use crate::{
-    robot::map::Map2D,
+    map::Map2D,
     utility::{Point, Pose},
 };
 use piston_window::*;

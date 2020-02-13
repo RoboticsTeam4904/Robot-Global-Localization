@@ -1,5 +1,5 @@
 use crate::{
-    robot::sensors::{LimitedSensor, Sensor},
+    sensors::{LimitedSensor, Sensor},
     utility::{Point, Pose},
 };
 use rplidar_drv::RplidarDevice;

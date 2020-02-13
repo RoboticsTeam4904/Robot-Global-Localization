@@ -1,4 +1,6 @@
+pub mod ai;
+pub mod map;
 pub mod networktables;
 pub mod replay;
-pub mod robot;
+pub mod sensors;
 pub mod utility;

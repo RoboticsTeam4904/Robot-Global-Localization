@@ -1,9 +1,7 @@
 use crate::{
-    robot::{
-        ai::localization::{ErrorCalculator, ResampleNoiseCalculator, WeightCalculator},
-        map::Map2D,
-        sensors::{LimitedSensor, Sensor},
-    },
+    ai::localization::{ErrorCalculator, ResampleNoiseCalculator, WeightCalculator},
+    map::Map2D,
+    sensors::{LimitedSensor, Sensor},
     utility::{Point, Pose},
 };
 use rand::{distributions::Normal, prelude::*};

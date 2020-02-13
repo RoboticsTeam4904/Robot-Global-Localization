@@ -1,16 +1,14 @@
 use global_robot_localization::{
+    ai::{
+        kalman_filter::KalmanFilter,
+        localization::{DeathCondition, PoseMCL},
+        presets,
+    },
+    map::{Map2D, Object2D},
     replay::{draw_map, isoceles_triangle, point_cloud},
-    robot::{
-        ai::{
-            kalman_filter::KalmanFilter,
-            localization::{DeathCondition, PoseMCL},
-            presets,
-        },
-        map::{Map2D, Object2D},
-        sensors::{
-            dummy::{DummyLidar, DummyPositionSensor, DummyVelocitySensor},
-            Sensor,
-        },
+    sensors::{
+        dummy::{DummyLidar, DummyPositionSensor, DummyVelocitySensor},
+        Sensor,
     },
     utility::{KinematicState, Point, Pose},
 };

@@ -1,8 +1,6 @@
 use crate::{
-    robot::{
-        map::Map2D,
-        sensors::{LimitedSensor, Sensor},
-    },
+    map::Map2D,
+    sensors::{LimitedSensor, Sensor},
     utility::{Point, Pose},
 };
 use rand::{
