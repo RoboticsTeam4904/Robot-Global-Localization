@@ -5,6 +5,12 @@ use crate::{
 use piston_window::*;
 use std::{f64::consts::*, sync::Arc};
 
+pub const BLACK: [f32; 4] = [0., 0., 0., 1.];
+pub const RED: [f32; 4] = [1., 0., 0., 1.];
+pub const GREEN: [f32; 4] = [0., 1., 0., 1.];
+pub const BLUE: [f32; 4] = [0., 0., 1., 1.];
+
+
 pub fn draw_map<G>(
     map: Arc<Map2D>,
     color: [f32; 4],
