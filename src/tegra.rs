@@ -47,7 +47,7 @@ async fn main() -> Result<(), ()> {
     let mut y_entry =
         networktables::get_entry(&inst, "localization/y".to_owned(), EntryValue::Double(0.)).await;
     // Initialize sensors
-    let mut lidar = RplidarSensor::new(LIDAR_PORT, Pose::default(), None);
+    let mut lidar = RplidarSensor::with_range(LIDAR_PORT, Pose::default(), Some(0.0..8000.), None);
     let mut nt_navx = DeltaSensor::new(
         PoseNTSensor::new(
             Pose::default(),
