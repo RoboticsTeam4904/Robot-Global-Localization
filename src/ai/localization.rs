@@ -247,8 +247,6 @@ where
 ///
 /// `max_particle_count` is the max number of particles and starting number
 ///
-/// `weight_sum_threshold` is cumulative weight of the belief used for likelyhood-based resampling
-///
 /// `death_condition` is the condition for the belief after resampling required to "restart" the algorithm
 ///
 /// `weight_from_error` calculates the weight of each particle from its error
@@ -266,7 +264,6 @@ where
     pub belief: Vec<Pose>,
     max_particle_count: usize,
     min_particle_count: usize,
-    weight_sum_threshold: f64,
     error_bound: f64,      // ε
     error_confidence: f64, // δ
     bin_size: Pose,        // ∆
@@ -287,7 +284,6 @@ where
     pub fn new(
         max_particle_count: usize,
         min_particle_count: usize,
-        weight_sum_threshold: f64,
         error_bound: f64,      // ε
         error_confidence: f64, // δ
         bin_size: Pose,        // ∆
@@ -307,7 +303,6 @@ where
             bin_size,
             error_confidence,
             death_condition,
-            weight_sum_threshold,
             weight_from_error,
             errors_from_sense,
             resampling_noise,
@@ -319,7 +314,6 @@ where
         belief_distr: (U, (U, U)),
         max_particle_count: usize,
         min_particle_count: usize,
-        weight_sum_threshold: f64,
         error_bound: f64,      // ε
         error_confidence: f64, // δ
         bin_size: Pose,        // ∆
@@ -343,7 +337,6 @@ where
             bin_size,
             error_confidence,
             death_condition,
-            weight_sum_threshold,
             weight_from_error,
             errors_from_sense,
             resampling_noise,
@@ -361,6 +354,12 @@ where
         average_pose.with_angle(angle) / self.belief.len() as f64
     }
 
+    /// Takes in a sensor which senses the total change in pose sensed since the last update
+    pub fn control_update<U: Sensor<Output = Pose>>(&mut self, u: &U) {
+        let update = u.sense();
+        self.belief.iter_mut().for_each(|p| *p += update);
+    }
+
     pub fn observation_update(&mut self, z: &Z) {
         let errors: Vec<_> = self
             .belief
@@ -368,17 +367,11 @@ where
             .map(|sample| (&self.errors_from_sense)(sample, z, self.map.clone()))
             .collect();
 
-        let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
-            errors
-                .iter()
-                .map(|_| 2. * self.weight_sum_threshold / self.belief.len() as f64) // TODO: fixed parameter
-                .collect()
-        } else {
-            errors
-                .iter()
-                .map(|error| (self.weight_from_error)(error))
-                .collect()
-        };
+        let weights: Vec<f64> = errors
+            .iter()
+            .map(|error| (self.weight_from_error)(error))
+            .collect();
+        // KLD sample new particles
         let particles = WeightedIndex::new(weights.clone()).unwrap();
         let mut rng = thread_rng();
         let mut new_particles = vec![];
@@ -399,10 +392,10 @@ where
                 let k = non_empty_bins.len() as f64;
                 non_empty_bins.push(bin);
                 let normal_quantile =
-                    (1. - erf(4. * (1. - self.error_confidence) / 2f64.sqrt())) / 2.; // Take the upper (1 - self.error_confidence)% of the normal distribution
-                let a = 2. / (9. * k);
+                    (1. - erf(4. * self.error_confidence / 2f64.sqrt())) / 2.; // Take the upper (1 - self.error_confidence)% of the normal distribution
+                let k_ = 2. / (9. * k);
                 desired_particles_count =
-                    k / (2. * self.error_bound) * (1. - a + a.sqrt() * normal_quantile).powi(3);
+                    k / (2. * self.error_bound) * (1. - k_ + k_.sqrt() * normal_quantile).powi(3);
             }
             if n as f64 >= desired_particles_count && n >= self.min_particle_count {
                 break;

@@ -1,7 +1,7 @@
 use global_robot_localization::{
     ai::{
         kalman_filter::KalmanFilter,
-        localization::{DeathCondition, PoseMCL},
+        localization::{DeathCondition, KLDPoseMCL},
         presets,
     },
     map::{Map2D, Object2D},
@@ -68,41 +68,13 @@ fn main() {
     let percieved_map = Arc::new(Map2D::with_size(
         (200., 200.).into(),
         vec![
-            Object2D::Point((0., 200.).into()),
-            Object2D::Point((200., 200.).into()),
-            Object2D::Point((200., 0.).into()),
-            Object2D::Point((0., 0.).into()),
-            Object2D::Line(((0., 0.).into(), (200., 0.).into())),
-            Object2D::Line(((0., 0.).into(), (0., 200.).into())),
-            Object2D::Line(((200., 0.).into(), (200., 200.).into())),
-            Object2D::Line(((0., 200.).into(), (200., 200.).into())),
-            Object2D::Line(((20., 60.).into(), (50., 100.).into())),
-            Object2D::Line(((50., 100.).into(), (80., 50.).into())),
-            Object2D::Line(((80., 50.).into(), (20., 60.).into())),
-            Object2D::Line(((140., 100.).into(), (180., 120.).into())),
-            Object2D::Line(((180., 120.).into(), (160., 90.).into())),
-            Object2D::Line(((160., 90.).into(), (140., 100.).into())),
-            Object2D::Line(((100., 40.).into(), (160., 80.).into())),
+            Object2D::Rectangle(((0., 0.).into(), (200., 200.).into()))
         ],
     ));
     let real_map = Arc::new(Map2D::with_size(
         (200., 200.).into(),
         vec![
-            Object2D::Point((0., 200.).into()),
-            Object2D::Point((200., 200.).into()),
-            Object2D::Point((200., 0.).into()),
-            Object2D::Point((0., 0.).into()),
-            Object2D::Line(((0., 0.).into(), (200., 0.).into())),
-            Object2D::Line(((0., 0.).into(), (0., 200.).into())),
-            Object2D::Line(((200., 0.).into(), (200., 200.).into())),
-            Object2D::Line(((0., 200.).into(), (200., 200.).into())),
-            Object2D::Line(((20., 60.).into(), (50., 100.).into())),
-            Object2D::Line(((50., 100.).into(), (80., 50.).into())),
-            Object2D::Line(((80., 50.).into(), (20., 60.).into())),
-            Object2D::Line(((140., 100.).into(), (180., 120.).into())),
-            Object2D::Line(((180., 120.).into(), (160., 90.).into())),
-            Object2D::Line(((160., 90.).into(), (140., 100.).into())),
-            Object2D::Line(((100., 40.).into(), (160., 80.).into())),
+            Object2D::Rectangle(((0., 0.).into(), (200., 200.).into())),
             Object2D::Triangle(((10., 10.).into(), (30., 30.).into(), (40., 20.).into())),
         ],
     ));
@@ -170,20 +142,29 @@ fn main() {
         None,
     );
     let mut mcl = {
-        let particle_count = 40_000;
-        let weight_sum_threshold = 200.;
-        let death_threshold = DeathCondition {
-            particle_count_threshold: 4_000,
+        let max_particle_count = 20_000;
+        let min_particle_count = 200;
+        let error_bound = 0.1;
+        let error_confidence = 1. - 0.99;
+        let bin_size = Pose {
+            angle: (2. * PI) / 10.,
+            position: (5., 5.).into()
+        };
+        let death_condition = DeathCondition {
+            particle_count_threshold: max_particle_count / 2,
             particle_concentration_threshold: 300.,
         };
-        PoseMCL::new(
-            particle_count,
-            weight_sum_threshold,
-            death_threshold,
+        KLDPoseMCL::new(
+            max_particle_count,
+            min_particle_count,
+            error_bound,
+            error_confidence,
+            bin_size,
+            death_condition,
             percieved_map.clone(),
             presets::exp_weight(1.05),
-            presets::lidar_error(1.2, 1.),
-            presets::uniform_resampler(0.001, 0.7),
+            presets::lidar_error(2., 1.),
+            presets::uniform_resampler(0.01, 0.5),
         )
     };
 
