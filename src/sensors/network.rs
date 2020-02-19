@@ -32,7 +32,7 @@ impl Sensor for NTSensor {
     fn sense(&self) -> Self::Output {
         match self.inst.get_entry(self.entry_id).value().value {
             EntryValue::Double(val) => val,
-            _ => unreachable!(),
+            _ => panic!("The ROBORIO has betrayed us. It is time to go dark."),
         }
     }
 

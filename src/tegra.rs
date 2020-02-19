@@ -38,16 +38,13 @@ async fn main() -> Result<(), ()> {
                 "navx/yaw".to_owned(),
                 "encoders/netDisplacementAngle".to_owned(),
                 "encoders/netDisplacement".to_owned(),
-            ]
+            ],
         )
         .await
         .expect("Failed to initialized networktables sensor")
         .map(|pose: Vec<f64>| Pose {
             angle: pose[0],
-            position: Point::polar(
-                pose[1],
-                pose[2],
-            ) * 1000.,
+            position: Point::polar(pose[1], pose[2]) * 1000.,
         }),
     );
     // Initialize mcl
