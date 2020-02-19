@@ -181,7 +181,9 @@ where
         self.belief.iter_mut().for_each(|p| *p += update);
     }
 
-    /// Takes in a vector of distance finder sensors (e.g. laser range finder)
+    /// Resamples the belief based on sensor data from `z`.
+    /// 
+    /// Calculates error for each particle in parallel.
     pub fn observation_update(&mut self, z: &Z) {
         let errors: Vec<_> = self
             .belief
@@ -190,7 +192,6 @@ where
             .collect();
 
         let mut new_particles = Vec::new();
-        #[allow(clippy::float_cmp)]
         let weights: Vec<f64> = if errors.iter().all(|error| error == &0.) {
             errors
                 .iter()
@@ -214,7 +215,6 @@ where
             sum_weights += weights[idx];
             new_particles.push(self.belief[idx]);
         }
-        println!("\tΣ = {}", sum_weights);
         self.belief = if self.death_condition.triggered(&new_particles) {
             PoseBelief::new(self.max_particle_count, self.map.size)
         } else {
@@ -225,6 +225,7 @@ where
         };
     }
 
+    /// Finds the average of the belief
     pub fn get_prediction(&self) -> Pose {
         let mut average_pose = Pose::default();
         let mut angle = 0.;
@@ -344,6 +345,7 @@ where
         }
     }
 
+    /// Finds the average of the belief
     pub fn get_prediction(&self) -> Pose {
         let mut average_pose = Pose::default();
         let mut angle = 0.;
@@ -360,18 +362,23 @@ where
         self.belief.iter_mut().for_each(|p| *p += update);
     }
 
+    /// Resamples the belief based on sensor data from `z`.
+    /// 
+    /// Calculates error for each particle in parallel.
     pub fn observation_update(&mut self, z: &Z) {
+        // Calculate error of each particle
         let errors: Vec<_> = self
             .belief
             .par_iter()
             .map(|sample| (&self.errors_from_sense)(sample, z, self.map.clone()))
             .collect();
 
+        // Calculate weight of each particle
         let weights: Vec<f64> = errors
             .iter()
             .map(|error| (self.weight_from_error)(error))
             .collect();
-        // KLD sample new particles
+        // sample new particles using KL-Distance
         let particles = WeightedIndex::new(weights.clone()).unwrap();
         let mut rng = thread_rng();
         let mut new_particles = vec![];
@@ -400,12 +407,13 @@ where
                 break;
             }
         }
+        // Check whether or not to restart the algorithm based on death_condition
         self.belief = if self.death_condition.triggered(&new_particles) {
             PoseBelief::new(self.max_particle_count, self.map.size)
         } else {
             new_particles
                 .iter()
-                .map(|&p| p + (self.resampling_noise)(self.belief.len()))
+                .map(|&p| p + (self.resampling_noise)(self.belief.len())) // Add resampling noise to each particle
                 .collect()
         };
     }

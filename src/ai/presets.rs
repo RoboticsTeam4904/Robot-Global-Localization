@@ -87,6 +87,14 @@ where
     }
 }
 
+/// Creates an `ErrorCalculator` for a sensor which detects objects in its viscinity 
+/// and is bounded by an fov returned by its impl of `LimitedSensor<f64>`
+/// and a detection range returned by its impl of `LimitedSensor<Range<f64>>`.
+/// 
+/// It calculates error based on the difference in position
+/// of each detected object and 
+/// `discrepency_factor` multiplied by the difference in length of the expected objects
+/// and predicted objects.
 pub fn object_detection_error<S>(
     discrepancy_factor: f64,
     error_scale: f64,
