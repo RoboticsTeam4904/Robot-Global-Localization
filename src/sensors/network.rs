@@ -41,6 +41,38 @@ impl Sensor for NTSensor {
     }
 }
 
+pub struct MultiNTSensor {
+    sensors: Vec<NTSensor>,
+}
+
+impl MultiNTSensor {
+    pub async fn new<T>(relative_pose: Pose, ip: &str, paths: T) -> Result<Self, failure::Error>
+    where
+        T: IntoIterator<Item = String>,
+    {
+        let mut sensors = vec![];
+        for path in paths {
+            sensors.push(NTSensor::new(relative_pose, ip, path).await?);
+        }
+        Ok(Self { sensors })
+    }
+}
+
+impl Sensor for MultiNTSensor {
+    type Output = Vec<f64>;
+
+    fn sense(&self) -> Self::Output {
+        self.sensors.iter().map(|sensor| sensor.sense()).collect()
+    }
+
+    fn relative_pose(&self) -> Pose {
+        match self.sensors.first() {
+            Some(s) => s.relative_pose(),
+            None => Pose::default(),
+        }
+    }
+}
+
 pub struct PoseNTSensor {
     x: NTSensor,
     y: NTSensor,

@@ -103,6 +103,79 @@ where
     }
 }
 
+/// Helper trait for overriding a sensors limit.
+pub trait LimitableSensor<L>: Sensor + Sized
+where
+    L: Clone,
+{
+    /// Overrides range of `self` to be `range`
+    fn limit(self, range: Option<L>) -> OverridenLimitedSensor<Self, L> {
+        OverridenLimitedSensor::new(self, range)
+    }
+}
+
+impl<S, L> LimitableSensor<L> for S
+where
+    S: Sensor,
+    L: Clone,
+{
+}
+
+/// A wrapper sensor that imposes `limit` as the sensors `LimitedSensor::range` result.
+///
+/// Everything except for the `range` is reflected from the `internal_sensor`.
+pub struct OverridenLimitedSensor<S, L>
+where
+    S: Sensor,
+    L: Clone,
+{
+    internal_sensor: S,
+    range: Option<L>,
+}
+
+impl<S, L> OverridenLimitedSensor<S, L>
+where
+    S: Sensor,
+    L: Clone,
+{
+    pub fn new(internal_sensor: S, range: Option<L>) -> Self {
+        Self {
+            internal_sensor,
+            range,
+        }
+    }
+}
+
+impl<S, L> Sensor for OverridenLimitedSensor<S, L>
+where
+    S: Sensor,
+    L: Clone,
+{
+    type Output = <S as Sensor>::Output;
+
+    fn update(&mut self) {
+        self.internal_sensor.update();
+    }
+
+    fn sense(&self) -> Self::Output {
+        self.internal_sensor.sense()
+    }
+
+    fn relative_pose(&self) -> Pose {
+        self.internal_sensor.relative_pose()
+    }
+}
+
+impl<S, L> LimitedSensor<L> for OverridenLimitedSensor<S, L>
+where
+    S: Sensor,
+    L: Clone,
+{
+    fn range(&self) -> Option<L> {
+        self.range.clone()
+    }
+}
+
 /// A wrapper sensor that senses the difference in `absolute_sensor`'s outputs.
 /// The difference is set in `update`, so updating multiple times between each call of `sense` could result in lost data.
 pub struct DeltaSensor<S, O>
