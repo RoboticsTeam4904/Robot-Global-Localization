@@ -1,13 +1,11 @@
 use super::Sensor;
-use crate::{
-    networktables,
-    utility::{Point, Pose},
-};
+use crate::{networktables, utility::Pose};
 use failure;
 use nt::{Client, EntryValue, NetworkTables};
+use std::sync::{Arc, Mutex};
 
 pub struct NTSensor {
-    inst: NetworkTables<Client>,
+    inst: Arc<Mutex<NetworkTables<Client>>>,
     entry_id: u16,
     relative_pose: Pose,
 }
@@ -19,10 +17,26 @@ impl NTSensor {
             .await
             .id();
         Ok(Self {
-            inst,
+            inst: Arc::new(Mutex::new(inst)),
             entry_id,
             relative_pose,
         })
+    }
+
+    pub async fn from_inst(
+        relative_pose: Pose,
+        inst: Arc<Mutex<NetworkTables<Client>>>,
+        path: String,
+    ) -> Self {
+        let entry_id =
+            *networktables::get_entry(&*inst.lock().unwrap(), path, EntryValue::Double(0.))
+                .await
+                .id();
+        Self {
+            inst,
+            entry_id,
+            relative_pose,
+        }
     }
 }
 
@@ -30,7 +44,14 @@ impl Sensor for NTSensor {
     type Output = f64;
 
     fn sense(&self) -> Self::Output {
-        match self.inst.get_entry(self.entry_id).value().value {
+        match self
+            .inst
+            .lock()
+            .unwrap()
+            .get_entry(self.entry_id)
+            .value()
+            .value
+        {
             EntryValue::Double(val) => val,
             _ => panic!("The ROBORIO has betrayed us. It is time to go dark."),
         }
@@ -42,7 +63,9 @@ impl Sensor for NTSensor {
 }
 
 pub struct MultiNTSensor {
-    sensors: Vec<NTSensor>,
+    inst: Arc<Mutex<NetworkTables<Client>>>,
+    relative_pose: Pose,
+    entry_ids: Vec<u16>,
 }
 
 impl MultiNTSensor {
@@ -50,11 +73,46 @@ impl MultiNTSensor {
     where
         T: IntoIterator<Item = String>,
     {
-        let mut sensors = vec![];
+        let inst = NetworkTables::connect(ip, "sensor").await?;
+        let mut entry_ids = vec![];
         for path in paths {
-            sensors.push(NTSensor::new(relative_pose, ip, path).await?);
+            entry_ids.push(
+                *networktables::get_entry(&inst, path, EntryValue::Double(0.))
+                    .await
+                    .id(),
+            );
         }
-        Ok(Self { sensors })
+        Ok(Self {
+            inst: Arc::new(Mutex::new(inst)),
+            entry_ids,
+            relative_pose,
+        })
+    }
+
+    pub async fn from_inst<T>(
+        relative_pose: Pose,
+        inst: Arc<Mutex<NetworkTables<Client>>>,
+        paths: T,
+    ) -> Self
+    where
+        T: IntoIterator<Item = String>,
+    {
+        let mut entry_ids = vec![];
+        {
+            let inst_ = inst.lock().unwrap();
+            for path in paths {
+                entry_ids.push(
+                    *networktables::get_entry(&*inst_, path, EntryValue::Double(0.))
+                        .await
+                        .id(),
+                );
+            }
+        }
+        Self {
+            inst,
+            entry_ids,
+            relative_pose,
+        }
     }
 }
 
@@ -62,21 +120,23 @@ impl Sensor for MultiNTSensor {
     type Output = Vec<f64>;
 
     fn sense(&self) -> Self::Output {
-        self.sensors.iter().map(|sensor| sensor.sense()).collect()
+        let inst = self.inst.lock().unwrap();
+        self.entry_ids
+            .iter()
+            .map(|&id| match inst.get_entry(id).value().value {
+                EntryValue::Double(val) => val,
+                _ => panic!("The ROBORIO has betrayed us. It is time to go dark."),
+            })
+            .collect()
     }
 
     fn relative_pose(&self) -> Pose {
-        match self.sensors.first() {
-            Some(s) => s.relative_pose(),
-            None => Pose::default(),
-        }
+        self.relative_pose
     }
 }
 
 pub struct PoseNTSensor {
-    x: NTSensor,
-    y: NTSensor,
-    angle: NTSensor,
+    internal_sensor: MultiNTSensor,
 }
 
 impl PoseNTSensor {
@@ -88,10 +148,30 @@ impl PoseNTSensor {
         angle_path: String,
     ) -> Result<Self, failure::Error> {
         Ok(Self {
-            x: NTSensor::new(relative_pose, ip, x_path).await?,
-            y: NTSensor::new(relative_pose, ip, y_path).await?,
-            angle: NTSensor::new(relative_pose, ip, angle_path).await?,
+            internal_sensor: MultiNTSensor::new(
+                relative_pose,
+                ip,
+                vec![angle_path, x_path, y_path],
+            )
+            .await?,
         })
+    }
+
+    pub async fn from_inst(
+        relative_pose: Pose,
+        inst: Arc<Mutex<NetworkTables<Client>>>,
+        x_path: String,
+        y_path: String,
+        angle_path: String,
+    ) -> Self {
+        Self {
+            internal_sensor: MultiNTSensor::from_inst(
+                relative_pose,
+                inst,
+                vec![angle_path, x_path, y_path],
+            )
+            .await,
+        }
     }
 }
 
@@ -99,16 +179,14 @@ impl Sensor for PoseNTSensor {
     type Output = Pose;
 
     fn sense(&self) -> Self::Output {
+        let p = self.internal_sensor.sense();
         Pose {
-            position: Point {
-                x: self.x.sense(),
-                y: self.y.sense(),
-            },
-            angle: self.angle.sense(),
+            angle: p[0],
+            position: (p[1], p[2]).into(),
         }
     }
 
     fn relative_pose(&self) -> Pose {
-        self.x.relative_pose
+        self.internal_sensor.relative_pose
     }
 }
