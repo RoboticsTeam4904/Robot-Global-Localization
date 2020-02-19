@@ -5,12 +5,12 @@ use global_robot_localization::{
     },
     map::{Map2D, Object2D},
     networktables,
-    sensors::{network::PoseNTSensor, rplidar::RplidarSensor, *},
     replay::*,
+    sensors::{network::PoseNTSensor, rplidar::RplidarSensor, *},
     utility::{Point, Pose},
 };
-use std::sync::Arc;
 use piston_window::*;
+use std::sync::Arc;
 
 const LIDAR_PORT: &'static str = "/dev/ttyUSB0";
 const WINDOW_SIZE: [f64; 2] = [1000., 1000.];
@@ -41,8 +41,9 @@ async fn main() -> Result<(), ()> {
         .await
         .expect("Failed to initialized networktables sensor")
         .map(|pose: Pose| Pose {
-            angle: pose.angle,
-            position: pose.position * 1000., // Currently displacement is being given in meters ._.
+            // Currently being given in angles and meters ._.
+            angle: pose.angle.to_radians(),
+            position: pose.position * 1000.,
         }),
     );
     // Initialize mcl
@@ -81,7 +82,7 @@ async fn main() -> Result<(), ()> {
         // Push prediction to the network
         let prediction = mcl.get_prediction();
         // TODO
-        
+
         // Render frame
         window.draw_2d(&e, |c, g, _device| {
             clear([1.0; 4], g);
@@ -94,7 +95,7 @@ async fn main() -> Result<(), ()> {
                     MAP_SCALE,
                     MAP_OFFSET,
                     c.transform,
-                    g                    
+                    g,
                 )
             }
             if RENDER_SCAN {
@@ -109,15 +110,7 @@ async fn main() -> Result<(), ()> {
                 );
             }
             if RENDER_PREDICTION {
-                isoceles_triangle(
-                    BLUE,
-                    MAP_OFFSET,
-                    MAP_SCALE,
-                    5.,
-                    prediction,
-                    c.transform,
-                    g
-                )
+                isoceles_triangle(BLUE, MAP_OFFSET, MAP_SCALE, 5., prediction, c.transform, g)
             }
         });
     }

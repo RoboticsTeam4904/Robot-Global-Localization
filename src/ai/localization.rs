@@ -391,8 +391,7 @@ where
             if !non_empty_bins.contains(&bin) {
                 let k = non_empty_bins.len() as f64;
                 non_empty_bins.push(bin);
-                let normal_quantile =
-                    (1. - erf(4. * self.error_confidence / 2f64.sqrt())) / 2.; // Take the upper (1 - self.error_confidence)% of the normal distribution
+                let normal_quantile = (1. - erf(4. * self.error_confidence / 2f64.sqrt())) / 2.; // Take the upper (1 - self.error_confidence)% of the normal distribution
                 let k_ = 2. / (9. * k);
                 desired_particles_count =
                     k / (2. * self.error_bound) * (1. - k_ + k_.sqrt() * normal_quantile).powi(3);

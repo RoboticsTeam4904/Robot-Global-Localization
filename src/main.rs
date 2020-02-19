@@ -67,9 +67,7 @@ fn main() {
     let noise_y = Normal::new(0., Y_NOISE);
     let percieved_map = Arc::new(Map2D::with_size(
         (200., 200.).into(),
-        vec![
-            Object2D::Rectangle(((0., 0.).into(), (200., 200.).into()))
-        ],
+        vec![Object2D::Rectangle(((0., 0.).into(), (200., 200.).into()))],
     ));
     let real_map = Arc::new(Map2D::with_size(
         (200., 200.).into(),
@@ -148,7 +146,7 @@ fn main() {
         let error_confidence = 1. - 0.99;
         let bin_size = Pose {
             angle: (2. * PI) / 10.,
-            position: (5., 5.).into()
+            position: (5., 5.).into(),
         };
         let death_condition = DeathCondition {
             particle_count_threshold: max_particle_count / 2,
