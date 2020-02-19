@@ -43,7 +43,7 @@ async fn main() -> Result<(), ()> {
         .await
         .expect("Failed to initialized networktables sensor")
         .map(|pose: Vec<f64>| Pose {
-            angle: pose[0].to_radians(),
+            angle: pose[0],
             position: Point::polar(
                 pose[1],
                 pose[2],
