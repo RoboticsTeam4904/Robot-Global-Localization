@@ -6,7 +6,7 @@ use global_robot_localization::{
     map::{Map2D, Object2D},
     networktables,
     replay::*,
-    sensors::{network::PoseNTSensor, rplidar::RplidarSensor, *},
+    sensors::{network::MultiNTSensor, rplidar::RplidarSensor, *},
     utility::{Point, Pose},
 };
 use piston_window::*;
@@ -30,20 +30,24 @@ async fn main() -> Result<(), ()> {
     ))]));
     // Initialize sensors
     let mut lidar = RplidarSensor::with_range(LIDAR_PORT, Pose::default(), Some(0.0..8000.), None);
-    let mut nt_navx = DeltaSensor::new(
-        PoseNTSensor::new(
+    let mut nt_imu = DeltaSensor::new(
+        MultiNTSensor::new(
             Pose::default(),
             networktables::DEFAULT_ROBORIO_IP,
-            "navx/yaw".to_owned(),
-            "navx/displacementX".to_owned(),
-            "navx/displacementY".to_owned(),
+            vec![
+                "navx/yaw".to_owned(),
+                "encoders/netDisplacementAngle".to_owned(),
+                "encoders/netDisplacement".to_owned(),
+            ]
         )
         .await
         .expect("Failed to initialized networktables sensor")
-        .map(|pose: Pose| Pose {
-            // Currently being given in angles and meters ._.
-            angle: pose.angle.to_radians(),
-            position: pose.position * 1000.,
+        .map(|pose: Vec<f64>| Pose {
+            angle: pose[0].to_radians(),
+            position: Point::polar(
+                pose[1],
+                pose[2],
+            ) * 1000.,
         }),
     );
     // Initialize mcl
@@ -73,10 +77,10 @@ async fn main() -> Result<(), ()> {
     while let Some(e) = window.next() {
         // Update sensors
         lidar.update();
-        nt_navx.update();
+        nt_imu.update();
 
         // Update mcl
-        mcl.control_update(&nt_navx);
+        mcl.control_update(&nt_imu);
         mcl.observation_update(&lidar);
 
         // Push prediction to the network
