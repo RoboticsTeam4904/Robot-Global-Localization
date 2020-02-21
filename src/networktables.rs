@@ -17,7 +17,7 @@ pub async fn get_entry<'a>(
             Some(id) => id,
             None => {
                 nt.create_entry(EntryData::new(name, 0, or_create_with))
-                    .await
+                    .await.unwrap()
             }
         },
     )

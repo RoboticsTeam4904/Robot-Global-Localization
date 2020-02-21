@@ -9,6 +9,7 @@ use global_robot_localization::{
     sensors::{network::MultiNTSensor, rplidar::RplidarSensor, *},
     utility::{Point, Pose},
 };
+use nt::{NetworkTables, EntryValue};
 use piston_window::*;
 use std::sync::Arc;
 
@@ -28,6 +29,11 @@ async fn main() -> Result<(), ()> {
         (0., 0.).into(),
         (7000., 2000.).into(),
     ))]));
+    // Initialize networktable entries for output
+    let inst = NetworkTables::connect(networktables::DEFAULT_ROBORIO_IP, "nano").await.expect("Failed to start networktables");
+    let mut x_entry = networktables::get_entry(&inst, "localization/x".to_owned(), EntryValue::Double(0.)).await;
+    let mut y_entry = networktables::get_entry(&inst, "localization/y".to_owned(), EntryValue::Double(0.)).await;
+    let mut angle_entry = networktables::get_entry(&inst, "localization/angle".to_owned(), EntryValue::Double(0.)).await;
     // Initialize sensors
     let mut lidar = RplidarSensor::with_range(LIDAR_PORT, Pose::default(), Some(0.0..8000.), None);
     let mut nt_imu = DeltaSensor::new(
@@ -41,7 +47,7 @@ async fn main() -> Result<(), ()> {
             ],
         )
         .await
-        .expect("Failed to initialized networktables sensor")
+        .expect("Failed to start networktables sensor")
         .map(|pose: Vec<f64>| Pose {
             angle: pose[0],
             position: Point::polar(pose[1], pose[2]) * 1000.,
@@ -82,7 +88,9 @@ async fn main() -> Result<(), ()> {
 
         // Push prediction to the network
         let prediction = mcl.get_prediction();
-        // TODO
+        x_entry.set_value(EntryValue::Double(prediction.position.x));
+        y_entry.set_value(EntryValue::Double(prediction.position.y));
+        angle_entry.set_value(EntryValue::Double(prediction.angle));
 
         // Render frame
         window.draw_2d(&e, |c, g, _device| {
