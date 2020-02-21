@@ -11,7 +11,7 @@ pub struct NTSensor {
 }
 
 impl NTSensor {
-    pub async fn new(relative_pose: Pose, ip: &str, path: String) -> Result<Self, failure::Error> {
+    pub async fn new(relative_pose: Pose, ip: &str, path: &str) -> Result<Self, failure::Error> {
         let inst = NetworkTables::connect(ip, "sensor").await?;
         let entry_id = *networktables::get_entry(&inst, path, EntryValue::Double(0.))
             .await
@@ -26,7 +26,7 @@ impl NTSensor {
     pub async fn from_inst(
         relative_pose: Pose,
         inst: Arc<Mutex<NetworkTables<Client>>>,
-        path: String,
+        path: &str,
     ) -> Self {
         let entry_id =
             *networktables::get_entry(&*inst.lock().unwrap(), path, EntryValue::Double(0.))
@@ -77,7 +77,7 @@ impl MultiNTSensor {
         let mut entry_ids = vec![];
         for path in paths {
             entry_ids.push(
-                *networktables::get_entry(&inst, path, EntryValue::Double(0.))
+                *networktables::get_entry(&inst, &path, EntryValue::Double(0.))
                     .await
                     .id(),
             );
@@ -102,7 +102,7 @@ impl MultiNTSensor {
             let inst_ = inst.lock().unwrap();
             for path in paths {
                 entry_ids.push(
-                    *networktables::get_entry(&*inst_, path, EntryValue::Double(0.))
+                    *networktables::get_entry(&*inst_, &path, EntryValue::Double(0.))
                         .await
                         .id(),
                 );

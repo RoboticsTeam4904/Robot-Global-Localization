@@ -4,7 +4,7 @@ pub const DEFAULT_ROBORIO_IP: &'static str = "10.49.4.2:1735";
 
 pub async fn get_entry<'a>(
     nt: &'a NetworkTables<Client>,
-    name: String,
+    name: &str,
     or_create_with: EntryValue,
 ) -> Entry<'a, Client> {
     nt.get_entry(
@@ -16,7 +16,7 @@ pub async fn get_entry<'a>(
         {
             Some(id) => id,
             None => nt
-                .create_entry(EntryData::new(name, 0, or_create_with))
+                .create_entry(EntryData::new(name.to_owned(), 0, or_create_with))
                 .await
                 .unwrap(),
         },

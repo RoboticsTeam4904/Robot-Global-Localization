@@ -1,12 +1,13 @@
 use nalgebra::RowVector6;
 use rand::prelude::*;
+use serde::Deserialize;
 use std::{
     f64::consts::{FRAC_PI_2, PI},
     ops::Range,
 };
 
 /// Generic 2d point
-#[derive(Default, Debug, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Clone, Copy, Deserialize)]
 pub struct Point {
     pub x: f64,
     pub y: f64,
@@ -215,7 +216,7 @@ impl std::ops::SubAssign for Point {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Deserialize)]
 pub struct KinematicState {
     pub angle: f64,
     pub position: Point,
@@ -405,7 +406,7 @@ impl std::ops::AddAssign for KinematicState {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Deserialize)]
 pub struct Pose {
     pub angle: f64,
     pub position: Point,

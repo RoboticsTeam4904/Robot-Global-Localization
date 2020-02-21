@@ -1,7 +1,7 @@
 use global_robot_localization::{
     ai::{
         kalman_filter::KalmanFilter,
-        localization::{DeathCondition, KLDPoseMCL},
+        localization::{DeathCondition, KLDPoseMCL, PoseMCL},
         presets,
     },
     map::{Map2D, Object2D},

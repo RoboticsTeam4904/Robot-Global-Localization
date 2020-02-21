@@ -124,6 +124,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "base64"
+version = "0.10.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0b25d992356d2eb0ed82172f5248873db5560c4721f564b13cb5193bda5e668e"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -604,7 +613,9 @@ dependencies = [
  "piston_window",
  "rand 0.6.5",
  "rayon",
+ "ron",
  "rplidar_drv",
+ "serde",
  "serialport",
  "statrs",
  "tokio",
@@ -1629,6 +1640,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b28dfe3fe9badec5dbf0a79a9cccad2cfc2ab5484bdb3e44cbd1ae8b3ba2be06"
 
 [[package]]
+name = "ron"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2ece421e0c4129b90e4a35b6f625e472e96c552136f5093a2f4fa2bbb75a62d5"
+dependencies = [
+ "base64",
+ "bitflags",
+ "serde",
+]
+
+[[package]]
 name = "rplidar_drv"
 version = "0.6.0"
 source = "git+https://github.com/RoboticsTeam4904/rplidar.rs#84adc09243e164d56a3843b542965d7e5f18805b"
@@ -1723,6 +1745,9 @@ name = "serde"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "414115f25f818d7dfccec8ee535d76949ae78584fc4f79a6f45a904bf8ab4449"
+dependencies = [
+ "serde_derive",
+]
 
 [[package]]
 name = "serde_derive"

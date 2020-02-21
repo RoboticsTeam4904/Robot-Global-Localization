@@ -1,0 +1,23 @@
+(
+    render: (
+        window_size: (1000., 1000.),
+        render_map: true,
+        render_scan: true,
+        render_prediction: true,
+        map_scale: 0.1,
+        map_offset: (
+            x: 25.,
+            y: 25.
+        ),
+    ),
+    mcl: (
+        max_particle_count: 40000,
+        death_condition: (
+            particle_count_threshold: 20000,
+            particle_concentration_threshold: 600.
+        ),
+        variant: Adaptive(
+            weight_sum_threshold: 300.
+        )
+    )
+)

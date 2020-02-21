@@ -5,6 +5,7 @@ use crate::{
 };
 use rand::{distributions::WeightedIndex, prelude::*};
 use rayon::prelude::*;
+use serde::Deserialize;
 use statrs::function::erf::erf;
 use std::{f64::consts::*, marker::PhantomData, sync::Arc};
 
@@ -55,6 +56,7 @@ impl<Z, T: Fn(&Pose, &Z, Arc<Map2D>) -> f64> ErrorCalculator<Z> for T {}
 pub trait ResampleNoiseCalculator: Fn(usize) -> Pose {}
 impl<T: Fn(usize) -> Pose> ResampleNoiseCalculator for T {}
 
+#[derive(Debug, Deserialize, Clone)]
 pub struct DeathCondition {
     pub particle_count_threshold: usize,
     pub particle_concentration_threshold: f64,
@@ -82,6 +84,30 @@ impl DeathCondition {
     }
 }
 
+pub trait PoseMCL<Z: Send + Sync> {
+    /// Retrieves the current belief
+    fn belief(&self) -> &[Pose];
+    /// Retrives the current belief as mutable
+    fn belief_mut(&mut self) -> &mut [Pose];
+    /// Takes in a sensor which senses the total change in pose sensed since the last update
+    fn control_update<U: Sensor<Output = Pose>>(&mut self, u: &U) {
+        let update = u.sense();
+        self.belief_mut().iter_mut().for_each(|p| *p += update);
+    }
+    /// Finds the average of the belief
+    fn get_prediction(&self) -> Pose {
+        let mut average_pose = Pose::default();
+        let mut angle = 0.;
+        for sample in self.belief() {
+            average_pose += *sample;
+            angle += sample.angle;
+        }
+        average_pose.with_angle(angle) / self.belief().len() as f64
+    }
+    /// Resamples the belief based on sensor data from `z`.
+    fn observation_update(&mut self, z: &Z);
+}
+
 /// A localizer that uses likelyhood-based Monte Carlo Localization
 /// and takes in motion sensor data and `Z` as sensor data
 ///
@@ -100,7 +126,7 @@ impl DeathCondition {
 /// `errors_from_sense` calculates the error of each particle from its sensor data
 ///
 /// `resampling_noise` calculates the amount of noise to add to each particle during resampling
-pub struct PoseMCL<W, E, R, Z>
+pub struct AdaptivePoseMCL<W, E, R, Z>
 where
     W: WeightCalculator,
     E: ErrorCalculator<Z>,
@@ -117,7 +143,7 @@ where
     data_type: PhantomData<Z>,
 }
 
-impl<W, E, R, Z> PoseMCL<W, E, R, Z>
+impl<W, E, R, Z> AdaptivePoseMCL<W, E, R, Z>
 where
     W: WeightCalculator + Send + Sync,
     E: ErrorCalculator<Z> + Send + Sync,
@@ -174,17 +200,25 @@ where
             data_type: PhantomData,
         }
     }
+}
 
-    /// Takes in a sensor which senses the total change in pose sensed since the last update
-    pub fn control_update<U: Sensor<Output = Pose>>(&mut self, u: &U) {
-        let update = u.sense();
-        self.belief.iter_mut().for_each(|p| *p += update);
+impl<W, E, R, Z> PoseMCL<Z> for AdaptivePoseMCL<W, E, R, Z>
+where
+    W: WeightCalculator + Send + Sync,
+    E: ErrorCalculator<Z> + Send + Sync,
+    R: ResampleNoiseCalculator + Send + Sync,
+    Z: Sync + Send,
+{
+    fn belief(&self) -> &[Pose] {
+        &self.belief
     }
-
+    fn belief_mut(&mut self) -> &mut [Pose] {
+        &mut self.belief
+    }
     /// Resamples the belief based on sensor data from `z`.
     ///
     /// Calculates error for each particle in parallel.
-    pub fn observation_update(&mut self, z: &Z) {
+    fn observation_update(&mut self, z: &Z) {
         let errors: Vec<_> = self
             .belief
             .par_iter()
@@ -223,17 +257,6 @@ where
                 .map(|&p| p + (self.resampling_noise)(self.belief.len()))
                 .collect()
         };
-    }
-
-    /// Finds the average of the belief
-    pub fn get_prediction(&self) -> Pose {
-        let mut average_pose = Pose::default();
-        let mut angle = 0.;
-        for sample in &self.belief {
-            average_pose += *sample;
-            angle += sample.angle;
-        }
-        average_pose.with_angle(angle) / self.belief.len() as f64
     }
 }
 
@@ -344,28 +367,25 @@ where
             data_type: PhantomData,
         }
     }
+}
 
-    /// Finds the average of the belief
-    pub fn get_prediction(&self) -> Pose {
-        let mut average_pose = Pose::default();
-        let mut angle = 0.;
-        for sample in &self.belief {
-            average_pose += *sample;
-            angle += sample.angle;
-        }
-        average_pose.with_angle(angle) / self.belief.len() as f64
+impl<W, E, R, Z> PoseMCL<Z> for KLDPoseMCL<W, E, R, Z>
+where
+    W: WeightCalculator + Send + Sync,
+    E: ErrorCalculator<Z> + Send + Sync,
+    R: ResampleNoiseCalculator + Send + Sync,
+    Z: Sync + Send,
+{
+    fn belief(&self) -> &[Pose] {
+        &self.belief
     }
-
-    /// Takes in a sensor which senses the total change in pose sensed since the last update
-    pub fn control_update<U: Sensor<Output = Pose>>(&mut self, u: &U) {
-        let update = u.sense();
-        self.belief.iter_mut().for_each(|p| *p += update);
+    fn belief_mut(&mut self) -> &mut [Pose] {
+        &mut self.belief
     }
-
     /// Resamples the belief based on sensor data from `z`.
     ///
     /// Calculates error for each particle in parallel.
-    pub fn observation_update(&mut self, z: &Z) {
+    fn observation_update(&mut self, z: &Z) {
         // Calculate error of each particle
         let errors: Vec<_> = self
             .belief

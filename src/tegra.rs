@@ -1,8 +1,9 @@
 use global_robot_localization::{
     ai::{
-        localization::{DeathCondition, PoseMCL},
+        localization::{AdaptivePoseMCL, PoseMCL},
         presets::{exp_weight, lidar_error, uniform_resampler},
     },
+    config::*,
     map::{Map2D, Object2D},
     networktables,
     replay::*,
@@ -11,18 +12,19 @@ use global_robot_localization::{
 };
 use nt::{EntryValue, NetworkTables};
 use piston_window::*;
-use std::sync::Arc;
-
-const LIDAR_PORT: &'static str = "/dev/ttyUSB0";
-const WINDOW_SIZE: [f64; 2] = [1000., 1000.];
-const RENDER_MAP: bool = true;
-const RENDER_SCAN: bool = true;
-const RENDER_PREDICTION: bool = true;
-const MAP_SCALE: f64 = 0.5;
-const MAP_OFFSET: Point = Point { x: 25., y: 25. };
+use std::{env, fs::File, io::Read, sync::Arc};
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
+    // Grab config from file
+    let mut args = env::args();
+    let config_path = args.nth(1).expect("Please provide a path to a config file");
+    let mut config_file =
+        File::open(config_path).expect("Please provide a valid path to a config file");
+    let mut raw_config = String::new();
+    config_file.read_to_string(&mut raw_config).unwrap();
+    let config: TegraConfig =
+        ron::de::from_str(&raw_config).expect("Could not parse provided config file");
     // Cartograph the map
     // THE MAP IS IN MILLIMETERS
     let map = Arc::new(Map2D::new(vec![Object2D::Rectangle((
@@ -34,17 +36,14 @@ async fn main() -> Result<(), ()> {
         .await
         .expect("Failed to start networktables");
     let mut x_entry =
-        networktables::get_entry(&inst, "localization/x".to_owned(), EntryValue::Double(0.)).await;
+        networktables::get_entry(&inst, "localization/x", EntryValue::Double(0.)).await;
     let mut y_entry =
-        networktables::get_entry(&inst, "localization/y".to_owned(), EntryValue::Double(0.)).await;
-    let mut angle_entry = networktables::get_entry(
-        &inst,
-        "localization/angle".to_owned(),
-        EntryValue::Double(0.),
-    )
-    .await;
+        networktables::get_entry(&inst, "localization/y", EntryValue::Double(0.)).await;
+    let mut angle_entry =
+        networktables::get_entry(&inst, "localization/angle", EntryValue::Double(0.)).await;
     // Initialize sensors
-    let mut lidar = RplidarSensor::with_range(LIDAR_PORT, Pose::default(), Some(0.0..8000.), None);
+    let mut lidar =
+        RplidarSensor::with_range("/dev/ttyUSB0", Pose::default(), Some(0.0..8000.), None);
     let mut nt_imu = DeltaSensor::new(
         MultiNTSensor::new(
             Pose::default(),
@@ -63,25 +62,22 @@ async fn main() -> Result<(), ()> {
         }),
     );
     // Initialize mcl
-    let mut mcl = {
-        let max_particle_count = 40_000;
-        let weight_sum_threshold = 300.;
-        let death_condition = DeathCondition {
-            particle_count_threshold: max_particle_count / 2,
-            particle_concentration_threshold: 300.,
-        };
-        PoseMCL::new(
-            max_particle_count,
+    let mut mcl = match config.mcl.variant {
+        MCLVariant::Adaptive {
             weight_sum_threshold,
-            death_condition,
+        } => AdaptivePoseMCL::new(
+            config.mcl.max_particle_count,
+            weight_sum_threshold,
+            config.mcl.death_condition.clone(),
             map.clone(),
             exp_weight(1.05),
             lidar_error(1.3, 0.2),
             uniform_resampler(0.01, 7.),
-        )
+        ),
+        _ => unimplemented!("Getting types to work is annoying"),
     };
     // Initialize window
-    let mut window: PistonWindow = WindowSettings::new("😎", WINDOW_SIZE)
+    let mut window: PistonWindow = WindowSettings::new("😎", config.render.window_size)
         .exit_on_esc(true)
         .build()
         .unwrap();
@@ -104,31 +100,39 @@ async fn main() -> Result<(), ()> {
         // Render frame
         window.draw_2d(&e, |c, g, _device| {
             clear([1.0; 4], g);
-            if RENDER_MAP {
+            if config.render.render_map {
                 draw_map(
                     map.clone(),
                     BLACK,
                     1.,
                     1.,
-                    MAP_SCALE,
-                    MAP_OFFSET,
+                    config.render.map_scale,
+                    config.render.map_offset,
                     c.transform,
                     g,
                 )
             }
-            if RENDER_SCAN {
+            if config.render.render_scan {
                 point_cloud(
                     &lidar.sense(),
                     RED,
                     0.5,
-                    MAP_SCALE,
-                    MAP_OFFSET + map.size * MAP_SCALE,
+                    config.render.map_scale,
+                    config.render.map_offset + map.size * config.render.map_scale,
                     c.transform,
                     g,
                 );
             }
-            if RENDER_PREDICTION {
-                isoceles_triangle(BLUE, MAP_OFFSET, MAP_SCALE, 5., prediction, c.transform, g)
+            if config.render.render_prediction {
+                isoceles_triangle(
+                    BLUE,
+                    config.render.map_offset,
+                    config.render.map_scale,
+                    5.,
+                    prediction,
+                    c.transform,
+                    g,
+                )
             }
         });
     }
