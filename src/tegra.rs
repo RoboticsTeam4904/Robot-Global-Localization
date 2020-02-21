@@ -9,7 +9,7 @@ use global_robot_localization::{
     sensors::{network::MultiNTSensor, rplidar::RplidarSensor, *},
     utility::{Point, Pose},
 };
-use nt::{NetworkTables, EntryValue};
+use nt::{EntryValue, NetworkTables};
 use piston_window::*;
 use std::sync::Arc;
 
@@ -30,10 +30,19 @@ async fn main() -> Result<(), ()> {
         (7000., 2000.).into(),
     ))]));
     // Initialize networktable entries for output
-    let inst = NetworkTables::connect(networktables::DEFAULT_ROBORIO_IP, "nano").await.expect("Failed to start networktables");
-    let mut x_entry = networktables::get_entry(&inst, "localization/x".to_owned(), EntryValue::Double(0.)).await;
-    let mut y_entry = networktables::get_entry(&inst, "localization/y".to_owned(), EntryValue::Double(0.)).await;
-    let mut angle_entry = networktables::get_entry(&inst, "localization/angle".to_owned(), EntryValue::Double(0.)).await;
+    let inst = NetworkTables::connect(networktables::DEFAULT_ROBORIO_IP, "nano")
+        .await
+        .expect("Failed to start networktables");
+    let mut x_entry =
+        networktables::get_entry(&inst, "localization/x".to_owned(), EntryValue::Double(0.)).await;
+    let mut y_entry =
+        networktables::get_entry(&inst, "localization/y".to_owned(), EntryValue::Double(0.)).await;
+    let mut angle_entry = networktables::get_entry(
+        &inst,
+        "localization/angle".to_owned(),
+        EntryValue::Double(0.),
+    )
+    .await;
     // Initialize sensors
     let mut lidar = RplidarSensor::with_range(LIDAR_PORT, Pose::default(), Some(0.0..8000.), None);
     let mut nt_imu = DeltaSensor::new(

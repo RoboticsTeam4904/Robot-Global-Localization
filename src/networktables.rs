@@ -15,10 +15,10 @@ pub async fn get_entry<'a>(
             .map(|(id, _entry)| *id)
         {
             Some(id) => id,
-            None => {
-                nt.create_entry(EntryData::new(name, 0, or_create_with))
-                    .await.unwrap()
-            }
+            None => nt
+                .create_entry(EntryData::new(name, 0, or_create_with))
+                .await
+                .unwrap(),
         },
     )
 }

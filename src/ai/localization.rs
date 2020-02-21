@@ -182,7 +182,7 @@ where
     }
 
     /// Resamples the belief based on sensor data from `z`.
-    /// 
+    ///
     /// Calculates error for each particle in parallel.
     pub fn observation_update(&mut self, z: &Z) {
         let errors: Vec<_> = self
@@ -363,7 +363,7 @@ where
     }
 
     /// Resamples the belief based on sensor data from `z`.
-    /// 
+    ///
     /// Calculates error for each particle in parallel.
     pub fn observation_update(&mut self, z: &Z) {
         // Calculate error of each particle
