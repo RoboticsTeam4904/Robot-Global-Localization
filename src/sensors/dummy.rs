@@ -1,6 +1,6 @@
 use crate::{
     map::Map2D,
-    sensors::{LimitedSensor, Sensor},
+    sensors::{LimitedSensor, Sensor, SensorSink},
     utility::{Point, Pose},
 };
 use rand::{
@@ -13,6 +13,36 @@ use std::{
     sync::Arc,
     time::Instant,
 };
+
+
+/// A general dummy sensor which simply echoes whatever data is pushed to it.
+pub struct DummySensor<T> {
+    latest_data: T
+}
+
+impl<T> DummySensor<T> {
+    pub fn new(starting_data: T) -> DummySensor<T> {
+        Self {
+            latest_data: starting_data
+        }
+    }
+}
+
+impl<T: Clone> Sensor for DummySensor<T> {
+    type Output = T;
+
+    fn sense(&self) -> Self::Output {
+        self.latest_data.clone()
+    }
+}
+
+impl<T> SensorSink for DummySensor<T> {
+    type Input = T;
+
+    fn push(&mut self, input: Self::Input) {
+        self.latest_data = input
+    }
+}
 
 /// A sensor which senses all objects' relative positions within a certain fov
 pub struct DummyObjectSensor {
