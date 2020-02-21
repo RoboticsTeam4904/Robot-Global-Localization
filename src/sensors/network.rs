@@ -1,4 +1,4 @@
-use super::Sensor;
+use super::{Sensor, SensorSink};
 use crate::{networktables, utility::Pose};
 use failure;
 use nt::{Client, EntryValue, NetworkTables};
@@ -59,6 +59,18 @@ impl Sensor for NTSensor {
 
     fn relative_pose(&self) -> Pose {
         self.relative_pose
+    }
+}
+
+impl SensorSink for NTSensor {
+    type Input = f64;
+
+    fn push(&mut self, input: Self::Input) {
+        self.inst
+            .lock()
+            .unwrap()
+            .get_entry(self.entry_id)
+            .set_value(EntryValue::Double(input))
     }
 }
 
@@ -135,6 +147,20 @@ impl Sensor for MultiNTSensor {
     }
 }
 
+impl SensorSink for MultiNTSensor {
+    type Input = Vec<f64>;
+
+    fn push(&mut self, input: Self::Input) {
+        for (&id, inp) in self.entry_ids.iter().zip(input) {
+            self.inst
+                .lock()
+                .unwrap()
+                .get_entry(id)
+                .set_value(EntryValue::Double(inp))
+        }
+    }
+}
+
 pub struct PoseNTSensor {
     internal_sensor: MultiNTSensor,
 }
@@ -188,5 +214,14 @@ impl Sensor for PoseNTSensor {
 
     fn relative_pose(&self) -> Pose {
         self.internal_sensor.relative_pose
+    }
+}
+
+impl SensorSink for PoseNTSensor {
+    type Input = Pose;
+
+    fn push(&mut self, input: Self::Input) {
+        self.internal_sensor
+            .push(vec![input.angle, input.position.x, input.position.y])
     }
 }

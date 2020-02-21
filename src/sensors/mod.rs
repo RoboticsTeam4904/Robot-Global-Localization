@@ -1,5 +1,5 @@
 use crate::utility::Pose;
-use std::ops::Sub;
+use std::{marker::PhantomData, ops::Sub};
 
 // pub mod gpio;
 pub mod dummy;
@@ -32,6 +32,19 @@ pub trait LimitedSensor<T>: Sensor {
     }
 }
 
+/// The general sink trait which emulates the "other" side of the sensor trait
+/// wherein data is pushed rather than recieved.
+///
+/// `Input` is the input of the sensor.
+pub trait SensorSink {
+    type Input;
+
+    /// Update the sensor-sink (similar to `Sensor::update` in that it does not take in data)
+    fn update(&mut self) {}
+    /// Push data to the sensor-sink (the inverse of `Sensor::sense`)
+    fn push(&mut self, input: Self::Input);
+}
+
 /// Helper trait for providing easy usage of wrapped sensors.
 pub trait WrappableSensor: Sensor + Sized {
     /// Overrides range of `self` to be `range`
@@ -50,7 +63,65 @@ pub trait WrappableSensor: Sensor + Sized {
 
 impl<S: Sensor + Sized> WrappableSensor for S {}
 
-/// A wrapper sensor that applies that applies the the `map`
+/// Helper trait for providing easy usage of wrapped sensor-sinks.
+pub trait WrappableSensorSink: SensorSink + Sized {
+    /// Maps `self` to a `SensorSink<Input = M>`
+    /// by applying `map` to inputs of `push`
+    fn map_sink<M, I>(self, map: M) -> MappedSensorSink<Self, <Self as SensorSink>::Input, M, I>
+    where
+        M: Fn(I) -> <Self as SensorSink>::Input,
+    {
+        MappedSensorSink::new(self, map)
+    }
+}
+
+impl<S: SensorSink + Sized> WrappableSensorSink for S {}
+
+/// A wrapper sensor-sink that applies that applies the the `map`
+/// function to the input of `internal_sensor_sink.push in `MappedSensorSink::push`.
+///
+/// The implementation of `update` is reflected upward from the internal sensor-sink.
+pub struct MappedSensorSink<S, I, Map, MappedIn>
+where
+    S: SensorSink<Input = I>,
+    Map: Fn(MappedIn) -> I,
+{
+    pub internal_sensor_sink: S,
+    pub map: Map,
+    mapped_input: PhantomData<MappedIn>,
+}
+
+impl<S, I, Map, MappedIn> MappedSensorSink<S, I, Map, MappedIn>
+where
+    S: SensorSink<Input = I>,
+    Map: Fn(MappedIn) -> I,
+{
+    pub fn new(internal_sensor_sink: S, map: Map) -> Self {
+        Self {
+            internal_sensor_sink,
+            map,
+            mapped_input: PhantomData,
+        }
+    }
+}
+
+impl<S, I, Map, MappedIn> SensorSink for MappedSensorSink<S, I, Map, MappedIn>
+where
+    S: SensorSink<Input = I>,
+    Map: Fn(MappedIn) -> I,
+{
+    type Input = MappedIn;
+
+    fn update(&mut self) {
+        self.internal_sensor_sink.update()
+    }
+
+    fn push(&mut self, input: Self::Input) {
+        self.internal_sensor_sink.push((self.map)(input))
+    }
+}
+
+/// A wrapper sensor that applies the `map`
 /// function to the output of `internal_sensor.sense()` in `MappedSensor::sense`.
 ///
 /// The rest of the implementation of `Sense` and `LimitedSensor` is reflected upward

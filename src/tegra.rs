@@ -6,13 +6,16 @@ use global_robot_localization::{
     map::{Map2D, Object2D},
     networktables,
     replay::*,
-    sensors::{network::MultiNTSensor, rplidar::RplidarSensor, *},
+    sensors::{
+        network::{MultiNTSensor, PoseNTSensor},
+        rplidar::RplidarSensor,
+        DeltaSensor, Sensor, SensorSink, WrappableSensor,
+    },
     utility::{Point, Pose},
 };
-use nt::{EntryValue, NetworkTables};
+use nt::NetworkTables;
 use piston_window::*;
-use std::sync::Arc;
-
+use std::sync::{Arc, Mutex};
 const LIDAR_PORT: &'static str = "/dev/ttyUSB0";
 const WINDOW_SIZE: [f64; 2] = [1000., 1000.];
 const RENDER_MAP: bool = true;
@@ -30,25 +33,25 @@ async fn main() -> Result<(), ()> {
         (7000., 2000.).into(),
     ))]));
     // Initialize networktable entries for output
-    let inst = NetworkTables::connect(networktables::DEFAULT_ROBORIO_IP, "nano")
-        .await
-        .expect("Failed to start networktables");
-    let mut x_entry =
-        networktables::get_entry(&inst, "localization/x".to_owned(), EntryValue::Double(0.)).await;
-    let mut y_entry =
-        networktables::get_entry(&inst, "localization/y".to_owned(), EntryValue::Double(0.)).await;
-    let mut angle_entry = networktables::get_entry(
-        &inst,
+    let inst = Arc::new(Mutex::new(
+        NetworkTables::connect(networktables::DEFAULT_ROBORIO_IP, "nano")
+            .await
+            .expect("Failed to start networktables"),
+    ));
+    let mut localization_output = PoseNTSensor::from_inst(
+        Pose::default(),
+        inst.clone(),
+        "localization/x".to_owned(),
+        "localization/y".to_owned(),
         "localization/angle".to_owned(),
-        EntryValue::Double(0.),
     )
     .await;
     // Initialize sensors
     let mut lidar = RplidarSensor::with_range(LIDAR_PORT, Pose::default(), Some(0.0..8000.), None);
     let mut nt_imu = DeltaSensor::new(
-        MultiNTSensor::new(
+        MultiNTSensor::from_inst(
             Pose::default(),
-            networktables::DEFAULT_ROBORIO_IP,
+            inst,
             vec![
                 "navx/yaw".to_owned(),
                 "encoders/netDisplacementAngle".to_owned(),
@@ -56,7 +59,6 @@ async fn main() -> Result<(), ()> {
             ],
         )
         .await
-        .expect("Failed to start networktables sensor")
         .map(|pose: Vec<f64>| Pose {
             angle: pose[0],
             position: Point::polar(pose[1], pose[2]) * 1000.,
@@ -97,9 +99,7 @@ async fn main() -> Result<(), ()> {
 
         // Push prediction to the network
         let prediction = mcl.get_prediction();
-        x_entry.set_value(EntryValue::Double(prediction.position.x));
-        y_entry.set_value(EntryValue::Double(prediction.position.y));
-        angle_entry.set_value(EntryValue::Double(prediction.angle));
+        localization_output.push(prediction);
 
         // Render frame
         window.draw_2d(&e, |c, g, _device| {
