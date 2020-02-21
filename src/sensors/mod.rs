@@ -32,18 +32,23 @@ pub trait LimitedSensor<T>: Sensor {
     }
 }
 
-/// Helper trait for mapping a `Sensor<Output = O>` to a `Sensor<Output = M>`
-pub trait MappableSensor<M, O>: Sensor + Sized
-where
-    M: Fn(<Self as Sensor>::Output) -> O,
-{
+/// Helper trait for providing easy usage of wrapped sensors.
+pub trait WrappableSensor: Sensor + Sized {
+    /// Overrides range of `self` to be `range`
+    fn override_limit<L: Clone>(self, range: Option<L>) -> OverridenLimitedSensor<Self, L> {
+        OverridenLimitedSensor::new(self, range)
+    }
     /// Maps `self` to a `Sensor<Output = M>`
-    fn map(self, map: M) -> MappedSensor<Self, <Self as Sensor>::Output, M, O> {
+    /// by calling `map` on `self.sense` in the returned sensor's `sense` function.
+    fn map<M, O>(self, map: M) -> MappedSensor<Self, <Self as Sensor>::Output, M, O>
+    where
+        M: Fn(<Self as Sensor>::Output) -> O,
+    {
         MappedSensor::new(self, map)
     }
 }
 
-impl<S: Sensor + Sized, M, O> MappableSensor<M, O> for S where M: Fn(<Self as Sensor>::Output) -> O {}
+impl<S: Sensor + Sized> WrappableSensor for S {}
 
 /// A wrapper sensor that applies that applies the the `map`
 /// function to the output of `internal_sensor.sense()` in `MappedSensor::sense`.
@@ -103,25 +108,8 @@ where
     }
 }
 
-/// Helper trait for overriding a sensors limit.
-pub trait LimitableSensor<L>: Sensor + Sized
-where
-    L: Clone,
-{
-    /// Overrides range of `self` to be `range`
-    fn limit(self, range: Option<L>) -> OverridenLimitedSensor<Self, L> {
-        OverridenLimitedSensor::new(self, range)
-    }
-}
-
-impl<S, L> LimitableSensor<L> for S
-where
-    S: Sensor,
-    L: Clone,
-{
-}
-
-/// A wrapper sensor that imposes `limit` as the sensors `LimitedSensor::range` result.
+/// A wrapper sensor that imposes `limit` as the sensors `LimitedSensor::range`
+/// output rather than what it had previously.
 ///
 /// Everything except for the `range` is reflected from the `internal_sensor`.
 pub struct OverridenLimitedSensor<S, L>
