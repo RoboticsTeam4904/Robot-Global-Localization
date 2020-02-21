@@ -6,7 +6,7 @@ edition = "2018"
 
 [[bin]]
 name = "simulation"
-path = "src/main.rs"
+path = "src/simulation.rs"
 
 [[bin]]
 name = "tegra"
