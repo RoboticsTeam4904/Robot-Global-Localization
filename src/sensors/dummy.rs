@@ -14,16 +14,15 @@ use std::{
     time::Instant,
 };
 
-
 /// A general dummy sensor which simply echoes whatever data is pushed to it.
 pub struct DummySensor<T> {
-    latest_data: T
+    latest_data: T,
 }
 
 impl<T> DummySensor<T> {
     pub fn new(starting_data: T) -> DummySensor<T> {
         Self {
-            latest_data: starting_data
+            latest_data: starting_data,
         }
     }
 }
