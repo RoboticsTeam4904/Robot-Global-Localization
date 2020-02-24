@@ -12,6 +12,7 @@ use std::{
     thread,
 };
 
+// TODO: I really really dislike this
 pub struct UDPSocketChannel<T> {
     socket: Arc<Mutex<UdpSocket>>,
     elem: T,
