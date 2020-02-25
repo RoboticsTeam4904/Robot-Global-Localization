@@ -203,7 +203,7 @@ fn main() {
     let start = Instant::now();
     while let Some(e) = window.next() {
         delta_t = last_time.elapsed().as_secs_f64();
-        if tick >= 500 {
+        if tick >= 2000 {
             let elapsed = start.elapsed();
             println!(
                 "{}t in {:?}, {}tps",
