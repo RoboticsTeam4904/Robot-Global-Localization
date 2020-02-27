@@ -203,8 +203,8 @@ impl KalmanFilterVision {
     fn gen_sigma_matrix(&mut self) {
         let mut rows: Vec<RowVector3<f64>> = Vec::new();
         rows.push(self.known_state);
-        let lambda = (self.alpha.powi(2)) * (6. + self.kappa) - 6.;
-        let eigendecomp = (self.covariance_matrix * (6. + lambda)).symmetric_eigen();
+        let lambda = (self.alpha.powi(2)) * (3. + self.kappa) - 3.;
+        let eigendecomp = (self.covariance_matrix * (3. + lambda)).symmetric_eigen();
         let mut diagonalization = eigendecomp.eigenvalues;
         diagonalization.data.iter_mut().for_each(|e| {
             *e = e.max(0.).sqrt();
@@ -212,10 +212,10 @@ impl KalmanFilterVision {
         let square_root_cov = eigendecomp.eigenvectors
             * Matrix3::from_diagonal(&diagonalization)
             * eigendecomp.eigenvectors.try_inverse().unwrap();
-        for i in 0..=(6 - 1) {
+        for i in 0..=(3 - 1) {
             rows.push(self.known_state + square_root_cov.row(i));
         }
-        for i in 0..=(6 - 1) {
+        for i in 0..=(3 - 1) {
             rows.push(self.known_state - square_root_cov.row(i));
         }
 
