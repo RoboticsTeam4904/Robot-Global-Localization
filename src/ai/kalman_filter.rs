@@ -248,7 +248,7 @@ impl KalmanFilterVision {
                     1. / (2. * (3. + lambda))
                 };
         }
-        self.covariance_matrix += self.q;
+        self.covariance_matrix += self.q * time;
     }
 
     pub fn measurement_update(&mut self, sensor_data: Pose) {
@@ -308,5 +308,12 @@ impl KalmanFilterVision {
             });
         self.known_state += (k * (sensor_update - sensor_predicted).transpose()).transpose();
         self.covariance_matrix -= k * cov_zz * k.transpose();
+    }
+
+    pub fn known_state(&self) -> Pose {
+        Pose {
+            angle: self.known_state[0],
+            position: (self.known_state[1], self.known_state[2]).into(),
+        }
     }
 }

@@ -28,18 +28,18 @@ use std::{
 const ANGLE_NOISE: f64 = 0.;
 const X_NOISE: f64 = 25.;
 const Y_NOISE: f64 = 3.;
-const X_MCL_NOISE: f64 = 1.;
-const Y_MCL_NOISE: f64 = 1.;
-const ANGLE_MCL_NOISE: f64 = 0.05;
-const CONTROL_X_NOISE: f64 = 0.0005 / 10.;
-const CONTROL_Y_NOISE: f64 = 0.0005 / 10.;
-const CONTROL_ANGLE_NOISE: f64 = 0.000005 / 10.;
-const VELOCITY_X_SENSOR_NOISE: f64 = 0.0005;
-const VELOCITY_Y_SENSOR_NOISE: f64 = 0.0005;
-const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.0005;
+const X_MCL_NOISE: f64 = 5. / 3.; // 10 cm / m^2 of noise
+const Y_MCL_NOISE: f64 = 5. / 3.; // 10 cm / m^2 of noise
+const ANGLE_MCL_NOISE: f64 = 0.1; // 3 cm / m^2 of noise
+const CONTROL_X_NOISE: f64 = 0.1; // 3 cm / m^2 of noise
+const CONTROL_Y_NOISE: f64 = 0.1; // 3 cm / m^2 of noise
+const CONTROL_ANGLE_NOISE: f64 = 0.035; // 2 degrees / m^2 of noise
+const VELOCITY_X_SENSOR_NOISE: f64 = 0.0005 / 20.;
+const VELOCITY_Y_SENSOR_NOISE: f64 = 0.0005 / 20.;
+const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.0005 / 20.;
 const MAP_SCALE: f64 = 2.;
-const ROBOT_ACCEL: f64 = 3. / 1000.;
-const ROBOT_ANGLE_ACCEL: f64 = 0.1 / 1000.;
+const ROBOT_ACCEL: f64 = 200.;
+const ROBOT_ANGLE_ACCEL: f64 = 20.;
 
 fn main() {
     let mut rng = thread_rng();
@@ -65,6 +65,7 @@ fn main() {
     let noise_x = Normal::new(0., X_NOISE);
     let noise_angle = Normal::new(0., ANGLE_NOISE);
     let noise_y = Normal::new(0., Y_NOISE);
+    let start_time = Instant::now();
     let percieved_map = Arc::new(Map2D::with_size(
         (200., 200.).into(),
         vec![
@@ -198,12 +199,14 @@ fn main() {
     let control_noise_y = Normal::new(0., CONTROL_Y_NOISE);
     let mut kalman_error: Pose = Pose::default();
     let mut mcl_error: Pose = Pose::default();
-    let last_time: Instant = Instant::now();
+    let mut last_time: Instant = Instant::now();
     let mut delta_t;
     let start = Instant::now();
     while let Some(e) = window.next() {
         delta_t = last_time.elapsed().as_secs_f64();
-        if tick >= 2000 {
+        last_time = Instant::now();
+        println!("{}", delta_t);
+        if tick >= 5000 {
             let elapsed = start.elapsed();
             println!(
                 "{}t in {:?}, {}tps",
@@ -219,13 +222,13 @@ fn main() {
         if let Some(Button::Keyboard(key)) = e.press_args() {
             match key {
                 keyboard::Key::W => {
-                    control.position.x += ROBOT_ACCEL / delta_t;
+                    control.position.x += ROBOT_ACCEL;
                 }
                 keyboard::Key::S => {
-                    control.position.x -= ROBOT_ACCEL / delta_t;
+                    control.position.x -= ROBOT_ACCEL;
                 }
-                keyboard::Key::A => control.angle -= ROBOT_ANGLE_ACCEL / delta_t,
-                keyboard::Key::D => control.angle += ROBOT_ANGLE_ACCEL / delta_t,
+                keyboard::Key::A => control.angle -= ROBOT_ANGLE_ACCEL,
+                keyboard::Key::D => control.angle += ROBOT_ANGLE_ACCEL,
 
                 _ => (),
             }
@@ -327,11 +330,10 @@ fn main() {
                 end: Point { x: 199.9, y: 199. },
             })
             .into();
-
         control.angle -= (robot_state.vel_angle - temp.vel_angle) / delta_t;
         control.position.x -= (robot_state.velocity.x - temp.velocity.x) / delta_t;
         control.position.y -= (robot_state.velocity.y - temp.velocity.y) / delta_t;
-
+        println!("{:?}\n{:?}", robot_state.velocity, robot_state.position);
         let control_noise = Pose {
             angle: control_noise_angle.sample(&mut rng),
             position: (
@@ -347,6 +349,7 @@ fn main() {
             angle: robot_state.vel_angle,
             position: robot_state.velocity,
         });
+        motion_sensor.set_delta_t(delta_t);
         let robot_pose = robot_state.pose();
         position_sensor.update_pose(robot_pose);
         lidar.update_pose(robot_pose);

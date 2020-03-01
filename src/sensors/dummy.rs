@@ -255,19 +255,23 @@ impl LimitedSensor<Range<f64>> for DummyLidar {
 
 #[derive(Clone)]
 pub struct DummyVelocitySensor {
-    x_noise_distr: Normal,
-    y_noise_distr: Normal,
-    angle_noise_distr: Normal,
+    noise_margins: Pose,
     real_velocity: Pose,
+    delta_t: f64,
+}
+
+impl DummyVelocitySensor {
+    pub fn set_delta_t(&mut self, delta_t: f64) {
+        self.delta_t = delta_t;
+    }
 }
 
 impl DummyVelocitySensor {
     pub fn new(noise_margins: Pose, real_velocity: Pose) -> Self {
         Self {
-            x_noise_distr: Normal::new(0., noise_margins.position.x),
-            y_noise_distr: Normal::new(0., noise_margins.position.y),
-            angle_noise_distr: Normal::new(0., noise_margins.angle),
+            noise_margins,
             real_velocity,
+            delta_t: 1. / 20.,
         }
     }
 
@@ -281,11 +285,14 @@ impl Sensor for DummyVelocitySensor {
 
     fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
+        let x_noise_distr = Normal::new(0., self.noise_margins.position.x);
+        let y_noise_distr = Normal::new(0., self.noise_margins.position.y);
+        let angle_noise_distr = Normal::new(0., self.noise_margins.angle);
         Pose {
-            angle: self.real_velocity.angle + self.angle_noise_distr.sample(&mut rng),
+            angle: self.real_velocity.angle + angle_noise_distr.sample(&mut rng),
             position: Point {
-                x: self.real_velocity.position.x + self.x_noise_distr.sample(&mut rng),
-                y: self.real_velocity.position.y + self.y_noise_distr.sample(&mut rng),
+                x: self.real_velocity.position.x + x_noise_distr.sample(&mut rng),
+                y: self.real_velocity.position.y + y_noise_distr.sample(&mut rng),
             },
         }
     }
@@ -338,8 +345,9 @@ impl Sensor for DummyPositionSensor {
 }
 
 pub struct DummyMotionSensor {
-    left_noise_distr: Normal,
-    right_noise_distr: Normal,
+    delta_t: f64,
+    x_noise: f64,
+    y_noise: f64,
     prev_robot_vel: Point,
     prev_measurement_timestep: Instant,
     pub robot_vel: Point,
@@ -348,12 +356,12 @@ pub struct DummyMotionSensor {
 impl Sensor for DummyMotionSensor {
     type Output = Point;
 
-    fn update(&mut self) {
-        self.prev_measurement_timestep = Instant::now();
-    }
+    fn update(&mut self) {}
 
     fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
+        let x_noise_distr = Normal::new(0., self.x_noise * self.delta_t);
+        let y_noise_distr = Normal::new(0., self.y_noise * self.delta_t);
         (self.robot_vel - self.prev_robot_vel)
             / self
                 .prev_measurement_timestep
@@ -361,8 +369,8 @@ impl Sensor for DummyMotionSensor {
                 .as_secs_f64()
             / 1000.
             + Point {
-                x: self.left_noise_distr.sample(&mut rng),
-                y: self.right_noise_distr.sample(&mut rng),
+                x: x_noise_distr.sample(&mut rng),
+                y: y_noise_distr.sample(&mut rng),
             }
     }
 }
