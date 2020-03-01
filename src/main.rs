@@ -65,7 +65,6 @@ fn main() {
     let noise_x = Normal::new(0., X_NOISE);
     let noise_angle = Normal::new(0., ANGLE_NOISE);
     let noise_y = Normal::new(0., Y_NOISE);
-    let start_time = Instant::now();
     let percieved_map = Arc::new(Map2D::with_size(
         (200., 200.).into(),
         vec![

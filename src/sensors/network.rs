@@ -1,87 +1,8 @@
 use super::{Sensor, SensorSink};
 use crate::{networktables, utility::Pose};
 use failure;
-use futures::channel::mpsc::{unbounded, UnboundedReceiver};
 use nt::{Client, EntryValue, NetworkTables};
-use serde::{de::DeserializeOwned, Serialize};
-use std::{
-    io,
-    marker::PhantomData,
-    net::UdpSocket,
-    sync::{Arc, Mutex},
-    thread,
-};
-
-// TODO: I really really dislike this
-pub struct UDPSocketChannel<T> {
-    socket: Arc<Mutex<UdpSocket>>,
-    elem: T,
-    elem_recv: UnboundedReceiver<Vec<u8>>,
-    _elem_type: PhantomData<T>,
-}
-
-impl<T> UDPSocketChannel<T> {
-    pub fn new(
-        host_ip: &str,
-        client_ip: &str,
-        max_elem_size: usize,
-        default: T,
-    ) -> io::Result<Self> {
-        let (elem_send, elem_recv) = unbounded();
-        let socket = UdpSocket::bind(host_ip)?;
-        socket.connect(client_ip)?;
-        let socket = Arc::new(Mutex::new(socket));
-        let listen_socket = socket.clone();
-        thread::spawn(move || loop {
-            let mut buf = vec![0; max_elem_size];
-            let len = listen_socket.lock().unwrap().recv(&mut buf).unwrap();
-            buf.truncate(len);
-            elem_send.unbounded_send(buf).unwrap();
-        });
-        Ok(Self {
-            socket,
-            elem: default,
-            elem_recv,
-            _elem_type: PhantomData,
-        })
-    }
-}
-
-impl<T> Sensor for UDPSocketChannel<T>
-where
-    T: Clone + DeserializeOwned,
-{
-    type Output = T;
-
-    fn update(&mut self) {
-        let mut elem_raw = None;
-        while let Some(elem) = self.elem_recv.try_next().unwrap() {
-            elem_raw = Some(elem);
-        }
-        if let Some(elem_raw) = elem_raw {
-            self.elem = serde_cbor::from_slice(&elem_raw).unwrap();
-        }
-    }
-
-    fn sense(&self) -> Self::Output {
-        self.elem.clone()
-    }
-}
-
-impl<T> SensorSink for UDPSocketChannel<T>
-where
-    T: Serialize,
-{
-    type Input = T;
-
-    fn push(&mut self, input: Self::Input) {
-        self.socket
-            .lock()
-            .unwrap()
-            .send(&serde_cbor::to_vec(&input).unwrap())
-            .unwrap();
-    }
-}
+use std::sync::{Arc, Mutex};
 
 pub struct NTSensor {
     inst: Arc<Mutex<NetworkTables<Client>>>,
