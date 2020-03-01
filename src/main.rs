@@ -30,10 +30,10 @@ const X_NOISE: f64 = 25.;
 const Y_NOISE: f64 = 3.;
 const X_MCL_NOISE: f64 = 5. / 3.; // 10 cm
 const Y_MCL_NOISE: f64 = 5. / 3.; // 10 cm
-const ANGLE_MCL_NOISE: f64 = 0.1; // 3 cm
+const ANGLE_MCL_NOISE: f64 = 0.01; // 3 cm
 const CONTROL_X_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
 const CONTROL_Y_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
-const CONTROL_ANGLE_NOISE: f64 = 0.035; // 2 degrees / m^2 of noise
+const CONTROL_ANGLE_NOISE: f64 = 0.007; // 2 degrees / m^2 of noise
 const VELOCITY_X_SENSOR_NOISE: f64 = 1.;
 const VELOCITY_Y_SENSOR_NOISE: f64 = 1.;
 const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.1;
@@ -364,22 +364,28 @@ fn main() {
         mcl.control_update(&position_sensor);
         mcl.observation_update(&lidar);
         filter.prediction_update(delta_t, control);
-        filter.measurement_update(motion_sensor.sense(), mcl.get_prediction(), delta_t);
+        let measurement_bias: f64 = (tick as f64).sqrt() / 10.;
+        filter.measurement_update(
+            motion_sensor.sense(),
+            mcl.get_prediction(),
+            delta_t,
+            measurement_bias,
+        );
 
         tick += 1;
 
         kalman_error += Pose {
-            angle: (filter_prediction.pose().angle - robot_state.pose().angle).abs(),
+            angle: (filter_prediction.pose().angle - robot_state.pose().angle).powi(2),
             position: Point {
-                x: (filter_prediction.pose().position.x - robot_state.pose().position.x).abs(),
-                y: (filter_prediction.pose().position.y - robot_state.pose().position.y).abs(),
+                x: (filter_prediction.pose().position.x - robot_state.pose().position.x).powi(2),
+                y: (filter_prediction.pose().position.y - robot_state.pose().position.y).powi(2),
             },
         };
         mcl_error += Pose {
-            angle: (mcl_pred.angle - robot_state.pose().angle).abs(),
+            angle: (mcl_pred.angle - robot_state.pose().angle).powi(2),
             position: Point {
-                x: (mcl_pred.position.x - robot_state.pose().position.x).abs(),
-                y: (mcl_pred.position.y - robot_state.pose().position.y).abs(),
+                x: (mcl_pred.position.x - robot_state.pose().position.x).powi(2),
+                y: (mcl_pred.position.y - robot_state.pose().position.y).powi(2),
             },
         };
         if tick % 1000 == 0 {

@@ -102,7 +102,13 @@ impl KalmanFilter {
         self.covariance_matrix += self.q * time;
     }
 
-    pub fn measurement_update(&mut self, velocity_sensor_data: Pose, mcl_pose: Pose, time: f64) {
+    pub fn measurement_update(
+        &mut self,
+        velocity_sensor_data: Pose,
+        mcl_pose: Pose,
+        time: f64,
+        measurement_bias: f64,
+    ) {
         let sensor_update_vector = vec![
             mcl_pose.angle,
             mcl_pose.position.x,
@@ -143,7 +149,7 @@ impl KalmanFilter {
                     1. / (2. * (6. + lambda))
                 };
         }
-        let mut r_vec = self.r.diagonal().clone();
+        let mut r_vec = self.r.diagonal().clone() * measurement_bias;
         r_vec[3] = r_vec[3] * time;
         r_vec[4] = r_vec[4] * time;
         r_vec[5] = r_vec[5] * time;
