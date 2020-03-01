@@ -1,14 +1,68 @@
 use crate::{
     map::Map2D,
+    sensors::Sensor,
     utility::{Point, Pose},
 };
 use piston_window::*;
-use std::{f64::consts::*, sync::Arc};
+use std::{f64::consts::*, io::Write, sync::Arc};
 
 pub const BLACK: [f32; 4] = [0., 0., 0., 1.];
 pub const RED: [f32; 4] = [1., 0., 0., 1.];
 pub const GREEN: [f32; 4] = [0., 1., 0., 1.];
 pub const BLUE: [f32; 4] = [0., 0., 1., 1.];
+
+/// HAS SIDE EFFECTS
+pub struct LoggingSensor<S, O, T, M>
+where
+    S: Sensor<Output = T>,
+    O: Write,
+    M: Fn(T) -> String,
+    T: Clone,
+{
+    internal_sensor: S,
+    latest_data: T,
+    output: O,
+    to_string: M,
+}
+
+impl<S, O, T, M> LoggingSensor<S, O, T, M>
+where
+    S: Sensor<Output = T>,
+    O: Write,
+    M: Fn(T) -> String,
+    T: Clone,
+{
+    pub fn new(internal_sensor: S, output: O, to_string: M) -> Self {
+        let latest_data = internal_sensor.sense();
+        Self {
+            internal_sensor,
+            latest_data,
+            output,
+            to_string,
+        }
+    }
+}
+
+impl<'a, S, O, T, M> Sensor for LoggingSensor<S, O, T, M>
+where
+    S: Sensor<Output = T>,
+    O: Write,
+    M: Fn(T) -> String,
+    T: Clone,
+{
+    type Output = T;
+
+    fn update(&mut self) {
+        self.latest_data = self.internal_sensor.sense();
+        self.output
+            .write_all((self.to_string)(self.latest_data.clone()).as_bytes())
+            .unwrap();
+    }
+
+    fn sense(&self) -> Self::Output {
+        self.latest_data.clone()
+    }
+}
 
 pub fn draw_map<G>(
     map: Arc<Map2D>,
