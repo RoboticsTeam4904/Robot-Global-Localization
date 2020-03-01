@@ -13,8 +13,8 @@ pub struct KalmanFilter {
     pub covariance_matrix: Matrix6<f64>,
     pub known_state: RowVector6<f64>,
     pub sigma_matrix: Matrix13x6,
-    q: Matrix6<f64>,
     r: Matrix6<f64>,
+    q: Matrix6<f64>,
     sensor_sigma_matrix: Matrix13x6,
     beta: f64,
     alpha: f64,
@@ -143,7 +143,7 @@ impl KalmanFilter {
                     1. / (2. * (6. + lambda))
                 };
         }
-        cov_zz += self.r;
+        cov_zz += self.r * self.known_state[1].hypot(self.known_state[2]).powi(2);
         let mut cov_xz = Matrix6::from_element(0.);
         let temp_sigma_matrix =
             self.sigma_matrix - Matrix13x6::from_rows(&vec![self.known_state; 13]);
