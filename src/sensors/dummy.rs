@@ -285,9 +285,9 @@ impl Sensor for DummyVelocitySensor {
 
     fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
-        let x_noise_distr = Normal::new(0., self.noise_margins.position.x);
-        let y_noise_distr = Normal::new(0., self.noise_margins.position.y);
-        let angle_noise_distr = Normal::new(0., self.noise_margins.angle);
+        let x_noise_distr = Normal::new(0., self.noise_margins.position.x * self.delta_t);
+        let y_noise_distr = Normal::new(0., self.noise_margins.position.y * self.delta_t);
+        let angle_noise_distr = Normal::new(0., self.noise_margins.angle * self.delta_t);
         Pose {
             angle: self.real_velocity.angle + angle_noise_distr.sample(&mut rng),
             position: Point {

@@ -1,6 +1,6 @@
 use crate::utility::Pose;
 use nalgebra::{
-    ArrayStorage, Matrix, Matrix3, Matrix6, RowVector3, RowVector6, U1, U13, U3, U6, U7,
+    ArrayStorage, Matrix, Matrix3, Matrix6, RowVector3, RowVector6, Vector3, U1, U13, U3, U6, U7,
 };
 use std::f64::consts::*;
 
@@ -13,8 +13,8 @@ pub struct KalmanFilter {
     pub covariance_matrix: Matrix6<f64>,
     pub known_state: RowVector6<f64>,
     pub sigma_matrix: Matrix13x6,
-    q: Matrix6<f64>,
     r: Matrix6<f64>,
+    q: Matrix6<f64>,
     sensor_sigma_matrix: Matrix13x6,
     beta: f64,
     alpha: f64,
@@ -99,10 +99,16 @@ impl KalmanFilter {
                     1. / (2. * (6. + lambda))
                 };
         }
-        self.covariance_matrix += self.q;
+        self.covariance_matrix += self.q * time;
     }
 
-    pub fn measurement_update(&mut self, velocity_sensor_data: Pose, mcl_pose: Pose) {
+    pub fn measurement_update(
+        &mut self,
+        velocity_sensor_data: Pose,
+        mcl_pose: Pose,
+        time: f64,
+        measurement_bias: f64,
+    ) {
         let sensor_update_vector = vec![
             mcl_pose.angle,
             mcl_pose.position.x,
@@ -143,6 +149,11 @@ impl KalmanFilter {
                     1. / (2. * (6. + lambda))
                 };
         }
+        let mut r_vec = self.r.diagonal().clone() * measurement_bias;
+        r_vec[3] = r_vec[3] * time;
+        r_vec[4] = r_vec[4] * time;
+        r_vec[5] = r_vec[5] * time;
+        self.r.set_diagonal(&r_vec);
         cov_zz += self.r;
         let mut cov_xz = Matrix6::from_element(0.);
         let temp_sigma_matrix =
@@ -289,7 +300,8 @@ impl KalmanFilterVision {
                     1. / (2. * (3. + lambda))
                 };
         }
-        cov_zz += self.r;
+
+        cov_zz += self.r * self.known_state[1].hypot(self.known_state[2]).powi(2);
         let mut cov_xz = Matrix3::from_element(0.);
         let temp_sigma_matrix =
             self.sigma_matrix - Matrix7x3::from_rows(&vec![self.known_state; 7]);
