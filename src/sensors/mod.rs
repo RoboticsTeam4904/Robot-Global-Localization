@@ -3,7 +3,9 @@ use std::{marker::PhantomData, ops::Sub};
 
 // pub mod gpio;
 pub mod dummy;
+#[cfg(feature = "network")]
 pub mod network;
+#[cfg(feature = "rplidar")]
 pub mod rplidar;
 
 /// The generic trait for any sensor.

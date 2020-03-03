@@ -1,6 +1,6 @@
 use crate::utility::Pose;
 use nalgebra::{
-    ArrayStorage, Matrix, Matrix3, Matrix6, RowVector3, RowVector6, Vector3, U1, U13, U3, U6, U7,
+    ArrayStorage, Matrix, Matrix3, Matrix6, RowVector3, RowVector6, U1, U13, U3, U6, U7,
 };
 use std::f64::consts::*;
 
