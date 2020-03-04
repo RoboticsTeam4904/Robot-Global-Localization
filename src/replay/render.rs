@@ -1,9 +1,10 @@
 use crate::{
     map::Map2D,
+    sensors::Sensor,
     utility::{Point, Pose},
 };
 use piston_window::*;
-use std::{f64::consts::*, sync::Arc};
+use std::{f64::consts::*, io::Write, sync::Arc};
 
 pub const BLACK: [f32; 4] = [0., 0., 0., 1.];
 pub const RED: [f32; 4] = [1., 0., 0., 1.];

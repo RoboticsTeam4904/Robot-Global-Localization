@@ -3,6 +3,7 @@ use std::{marker::PhantomData, ops::Sub};
 
 // pub mod gpio;
 pub mod dummy;
+pub mod io;
 #[cfg(feature = "network")]
 pub mod network;
 #[cfg(feature = "rplidar")]
@@ -11,11 +12,14 @@ pub mod rplidar;
 /// The generic trait for any sensor.
 /// Only `sense` is required, but relative pose is highly recommended.
 ///
-/// `Output` is the output of the sensor (percieved info from the environment)
+/// `Output` is the output of the sensor (percieved info from the environment).
+///
+/// By using the trait `WrappableSensor`, `map` and `override_limit` helper functions are provided
+/// to map a sensor's `output` and impose a new limit on the sensor.
 pub trait Sensor {
     type Output;
 
-    /// Update the sensor
+    /// Update the sensor (usually has side effects)
     fn update(&mut self) {}
     /// Gets the value that the sensor is currently sensing
     fn sense(&self) -> Self::Output;
@@ -38,6 +42,10 @@ pub trait LimitedSensor<T>: Sensor {
 /// wherein data is pushed rather than recieved.
 ///
 /// `Input` is the input of the sensor.
+///
+/// By using the trait `WrappableSensorSink`, the helper functions `map_sink` and `zip`
+/// are provided to map the input given to a sink before sinking it and reflect to the input
+/// of the sink to multiple sinks.
 pub trait SensorSink {
     type Input;
 
@@ -75,9 +83,58 @@ pub trait WrappableSensorSink: SensorSink + Sized {
     {
         MappedSensorSink::new(self, map)
     }
+    // Zips `self` with another `SensorSink` of the same input type.
+    //
+    // Whenevr a datum is pushed to `self`, it will also be cloned and pushed to `other` as well.
+    fn zip<S, I>(self, other: S) -> ZippedSensorSink<Self, S, <Self as SensorSink>::Input>
+    where
+        S: SensorSink<Input = I>,
+        Self: SensorSink<Input = I>,
+        I: Clone,
+    {
+        ZippedSensorSink::new(self, other)
+    }
 }
 
 impl<S: SensorSink + Sized> WrappableSensorSink for S {}
+
+pub struct ZippedSensorSink<S1, S2, I>
+where
+    S1: SensorSink<Input = I>,
+    S2: SensorSink<Input = I>,
+{
+    sink_1: S1,
+    sink_2: S2,
+}
+
+impl<S1, S2, I> ZippedSensorSink<S1, S2, I>
+where
+    S1: SensorSink<Input = I>,
+    S2: SensorSink<Input = I>,
+{
+    pub fn new(sink_1: S1, sink_2: S2) -> Self {
+        Self { sink_1, sink_2 }
+    }
+}
+
+impl<S1, S2, I> SensorSink for ZippedSensorSink<S1, S2, I>
+where
+    S1: SensorSink<Input = I>,
+    S2: SensorSink<Input = I>,
+    I: Clone,
+{
+    type Input = I;
+
+    fn update(&mut self) {
+        self.sink_1.update();
+        self.sink_2.update();
+    }
+
+    fn push(&mut self, input: Self::Input) {
+        self.sink_1.push(input.clone());
+        self.sink_2.push(input);
+    }
+}
 
 /// A wrapper sensor-sink that applies that applies the the `map`
 /// function to the input of `internal_sensor_sink.push in `MappedSensorSink::push`.
