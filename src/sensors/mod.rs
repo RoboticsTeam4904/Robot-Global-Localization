@@ -69,6 +69,24 @@ pub trait WrappableSensor: Sensor + Sized {
     {
         MappedSensor::new(self, map)
     }
+    /// Maps `self` to a `Sensor<Output = M>`
+    /// by calling `map` on `&self` in the `sense` function
+    /// and then returining its output.
+    fn map_whole<M, O>(self, map: M) -> FullyMappedSensor<Self, M, O>
+    where
+        M: Fn(&Self) -> O,
+    {
+        FullyMappedSensor::new(self, map)
+    }
+    /// Maps `self.relative_pose` by calling
+    /// `map` on `self.relative_pose` in the
+    /// returned sensor's `relative_pose`
+    fn map_relative_pose<M>(self, map: M) -> MappedPoseSensor<Self, M>
+    where
+        M: Fn(Pose) -> Pose,
+    {
+        MappedPoseSensor::new(self, map)
+    }
 }
 
 impl<S: Sensor + Sized> WrappableSensor for S {}
@@ -83,9 +101,9 @@ pub trait WrappableSensorSink: SensorSink + Sized {
     {
         MappedSensorSink::new(self, map)
     }
-    // Zips `self` with another `SensorSink` of the same input type.
-    //
-    // Whenevr a datum is pushed to `self`, it will also be cloned and pushed to `other` as well.
+    /// Zips `self` with another `SensorSink` of the same input type.
+    ///
+    /// Whenevr a datum is pushed to `self`, it will also be cloned and pushed to `other` as well.
     fn zip<S, I>(self, other: S) -> ZippedSensorSink<Self, S, <Self as SensorSink>::Input>
     where
         S: SensorSink<Input = I>,
@@ -232,6 +250,120 @@ impl<S, O, Map, MappedOut, R> LimitedSensor<R> for MappedSensor<S, O, Map, Mappe
 where
     S: Sensor<Output = O> + LimitedSensor<R>,
     Map: Fn(O) -> MappedOut,
+{
+    fn range(&self) -> Option<R> {
+        self.internal_sensor.range()
+    }
+}
+
+/// A wrapper sensor that applies the provided `map`
+/// function to `internal_sensor` in `MappedSensor::sense`.
+///
+/// The input of `map` is an `&Sensor`, but it is called in sense,
+/// so it is recommended to call sense of the provided sensor in the map function,
+/// do something to that output, then return it. (e.g. ```|sensor: Sensor<Output = f64> |sensor.sense() * 1000.```)
+///
+/// The rest of the implementation of `Sense` and `LimitedSensor` is reflected upward
+/// from `internal_sensor`.
+pub struct FullyMappedSensor<S, Map, MappedOut>
+where
+    S: Sensor,
+    Map: Fn(&S) -> MappedOut,
+{
+    pub internal_sensor: S,
+    pub map: Map,
+}
+
+impl<S, Map, MappedOut> FullyMappedSensor<S, Map, MappedOut>
+where
+    S: Sensor,
+    Map: Fn(&S) -> MappedOut,
+{
+    /// Creates a new `MappedSensor` around `internal_sensor` using `map`.
+    pub fn new(internal_sensor: S, map: Map) -> Self {
+        Self {
+            internal_sensor,
+            map,
+        }
+    }
+}
+
+impl<S, Map, MappedOut> Sensor for FullyMappedSensor<S, Map, MappedOut>
+where
+    S: Sensor,
+    Map: Fn(&S) -> MappedOut,
+{
+    type Output = MappedOut;
+
+    fn update(&mut self) {
+        self.internal_sensor.update()
+    }
+
+    fn sense(&self) -> Self::Output {
+        (self.map)(&self.internal_sensor)
+    }
+
+    fn relative_pose(&self) -> Pose {
+        self.internal_sensor.relative_pose()
+    }
+}
+
+impl<S, Map, MappedOut, R> LimitedSensor<R> for FullyMappedSensor<S, Map, MappedOut>
+where
+    S: Sensor + LimitedSensor<R>,
+    Map: Fn(&S) -> MappedOut,
+{
+    fn range(&self) -> Option<R> {
+        self.internal_sensor.range()
+    }
+}
+
+pub struct MappedPoseSensor<S, M>
+where
+    S: Sensor,
+    M: Fn(Pose) -> Pose,
+{
+    internal_sensor: S,
+    map: M,
+}
+
+impl<S, M> MappedPoseSensor<S, M>
+where
+    S: Sensor,
+    M: Fn(Pose) -> Pose,
+{
+    pub fn new(internal_sensor: S, map: M) -> Self {
+        Self {
+            internal_sensor,
+            map,
+        }
+    }
+}
+
+impl<S, M> Sensor for MappedPoseSensor<S, M>
+where
+    S: Sensor,
+    M: Fn(Pose) -> Pose,
+{
+    type Output = S::Output;
+
+    fn update(&mut self) {
+        self.internal_sensor.update();
+    }
+
+    fn sense(&self) -> Self::Output {
+        self.internal_sensor.sense()
+    }
+
+    fn relative_pose(&self) -> Pose {
+        (self.map)(self.internal_sensor.relative_pose())
+    }
+}
+
+impl<S, M, R> LimitedSensor<R> for MappedPoseSensor<S, M>
+where
+    S: Sensor + LimitedSensor<R>,
+    M: Fn(Pose) -> Pose,
 {
     fn range(&self) -> Option<R> {
         self.internal_sensor.range()
