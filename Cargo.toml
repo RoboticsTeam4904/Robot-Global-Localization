@@ -7,7 +7,7 @@ edition = "2018"
 [[bin]]
 name = "simulation"
 path = "src/simulation.rs"
-required-features = ["network", "rplidar", "render"]
+required-features = ["render"]
 
 [[bin]]
 name = "tegra"

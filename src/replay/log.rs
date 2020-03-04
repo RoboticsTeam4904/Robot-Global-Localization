@@ -1,4 +1,4 @@
-use crate::sensors::{Sensor, LimitedSensor};
+use crate::sensors::{LimitedSensor, Sensor};
 use std::io::Write;
 
 pub struct LoggingSensor<S, O, T, M>
