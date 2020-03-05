@@ -9,6 +9,11 @@ use std::io::{Read, Write};
 ///
 /// If the wrapped source implements `std::io::Write`, then `IOSensor` implements `SensorSink<Input = Vec<u8>>`.
 /// The input is pushed by calling `write_all`.
+/// 
+/// NOTE: pushed data to `IOSensor` as a `SensorSink` will not be immediately read by 
+/// `sense`, as `sense` uses `Read::read_to_end` which starts from the cursor position and
+/// `push` uses `Write::write_all` which moves the cursor position to the end of the
+/// written data.
 ///
 /// It is recomended to use this sensor in conjuction with the `map` and `override_limit`
 /// methods to build a sensor which fully meets your needs.
@@ -61,5 +66,6 @@ where
 
     fn push(&mut self, input: Self::Input) {
         self.io.write_all(&input).unwrap();
+        self.io.flush().unwrap();
     }
 }

@@ -50,7 +50,7 @@ pub trait SensorSink {
     type Input;
 
     /// Update the sensor-sink (similar to `Sensor::update` in that it does not take in data)
-    fn update(&mut self) {}
+    fn update_sink(&mut self) {}
     /// Push data to the sensor-sink (the inverse of `Sensor::sense`)
     fn push(&mut self, input: Self::Input);
 }
@@ -58,11 +58,15 @@ pub trait SensorSink {
 /// Helper trait for providing easy usage of wrapped sensors.
 pub trait WrappableSensor: Sensor + Sized {
     /// Overrides range of `self` to be `range`
+    /// 
+    /// Implementations of `LimitedSensor` and `SensorSink` on `self` are reflected up.
     fn override_limit<L: Clone>(self, range: Option<L>) -> OverridenLimitedSensor<Self, L> {
         OverridenLimitedSensor::new(self, range)
     }
     /// Maps `self` to a `Sensor<Output = M>`
     /// by calling `map` on `self.sense` in the returned sensor's `sense` function.
+    /// 
+    /// Implementations of `LimitedSensor` and `SensorSink` on `self` are reflected up.
     fn map<M, O>(self, map: M) -> MappedSensor<Self, <Self as Sensor>::Output, M, O>
     where
         M: Fn(<Self as Sensor>::Output) -> O,
@@ -72,6 +76,8 @@ pub trait WrappableSensor: Sensor + Sized {
     /// Maps `self` to a `Sensor<Output = M>`
     /// by calling `map` on `&self` in the `sense` function
     /// and then returining its output.
+    /// 
+    /// Implementations of `LimitedSensor` and `SensorSink` on `self` are reflected up.
     fn map_whole<M, O>(self, map: M) -> FullyMappedSensor<Self, M, O>
     where
         M: Fn(&Self) -> O,
@@ -81,6 +87,8 @@ pub trait WrappableSensor: Sensor + Sized {
     /// Maps `self.relative_pose` by calling
     /// `map` on `self.relative_pose` in the
     /// returned sensor's `relative_pose`
+    /// 
+    /// Implementations of `LimitedSensor` and `SensorSink` on `self` are reflected up.
     fn map_relative_pose<M>(self, map: M) -> MappedPoseSensor<Self, M>
     where
         M: Fn(Pose) -> Pose,
@@ -94,7 +102,10 @@ impl<S: Sensor + Sized> WrappableSensor for S {}
 /// Helper trait for providing easy usage of wrapped sensor-sinks.
 pub trait WrappableSensorSink: SensorSink + Sized {
     /// Maps `self` to a `SensorSink<Input = M>`
-    /// by applying `map` to inputs of `push`
+    /// by applying `map` to inputs of `push`.
+    /// 
+    /// Implementations of `Sensor` and `LimitedSensor` will be reflected onto 
+    /// the returned sink from `self`
     fn map_sink<M, I>(self, map: M) -> MappedSensorSink<Self, <Self as SensorSink>::Input, M, I>
     where
         M: Fn(I) -> <Self as SensorSink>::Input,
@@ -104,6 +115,9 @@ pub trait WrappableSensorSink: SensorSink + Sized {
     /// Zips `self` with another `SensorSink` of the same input type.
     ///
     /// Whenevr a datum is pushed to `self`, it will also be cloned and pushed to `other` as well.
+    /// 
+    /// If `self` implements `Sensor` or `LimitedSensor`, those implementations will be reflected up,
+    /// but any implementations from `other` will not.
     fn zip<S, I>(self, other: S) -> ZippedSensorSink<Self, S, <Self as SensorSink>::Input>
     where
         S: SensorSink<Input = I>,
@@ -143,14 +157,42 @@ where
 {
     type Input = I;
 
-    fn update(&mut self) {
-        self.sink_1.update();
-        self.sink_2.update();
+    fn update_sink(&mut self) {
+        self.sink_1.update_sink();
+        self.sink_2.update_sink();
     }
 
     fn push(&mut self, input: Self::Input) {
         self.sink_1.push(input.clone());
         self.sink_2.push(input);
+    }
+}
+
+impl<S1, S2, I> Sensor for ZippedSensorSink<S1, S2, I>
+where
+    S1: Sensor + SensorSink<Input = I>,
+    S2: SensorSink<Input = I>,
+    I: Clone,
+{
+    type Output = S1::Output;
+
+    fn update(&mut self) {
+        self.sink_1.update();
+    }
+
+    fn sense(&self) -> Self::Output {
+        self.sink_1.sense()
+    }
+}
+
+impl<S1, S2, I, R> LimitedSensor<R> for ZippedSensorSink<S1, S2, I>
+where
+    S1: LimitedSensor<R> + SensorSink<Input = I>,
+    S2: SensorSink<Input = I>,
+    I: Clone,
+{
+    fn range(&self) -> Option<R> {
+        self.sink_1.range()
     }
 }
 
@@ -189,12 +231,38 @@ where
 {
     type Input = MappedIn;
 
-    fn update(&mut self) {
-        self.internal_sensor_sink.update()
+    fn update_sink(&mut self) {
+        self.internal_sensor_sink.update_sink()
     }
 
     fn push(&mut self, input: Self::Input) {
         self.internal_sensor_sink.push((self.map)(input))
+    }
+}
+
+impl<S, I, Map, MappedIn> Sensor for MappedSensorSink<S, I, Map, MappedIn>
+where
+    S: Sensor + SensorSink<Input = I>,
+    Map: Fn(MappedIn) -> I,
+{
+    type Output = S::Output;
+
+    fn update(&mut self) {
+        self.internal_sensor_sink.update();
+    }
+
+    fn sense(&self) -> Self::Output {
+        self.internal_sensor_sink.sense()
+    }
+}
+
+impl<S, I, Map, MappedIn, R> LimitedSensor<R> for MappedSensorSink<S, I, Map, MappedIn>
+where
+    S: LimitedSensor<R> + SensorSink<Input = I>,
+    Map: Fn(MappedIn) -> I,
+{
+    fn range(&self) -> Option<R> {
+        self.internal_sensor_sink.range()
     }
 }
 
@@ -253,6 +321,22 @@ where
 {
     fn range(&self) -> Option<R> {
         self.internal_sensor.range()
+    }
+}
+
+impl<S, O, Map, MappedOut> SensorSink for MappedSensor<S, O, Map, MappedOut>
+where
+    S: Sensor<Output = O> + SensorSink,
+    Map: Fn(O) -> MappedOut,
+{
+    type Input = S::Input;
+
+    fn update_sink(&mut self) {
+        self.internal_sensor.update_sink();
+    }
+
+    fn push(&mut self, input: Self::Input) {
+        self.internal_sensor.push(input);
     }
 }
 
@@ -318,6 +402,22 @@ where
     }
 }
 
+impl<S, Map, MappedOut> SensorSink for FullyMappedSensor<S, Map, MappedOut>
+where
+    S: Sensor + SensorSink,
+    Map: Fn(&S) -> MappedOut,
+{
+    type Input = S::Input;
+
+    fn update_sink(&mut self) {
+        self.internal_sensor.update_sink();
+    }
+
+    fn push(&mut self, input: Self::Input) {
+        self.internal_sensor.push(input);
+    }
+}
+
 pub struct MappedPoseSensor<S, M>
 where
     S: Sensor,
@@ -367,6 +467,22 @@ where
 {
     fn range(&self) -> Option<R> {
         self.internal_sensor.range()
+    }
+}
+
+impl<S, M> SensorSink for MappedPoseSensor<S, M>
+where
+    S: Sensor + SensorSink,
+    M: Fn(Pose) -> Pose,
+{
+    type Input = S::Input;
+
+    fn update_sink(&mut self) {
+        self.internal_sensor.update_sink();
+    }
+
+    fn push(&mut self, input: Self::Input) {
+        self.internal_sensor.push(input);
     }
 }
 
@@ -423,6 +539,22 @@ where
 {
     fn range(&self) -> Option<L> {
         self.range.clone()
+    }
+}
+
+impl<S, L> SensorSink for OverridenLimitedSensor<S, L>
+where
+    S: Sensor + SensorSink,
+    L: Clone,
+{
+    type Input = S::Input;
+
+    fn update_sink(&mut self) {
+        self.internal_sensor.update_sink();
+    }
+
+    fn push(&mut self, input: Self::Input) {
+        self.internal_sensor.push(input);
     }
 }
 
