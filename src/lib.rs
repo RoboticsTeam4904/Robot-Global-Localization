@@ -9,10 +9,14 @@ pub mod utility;
 #[cfg(test)]
 mod tests {
     use super::{
+        map::*,
         sensors::{dummy::DummySensor, io::IOSensor, *},
-        utility::Pose,
+        utility::{Point, Pose},
     };
-    use std::fs::{copy, remove_file, OpenOptions};
+    use std::{
+        f64::consts::*,
+        fs::{copy, remove_file, OpenOptions},
+    };
 
     #[test]
     fn test_dummy_sensor() {
@@ -53,7 +57,13 @@ mod tests {
         wrapped.update();
         assert_eq!(6, wrapped.sense());
         assert_eq!(Some(3), wrapped.range());
-        assert_eq!(Pose { angle: 0., position: (9., 9.).into() }, wrapped.relative_pose());
+        assert_eq!(
+            Pose {
+                angle: 0.,
+                position: (9., 9.).into()
+            },
+            wrapped.relative_pose()
+        );
         wrapped.push(10);
         wrapped.update_sink();
         wrapped.update();
@@ -98,5 +108,46 @@ mod tests {
         }
         remove_file(PATH).unwrap();
         copy(RESET_PATH, PATH).unwrap();
+    }
+
+    #[test]
+    fn test_map_creation() {
+        let map = Map2D::new(vec![
+            Object2D::Rectangle(((0., 0.).into(), (1., 1.).into())),
+            Object2D::Triangle(((0., 0.).into(), (1., 1.).into(), (1., 0.).into())),
+            Object2D::Line(((0., 0.).into(), (1., 1.).into())),
+        ]);
+        assert_eq!(map.size, Point { x: 1., y: 1. });
+        assert_eq!(map.vertices.len(), 4);
+    }
+
+    #[test]
+    fn test_map_raycast() {
+        let map = Map2D::new(vec![
+            Object2D::Rectangle(((0., 0.).into(), (1., 1.).into())),
+            Object2D::Triangle(((0., 0.).into(), (1., 1.).into(), (1., 0.).into())),
+            Object2D::Line(((0., 0.).into(), (1., 1.).into())),
+        ]);
+        assert_eq!(
+            map.raycast(Pose {
+                angle: 0.,
+                position: (0.1, 0.5).into()
+            }),
+            Some((0.5, 0.5).into())
+        );
+        assert_eq!(
+            map.raycast(Pose {
+                angle: FRAC_PI_2,
+                position: (0.5, 0.24324).into()
+            }),
+            Some((0.5, 0.5).into())
+        );
+        let pred = map.raycast(Pose {
+                angle: FRAC_PI_4,
+                position: (0.34, 0.827).into()
+        }).expect("Failed to intersect");
+        let actual: Point = (0.513, 1.).into();
+        assert_eq!(actual.y, pred.y);
+        assert!((actual.x - pred.x).abs() <= 0.05);
     }
 }
