@@ -254,6 +254,10 @@ where
     fn sense(&self) -> Self::Output {
         self.internal_sensor_sink.sense()
     }
+
+    fn relative_pose(&self) -> Pose {
+        self.internal_sensor_sink.relative_pose()
+    }
 }
 
 impl<S, I, Map, MappedIn, R> LimitedSensor<R> for MappedSensorSink<S, I, Map, MappedIn>
