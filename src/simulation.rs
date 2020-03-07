@@ -165,8 +165,8 @@ fn main() {
     let mut lidar = DummyLidar::new(
         real_map.clone(),
         robot_state.pose(),
-        Normal::new(0., 0.01),
-        Normal::new(0., 0.01),
+        Normal::new(0., 1.),
+        Normal::new(0., 0.1),
         180,
         Pose::default(),
         None,
