@@ -5,7 +5,7 @@ use global_robot_localization::{
         presets,
     },
     map::{Map2D, Object2D},
-    replay::{draw_map, isoceles_triangle, point_cloud},
+    replay::render::{draw_map, isoceles_triangle, point_cloud},
     sensors::{
         dummy::{DummyLidar, DummyPositionSensor, DummyVelocitySensor},
         Sensor,
@@ -28,12 +28,13 @@ use std::{
 const ANGLE_NOISE: f64 = 0.;
 const X_NOISE: f64 = 25.;
 const Y_NOISE: f64 = 3.;
-const X_MCL_NOISE: f64 = 5. / 3.; // 10 cm
-const Y_MCL_NOISE: f64 = 5. / 3.; // 10 cm
-const ANGLE_MCL_NOISE: f64 = 0.01; // 3 cm
+const X_MCL_NOISE: f64 = 5. / 300.; // 10 cm
+const Y_MCL_NOISE: f64 = 5. / 300.; // 10 cm
+const ANGLE_MCL_NOISE: f64 = 1.; // 3 cm
 const CONTROL_X_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
 const CONTROL_Y_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
-const CONTROL_ANGLE_NOISE: f64 = 0.007; // 2 degrees / m^2 of noise
+
+const CONTROL_ANGLE_NOISE: f64 = 0.007; // 2 degrees / s^2 of noise
 const VELOCITY_X_SENSOR_NOISE: f64 = 1.;
 const VELOCITY_Y_SENSOR_NOISE: f64 = 1.;
 const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.1;
@@ -206,7 +207,7 @@ fn main() {
         delta_t = last_time.elapsed().as_secs_f64();
         last_time = Instant::now();
         println!("{}", delta_t);
-        if tick >= 5000 {
+        if tick > 2000 {
             let elapsed = start.elapsed();
             println!(
                 "{}t in {:?}, {}tps",
@@ -292,7 +293,7 @@ fn main() {
                 g,
             );
             isoceles_triangle(
-                [0., 0., 1., 1.],
+                [1., 1., 1., 1.],
                 map_visual_margins,
                 MAP_SCALE,
                 0.5,
@@ -336,7 +337,6 @@ fn main() {
         control.angle -= (robot_state.vel_angle - temp.vel_angle) / delta_t;
         control.position.x -= (robot_state.velocity.x - temp.velocity.x) / delta_t;
         control.position.y -= (robot_state.velocity.y - temp.velocity.y) / delta_t;
-        println!("{:?}\n{:?}", robot_state.velocity, robot_state.position);
         let control_noise = Pose {
             angle: control_noise_angle.sample(&mut rng),
             position: (
@@ -364,7 +364,9 @@ fn main() {
         mcl.control_update(&position_sensor);
         mcl.observation_update(&lidar);
         filter.prediction_update(delta_t, control);
-        let measurement_bias: f64 = (tick as f64).sqrt() / 10.;
+        let measurement_bias: f64 = if tick < 100 { 0.001 } else { 1. };
+
+        println!("{:?}", measurement_bias);
         filter.measurement_update(
             motion_sensor.sense(),
             mcl.get_prediction(),
@@ -373,7 +375,9 @@ fn main() {
         );
 
         tick += 1;
-
+        if tick < 200 {
+            continue;
+        }
         kalman_error += Pose {
             angle: (filter_prediction.pose().angle - robot_state.pose().angle).powi(2),
             position: Point {
@@ -391,8 +395,22 @@ fn main() {
         if tick % 1000 == 0 {
             println!(
                 "KALMAN: {:?} \n MCL: {:?}\n\n",
-                kalman_error / tick as f64,
-                mcl_error / tick as f64
+                Pose {
+                    angle: kalman_error.angle.sqrt() / 1000.,
+                    position: (
+                        kalman_error.position.x.sqrt() / 1000.,
+                        kalman_error.position.y.sqrt() / 1000.
+                    )
+                        .into()
+                },
+                Pose {
+                    angle: mcl_error.angle.sqrt() / 1000.,
+                    position: (
+                        mcl_error.position.x.sqrt() / 1000.,
+                        mcl_error.position.y.sqrt() / 1000.
+                    )
+                        .into()
+                }
             );
         }
     }

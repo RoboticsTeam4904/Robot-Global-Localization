@@ -99,7 +99,7 @@ impl KalmanFilter {
                     1. / (2. * (6. + lambda))
                 };
         }
-        self.covariance_matrix += self.q * time;
+        self.covariance_matrix += self.q * time.powi(2);
     }
 
     pub fn measurement_update(
@@ -149,12 +149,14 @@ impl KalmanFilter {
                     1. / (2. * (6. + lambda))
                 };
         }
+        let temp = self.r.diagonal().clone();
         let mut r_vec = self.r.diagonal().clone() * measurement_bias;
         r_vec[3] = r_vec[3] * time;
         r_vec[4] = r_vec[4] * time;
         r_vec[5] = r_vec[5] * time;
         self.r.set_diagonal(&r_vec);
         cov_zz += self.r;
+        self.r.set_diagonal(&temp);
         let mut cov_xz = Matrix6::from_element(0.);
         let temp_sigma_matrix =
             self.sigma_matrix - Matrix13x6::from_rows(&vec![self.known_state; 13]);
