@@ -264,7 +264,7 @@ impl KalmanFilterVision {
         self.covariance_matrix += self.q * time;
     }
 
-    pub fn measurement_update(&mut self, sensor_data: Pose) {
+    pub fn measurement_update(&mut self, sensor_data: Pose, measurement_bias: f64) {
         let sensor_update_vector = vec![
             sensor_data.angle,
             sensor_data.position.x,
@@ -302,7 +302,12 @@ impl KalmanFilterVision {
                     1. / (2. * (3. + lambda))
                 };
         }
+        let temp = self.r.diagonal().clone();
+        let r_vec = self.r.diagonal().clone() * measurement_bias;
 
+        self.r.set_diagonal(&r_vec);
+        cov_zz += self.r;
+        self.r.set_diagonal(&temp);
         cov_zz += self.r * self.known_state[1].hypot(self.known_state[2]).powi(2);
         let mut cov_xz = Matrix3::from_element(0.);
         let temp_sigma_matrix =

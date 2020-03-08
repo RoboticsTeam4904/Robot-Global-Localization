@@ -15,7 +15,7 @@ use global_robot_localization::{
 use nalgebra::{Matrix6, Vector6};
 use piston_window::*;
 use rand::{
-    distributions::{Distribution, Normal},
+    distributions::{uniform::Uniform, Distribution, Normal},
     thread_rng,
 };
 use std::{
@@ -63,20 +63,16 @@ fn main() {
         VELOCITY_Y_SENSOR_NOISE.powi(2),
     ]));
 
-    let noise_x = Normal::new(0., X_NOISE);
-    let noise_angle = Normal::new(0., ANGLE_NOISE);
-    let noise_y = Normal::new(0., Y_NOISE);
+    let noise_x = Normal::new(100., X_NOISE);
+    let noise_angle = Normal::new(FRAC_PI_2, ANGLE_NOISE);
+    let noise_y = Normal::new(8., Y_NOISE);
     let start_time = Instant::now();
     let percieved_map = Arc::new(Map2D::with_size(
         (200., 200.).into(),
         vec![
-            Object2D::Point((0., 200.).into()),
-            Object2D::Point((200., 200.).into()),
-            Object2D::Point((200., 0.).into()),
-            Object2D::Point((0., 0.).into()),
             Object2D::Line(((0., 0.).into(), (200., 0.).into())),
-            Object2D::Line(((0., 0.).into(), (0., 200.).into())),
-            Object2D::Line(((200., 0.).into(), (200., 200.).into())),
+            // Object2D::Line(((0., 0.).into(), (0., 200.).into())),
+            // Object2D::Line(((200., 0.).into(), (200., 200.).into())),
             Object2D::Line(((0., 200.).into(), (200., 200.).into())),
             Object2D::Line(((20., 60.).into(), (50., 100.).into())),
             Object2D::Line(((50., 100.).into(), (80., 50.).into())),
@@ -87,16 +83,13 @@ fn main() {
             Object2D::Line(((100., 40.).into(), (160., 80.).into())),
         ],
     ));
+    let mut measurement_bias: f64 = 0.01;
     let real_map = Arc::new(Map2D::with_size(
         (200., 200.).into(),
         vec![
-            Object2D::Point((0., 200.).into()),
-            Object2D::Point((200., 200.).into()),
-            Object2D::Point((200., 0.).into()),
-            Object2D::Point((0., 0.).into()),
             Object2D::Line(((0., 0.).into(), (200., 0.).into())),
-            Object2D::Line(((0., 0.).into(), (0., 200.).into())),
-            Object2D::Line(((200., 0.).into(), (200., 200.).into())),
+            // Object2D::Line(((0., 0.).into(), (0., 200.).into())),
+            // Object2D::Line(((200., 0.).into(), (200., 200.).into())),
             Object2D::Line(((0., 200.).into(), (200., 200.).into())),
             Object2D::Line(((20., 60.).into(), (50., 100.).into())),
             Object2D::Line(((50., 100.).into(), (80., 50.).into())),
@@ -109,10 +102,10 @@ fn main() {
         ],
     ));
     let init_state = KinematicState {
-        angle: FRAC_PI_2 + noise_angle.sample(&mut rng),
+        angle: noise_angle.sample(&mut rng),
         position: Point {
-            x: (100. + noise_x.sample(&mut rng)),
-            y: (8. + noise_y.sample(&mut rng)),
+            x: (noise_x.sample(&mut rng)),
+            y: (noise_y.sample(&mut rng)),
         },
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
@@ -165,8 +158,8 @@ fn main() {
     let mut lidar = DummyLidar::new(
         real_map.clone(),
         robot_state.pose(),
-        Normal::new(0., 1.),
-        Normal::new(0., 0.1),
+        Normal::new(0., 0.001),
+        Normal::new(0., 0.0005),
         180,
         Pose::default(),
         None,
@@ -178,7 +171,11 @@ fn main() {
             particle_count_threshold: 4_000,
             particle_concentration_threshold: 300.,
         };
-        PoseMCL::new(
+        PoseMCL::from_distributions(
+            (
+                Uniform::new(FRAC_PI_2, FRAC_PI_2 + 1e-3),
+                (Uniform::new(0., 200.), Uniform::new(8., 8. + 1e-3)),
+            ),
             particle_count,
             weight_sum_threshold,
             death_threshold,
@@ -199,6 +196,7 @@ fn main() {
     let control_noise_x = Normal::new(0., CONTROL_X_NOISE);
     let control_noise_y = Normal::new(0., CONTROL_Y_NOISE);
     let mut kalman_error: Pose = Pose::default();
+    let mut mcl_kalman_difference: Pose = Pose::default();
     let mut mcl_error: Pose = Pose::default();
     let mut last_time: Instant = Instant::now();
     let mut delta_t;
@@ -207,7 +205,7 @@ fn main() {
         delta_t = last_time.elapsed().as_secs_f64();
         last_time = Instant::now();
         println!("{}", delta_t);
-        if tick > 2000 {
+        if tick > 10000 {
             let elapsed = start.elapsed();
             println!(
                 "{}t in {:?}, {}tps",
@@ -334,6 +332,7 @@ fn main() {
                 end: Point { x: 199.9, y: 199. },
             })
             .into();
+        println!("{:?} {:?}", temp, robot_state);
         control.angle -= (robot_state.vel_angle - temp.vel_angle) / delta_t;
         control.position.x -= (robot_state.velocity.x - temp.velocity.x) / delta_t;
         control.position.y -= (robot_state.velocity.y - temp.velocity.y) / delta_t;
@@ -364,7 +363,6 @@ fn main() {
         mcl.control_update(&position_sensor);
         mcl.observation_update(&lidar);
         filter.prediction_update(delta_t, control);
-        let measurement_bias: f64 = if tick < 100 { 0.001 } else { 1. };
 
         println!("{:?}", measurement_bias);
         filter.measurement_update(
@@ -375,9 +373,7 @@ fn main() {
         );
 
         tick += 1;
-        if tick < 200 {
-            continue;
-        }
+
         kalman_error += Pose {
             angle: (filter_prediction.pose().angle - robot_state.pose().angle).powi(2),
             position: Point {
@@ -392,22 +388,36 @@ fn main() {
                 y: (mcl_pred.position.y - robot_state.pose().position.y).powi(2),
             },
         };
+        mcl_kalman_difference += Pose {
+            angle: (mcl_pred.angle - filter_prediction.pose().position.x).powi(2),
+            position: Point {
+                x: (mcl_pred.position.x - filter_prediction.pose().position.x).powi(2),
+                y: (mcl_pred.position.y - filter_prediction.pose().position.y).powi(2),
+            },
+        };
+        if tick % 100 == 0 {
+            let scaler = 1.;
+            measurement_bias = 200.
+                / ((mcl_kalman_difference.position.x).sqrt() / 25. / scaler
+                    + (mcl_kalman_difference.position.y).sqrt() / 25. / scaler
+                    + ((mcl_kalman_difference.angle).sqrt()) / scaler);
+        }
         if tick % 1000 == 0 {
             println!(
                 "KALMAN: {:?} \n MCL: {:?}\n\n",
                 Pose {
-                    angle: kalman_error.angle.sqrt() / 1000.,
+                    angle: kalman_error.angle.sqrt() / tick as f64,
                     position: (
-                        kalman_error.position.x.sqrt() / 1000.,
-                        kalman_error.position.y.sqrt() / 1000.
+                        kalman_error.position.x.sqrt() / tick as f64,
+                        kalman_error.position.y.sqrt() / tick as f64
                     )
                         .into()
                 },
                 Pose {
-                    angle: mcl_error.angle.sqrt() / 1000.,
+                    angle: mcl_error.angle.sqrt() / tick as f64,
                     position: (
-                        mcl_error.position.x.sqrt() / 1000.,
-                        mcl_error.position.y.sqrt() / 1000.
+                        mcl_error.position.x.sqrt() / tick as f64,
+                        mcl_error.position.y.sqrt() / tick as f64
                     )
                         .into()
                 }
