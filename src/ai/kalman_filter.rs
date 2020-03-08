@@ -104,20 +104,10 @@ impl KalmanFilter {
 
     pub fn measurement_update(
         &mut self,
-        velocity_sensor_data: Pose,
-        mcl_pose: Pose,
+        sensor_update: RowVector6<f64>,
         time: f64,
-        measurement_bias: f64,
+        sensor_noise: RowVector6<f64>,
     ) {
-        let sensor_update_vector = vec![
-            mcl_pose.angle,
-            mcl_pose.position.x,
-            mcl_pose.position.y,
-            velocity_sensor_data.angle,
-            velocity_sensor_data.position.x,
-            velocity_sensor_data.position.y,
-        ];
-        let sensor_update = RowVector6::from_vec(sensor_update_vector);
         self.sensor_sigma_matrix = Matrix13x6::from_rows(
             self.sigma_matrix
                 .row_iter()
@@ -150,10 +140,13 @@ impl KalmanFilter {
                 };
         }
         let temp = self.r.diagonal().clone();
-        let mut r_vec = self.r.diagonal().clone() * measurement_bias;
-        r_vec[3] = r_vec[3] * time;
-        r_vec[4] = r_vec[4] * time;
-        r_vec[5] = r_vec[5] * time;
+        let mut r_vec = self.r.diagonal().clone();
+        r_vec[0] = r_vec[0] * sensor_noise[0];
+        r_vec[1] = r_vec[1] * sensor_noise[1];
+        r_vec[2] = r_vec[2] * sensor_noise[2];
+        r_vec[3] = r_vec[3] * sensor_noise[3];
+        r_vec[4] = r_vec[4] * sensor_noise[4];
+        r_vec[5] = r_vec[5] * sensor_noise[5];
         self.r.set_diagonal(&r_vec);
         cov_zz += self.r;
         self.r.set_diagonal(&temp);

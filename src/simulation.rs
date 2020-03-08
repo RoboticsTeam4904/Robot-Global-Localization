@@ -12,7 +12,7 @@ use global_robot_localization::{
     },
     utility::{KinematicState, Point, Pose},
 };
-use nalgebra::{Matrix6, Vector6};
+use nalgebra::{Matrix6, RowVector6, Vector6};
 use piston_window::*;
 use rand::{
     distributions::{uniform::Uniform, Distribution, Normal},
@@ -83,7 +83,7 @@ fn main() {
             Object2D::Line(((100., 40.).into(), (160., 80.).into())),
         ],
     ));
-    let mut measurement_bias: f64 = 0.01;
+
     let real_map = Arc::new(Map2D::with_size(
         (200., 200.).into(),
         vec![
@@ -201,6 +201,7 @@ fn main() {
     let mut last_time: Instant = Instant::now();
     let mut delta_t;
     let start = Instant::now();
+    let mut sensor_noise = RowVector6::from_vec(vec![0.01; 6]);
     while let Some(e) = window.next() {
         delta_t = last_time.elapsed().as_secs_f64();
         last_time = Instant::now();
@@ -364,12 +365,19 @@ fn main() {
         mcl.observation_update(&lidar);
         filter.prediction_update(delta_t, control);
 
-        println!("{:?}", measurement_bias);
+        let motion_sensor = motion_sensor.sense();
+        let mcl_prediction = mcl.get_prediction();
         filter.measurement_update(
-            motion_sensor.sense(),
-            mcl.get_prediction(),
+            RowVector6::from_vec(vec![
+                mcl_prediction.angle,
+                mcl_prediction.position.x,
+                mcl_prediction.position.y,
+                motion_sensor.angle,
+                motion_sensor.position.x,
+                motion_sensor.position.y,
+            ]),
             delta_t,
-            measurement_bias,
+            sensor_noise,
         );
 
         tick += 1;
@@ -395,13 +403,17 @@ fn main() {
                 y: (mcl_pred.position.y - filter_prediction.pose().position.y).powi(2),
             },
         };
-        if tick % 100 == 0 {
-            let scaler = 1.;
-            measurement_bias = 200.
-                / ((mcl_kalman_difference.position.x).sqrt() / 25. / scaler
-                    + (mcl_kalman_difference.position.y).sqrt() / 25. / scaler
-                    + ((mcl_kalman_difference.angle).sqrt()) / scaler);
-        }
+
+        sensor_noise = RowVector6::from_vec(vec![
+            delta_t,
+            delta_t,
+            delta_t,
+            25. / mcl_kalman_difference.angle,
+            1. / mcl_kalman_difference.position.x,
+            1. / mcl_kalman_difference.position.y,
+        ]);
+        mcl_kalman_difference = Pose::default();
+
         if tick % 1000 == 0 {
             println!(
                 "KALMAN: {:?} \n MCL: {:?}\n\n",
