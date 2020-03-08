@@ -142,10 +142,12 @@ mod tests {
             }),
             Some((0.5, 0.5).into())
         );
-        let pred = map.raycast(Pose {
+        let pred = map
+            .raycast(Pose {
                 angle: FRAC_PI_4,
-                position: (0.34, 0.827).into()
-        }).expect("Failed to intersect");
+                position: (0.34, 0.827).into(),
+            })
+            .expect("Failed to intersect");
         let actual: Point = (0.513, 1.).into();
         assert_eq!(actual.y, pred.y);
         assert!((actual.x - pred.x).abs() <= 0.05);
