@@ -610,13 +610,3 @@ where
         self.absolute_sensor.relative_pose()
     }
 }
-
-impl<S, O, R> LimitedSensor<R> for DeltaSensor<S, O>
-where
-    S: Sensor<Output = O> + LimitedSensor<R>,
-    O: Sub + Clone,
-{
-    fn range(&self) -> Option<R> {
-        self.absolute_sensor.range()
-    }
-}
