@@ -87,6 +87,10 @@ pub mod asyncio {
         sync::{Arc, Mutex},
     };
 
+    // TODO: Could split this up, provide more convenience,
+    // etc. but really, I don't ever want to write down
+    // as many trait bounds as are below
+    // so...
     pub struct AsyncIOSensor<T, U>
     where
         T: MinCodecRead + Clone + Send,
