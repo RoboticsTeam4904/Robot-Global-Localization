@@ -109,7 +109,7 @@ pub mod asyncio {
         /// `i` and writes to `o`.
         /// It initially writes `starting_sink_data` to `o`
         /// and reads `starting_sensor_data` from `i`.
-        /// 
+        ///
         /// To get `i` and `o` from a single source, use
         /// `.split()` on that source to attain them.
         pub fn with_starting_data<I, O>(

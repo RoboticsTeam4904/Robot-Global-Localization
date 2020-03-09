@@ -1,9 +1,9 @@
 pub mod ai;
+pub mod map;
 #[cfg(feature = "network")]
 pub mod networktables;
 pub mod replay;
 pub mod sensors;
-pub mod map;
 pub mod utility;
 
 #[cfg(test)]
@@ -32,7 +32,10 @@ mod tests {
 
     #[test]
     fn test_many_layered_sensor() {
-        use super::{utility::*, sensors::{dummy::DummySensor, *}};
+        use super::{
+            sensors::{dummy::DummySensor, *},
+            utility::*,
+        };
         let mut wrapped = DummySensor::new(1)
             .map(|i: i32| 2 * i)
             .override_limit(Some(3))
@@ -65,8 +68,8 @@ mod tests {
 
     #[test]
     fn test_file_sensor_sink() {
-        use std::fs::{remove_file, copy, OpenOptions};
         use super::sensors::{io::IOSensor, *};
+        use std::fs::{copy, remove_file, OpenOptions};
         const PATH: &'static str = "test_resources/hello_mut.txt";
         const RESET_PATH: &'static str = "test_resources/hello.txt";
         remove_file(PATH).unwrap();
@@ -107,7 +110,7 @@ mod tests {
 
     #[test]
     fn test_map_creation() {
-        use super::{utility::*, map::*};
+        use super::{map::*, utility::*};
         let map = Map2D::new(vec![
             Object2D::Rectangle(((0., 0.).into(), (1., 1.).into())),
             Object2D::Triangle(((0., 0.).into(), (1., 1.).into(), (1., 0.).into())),
@@ -119,7 +122,7 @@ mod tests {
 
     #[test]
     fn test_map_raycast() {
-        use super::{utility::*, map::*};
+        use super::{map::*, utility::*};
         use std::f64::consts::*;
         let map = Map2D::new(vec![
             Object2D::Rectangle(((0., 0.).into(), (1., 1.).into())),
@@ -154,11 +157,14 @@ mod tests {
     #[cfg(feature = "asyncio")]
     #[test]
     fn test_mincodec_tcp_sensor_sink() {
-        use super::sensors::{*, io::AsyncIOSensor};
+        use super::sensors::{io::AsyncIOSensor, *};
         use async_std::net::{TcpListener, TcpStream};
         use core_futures_io::FuturesCompat;
-        use futures::{io::AsyncReadExt, executor::block_on, StreamExt};
-        use std::{time::Duration, thread::{sleep, spawn}};
+        use futures::{executor::block_on, io::AsyncReadExt, StreamExt};
+        use std::{
+            thread::{sleep, spawn},
+            time::Duration,
+        };
         // Setup the server thread (for testing only)
         spawn(|| {
             block_on(async {
@@ -170,7 +176,9 @@ mod tests {
                     let stream = stream.expect("server died");
                     // echo back whatever the server recieved
                     let (reader, writer) = &mut (&stream, &stream);
-                    async_std::io::copy(reader, writer).await.expect("Faield to echo");
+                    async_std::io::copy(reader, writer)
+                        .await
+                        .expect("Faield to echo");
                 }
             })
         });
@@ -198,7 +206,7 @@ mod tests {
             assert_eq!(tcp_sensor_sink.sense(), two);
 
             let three = "Yes I can".to_string();
-            let four = "I'm Gaming".to_string();
+            let four = "😎 😎 😎 😎 😎 ".to_string();
             tcp_sensor_sink.push(three);
             tcp_sensor_sink.push(four.clone());
             sleep(Duration::from_millis(50));
