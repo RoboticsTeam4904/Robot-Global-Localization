@@ -1,7 +1,5 @@
 pub mod ai;
 pub mod map;
-#[cfg(feature = "network")]
-pub mod networktables;
 pub mod replay;
 pub mod sensors;
 pub mod utility;
@@ -106,6 +104,18 @@ mod tests {
         }
         remove_file(PATH).unwrap();
         copy(RESET_PATH, PATH).unwrap();
+    }
+
+    #[test]
+    fn test_delta_sensor() {
+        use super::sensors::{dummy::DummySensor, *};
+        let mut delta_sensor = DeltaSensor::new(DummySensor::new(0));
+        delta_sensor.absolute_sensor.push(3);
+        delta_sensor.update();
+        assert_eq!(delta_sensor.sense(), 3);
+        delta_sensor.absolute_sensor.push(1);
+        delta_sensor.update();
+        assert_eq!(delta_sensor.sense(), -2);
     }
 
     #[test]

@@ -4,10 +4,9 @@ use global_robot_localization::{
         presets::{exp_weight, lidar_error, uniform_resampler},
     },
     map::{Map2D, Object2D},
-    networktables,
-    replay::*,
+    replay::render::*,
     sensors::{
-        network::{MultiNTSensor, PoseNTSensor},
+        network::{networktables, MultiNTSensor, PoseNTSensor},
         rplidar::RplidarSensor,
         DeltaSensor, Sensor, SensorSink, WrappableSensor,
     },
