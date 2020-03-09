@@ -15,6 +15,7 @@ path = "src/tegra.rs"
 required-features = ["network", "rplidar", "render"]
 
 [features]
+all = ["network", "rplidar", "render", "asyncio"]
 default_features = [ "asyncio", "render" ]
 network = ["nt", "tokio"]
 rplidar = ["rplidar_drv", "serialport"]
