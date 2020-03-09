@@ -195,7 +195,14 @@ mod tests {
             let two = "Can you hear me".to_string();
             tcp_sensor_sink.push(two.clone());
             sleep(Duration::from_millis(50));
-            assert_eq!(tcp_sensor_sink.sense(),two);
+            assert_eq!(tcp_sensor_sink.sense(), two);
+
+            let three = "Yes I can".to_string();
+            let four = "I'm Gaming".to_string();
+            tcp_sensor_sink.push(three);
+            tcp_sensor_sink.push(four.clone());
+            sleep(Duration::from_millis(50));
+            assert_eq!(tcp_sensor_sink.sense(), four);
         });
     }
 }
