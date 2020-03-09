@@ -58,14 +58,14 @@ pub trait SensorSink {
 /// Helper trait for providing easy usage of wrapped sensors.
 pub trait WrappableSensor: Sensor + Sized {
     /// Overrides range of `self` to be `range`
-    /// 
+    ///
     /// Implementations of `LimitedSensor` and `SensorSink` on `self` are reflected up.
     fn override_limit<L: Clone>(self, range: Option<L>) -> OverridenLimitedSensor<Self, L> {
         OverridenLimitedSensor::new(self, range)
     }
     /// Maps `self` to a `Sensor<Output = M>`
     /// by calling `map` on `self.sense` in the returned sensor's `sense` function.
-    /// 
+    ///
     /// Implementations of `LimitedSensor` and `SensorSink` on `self` are reflected up.
     fn map<M, O>(self, map: M) -> MappedSensor<Self, <Self as Sensor>::Output, M, O>
     where
@@ -76,7 +76,7 @@ pub trait WrappableSensor: Sensor + Sized {
     /// Maps `self` to a `Sensor<Output = M>`
     /// by calling `map` on `&self` in the `sense` function
     /// and then returining its output.
-    /// 
+    ///
     /// Implementations of `LimitedSensor` and `SensorSink` on `self` are reflected up.
     fn map_whole<M, O>(self, map: M) -> FullyMappedSensor<Self, M, O>
     where
@@ -87,7 +87,7 @@ pub trait WrappableSensor: Sensor + Sized {
     /// Maps `self.relative_pose` by calling
     /// `map` on `self.relative_pose` in the
     /// returned sensor's `relative_pose`
-    /// 
+    ///
     /// Implementations of `LimitedSensor` and `SensorSink` on `self` are reflected up.
     fn map_relative_pose<M>(self, map: M) -> MappedPoseSensor<Self, M>
     where
@@ -103,8 +103,8 @@ impl<S: Sensor + Sized> WrappableSensor for S {}
 pub trait WrappableSensorSink: SensorSink + Sized {
     /// Maps `self` to a `SensorSink<Input = M>`
     /// by applying `map` to inputs of `push`.
-    /// 
-    /// Implementations of `Sensor` and `LimitedSensor` will be reflected onto 
+    ///
+    /// Implementations of `Sensor` and `LimitedSensor` will be reflected onto
     /// the returned sink from `self`
     fn map_sink<M, I>(self, map: M) -> MappedSensorSink<Self, <Self as SensorSink>::Input, M, I>
     where
@@ -115,7 +115,7 @@ pub trait WrappableSensorSink: SensorSink + Sized {
     /// Zips `self` with another `SensorSink` of the same input type.
     ///
     /// Whenevr a datum is pushed to `self`, it will also be cloned and pushed to `other` as well.
-    /// 
+    ///
     /// If `self` implements `Sensor` or `LimitedSensor`, those implementations will be reflected up,
     /// but any implementations from `other` will not.
     fn zip<S, I>(self, other: S) -> ZippedSensorSink<Self, S, <Self as SensorSink>::Input>

@@ -1,25 +1,16 @@
 pub mod ai;
-pub mod map;
 #[cfg(feature = "network")]
 pub mod networktables;
 pub mod replay;
 pub mod sensors;
+pub mod map;
 pub mod utility;
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        map::*,
-        sensors::{dummy::DummySensor, io::IOSensor, *},
-        utility::{Point, Pose},
-    };
-    use std::{
-        f64::consts::*,
-        fs::{copy, remove_file, OpenOptions},
-    };
-
     #[test]
     fn test_dummy_sensor() {
+        use super::sensors::{dummy::DummySensor, *};
         let mut dummy = DummySensor::new("Hello");
         assert_eq!("Hello", dummy.sense());
         dummy.push("Hi");
@@ -32,6 +23,7 @@ mod tests {
 
     #[test]
     fn test_mapped_sensor() {
+        use super::sensors::{dummy::DummySensor, *};
         let mut mapped = DummySensor::new(9).map(|i: i32| 2 * i);
         assert_eq!(18, mapped.sense());
         mapped.push(7);
@@ -40,6 +32,7 @@ mod tests {
 
     #[test]
     fn test_many_layered_sensor() {
+        use super::{utility::*, sensors::{dummy::DummySensor, *}};
         let mut wrapped = DummySensor::new(1)
             .map(|i: i32| 2 * i)
             .override_limit(Some(3))
@@ -72,6 +65,8 @@ mod tests {
 
     #[test]
     fn test_file_sensor_sink() {
+        use std::fs::{remove_file, copy, OpenOptions};
+        use super::sensors::{io::IOSensor, *};
         const PATH: &'static str = "test_resources/hello_mut.txt";
         const RESET_PATH: &'static str = "test_resources/hello.txt";
         remove_file(PATH).unwrap();
@@ -112,6 +107,7 @@ mod tests {
 
     #[test]
     fn test_map_creation() {
+        use super::{utility::*, map::*};
         let map = Map2D::new(vec![
             Object2D::Rectangle(((0., 0.).into(), (1., 1.).into())),
             Object2D::Triangle(((0., 0.).into(), (1., 1.).into(), (1., 0.).into())),
@@ -123,6 +119,8 @@ mod tests {
 
     #[test]
     fn test_map_raycast() {
+        use super::{utility::*, map::*};
+        use std::f64::consts::*;
         let map = Map2D::new(vec![
             Object2D::Rectangle(((0., 0.).into(), (1., 1.).into())),
             Object2D::Triangle(((0., 0.).into(), (1., 1.).into(), (1., 0.).into())),
@@ -151,5 +149,53 @@ mod tests {
         let actual: Point = (0.513, 1.).into();
         assert_eq!(actual.y, pred.y);
         assert!((actual.x - pred.x).abs() <= 0.05);
+    }
+
+    #[cfg(feature = "asyncio")]
+    #[test]
+    fn test_mincodec_tcp_sensor_sink() {
+        use super::sensors::{*, io::AsyncIOSensor};
+        use async_std::net::{TcpListener, TcpStream};
+        use core_futures_io::FuturesCompat;
+        use futures::{io::AsyncReadExt, executor::block_on, StreamExt};
+        use std::{time::Duration, thread::{sleep, spawn}};
+        // Setup the server thread (for testing only)
+        spawn(|| {
+            block_on(async {
+                let listener = TcpListener::bind("127.0.0.1:6969")
+                    .await
+                    .expect("could not bind listener");
+                let mut incoming = listener.incoming();
+                if let Some(stream) = incoming.next().await {
+                    let stream = stream.expect("server died");
+                    // echo back whatever the server recieved
+                    let (reader, writer) = &mut (&stream, &stream);
+                    async_std::io::copy(reader, writer).await.expect("Faield to echo");
+                }
+            })
+        });
+        // Test the client serversink
+        block_on(async {
+            let stream = TcpStream::connect("127.0.0.1:6969")
+                .await
+                .expect("could not connect");
+            let (i, o) = stream.split();
+            let mut tcp_sensor_sink = AsyncIOSensor::with_starting_data(
+                FuturesCompat::new(i),
+                FuturesCompat::new(o),
+                "".to_string(),
+                "".to_string(),
+            );
+
+            let one = "Echo!".to_string();
+            tcp_sensor_sink.push(one.clone());
+            sleep(Duration::from_millis(50));
+            assert_eq!(tcp_sensor_sink.sense(), one);
+
+            let two = "Can you hear me".to_string();
+            tcp_sensor_sink.push(two.clone());
+            sleep(Duration::from_millis(50));
+            assert_eq!(tcp_sensor_sink.sense(),two);
+        });
     }
 }
