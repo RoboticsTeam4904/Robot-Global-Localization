@@ -122,9 +122,9 @@ mod tests {
     fn test_map_creation() {
         use super::{map::*, utility::*};
         let map = Map2D::new(vec![
-            Object2D::Rectangle(((0., 0.).into(), (1., 1.).into())),
-            Object2D::Triangle(((0., 0.).into(), (1., 1.).into(), (1., 0.).into())),
-            Object2D::Line(((0., 0.).into(), (1., 1.).into())),
+            Object2D::Rectangle((0., 0.).into(), (1., 1.).into()),
+            Object2D::Triangle((0., 0.).into(), (1., 1.).into(), (1., 0.).into()),
+            Object2D::Line((0., 0.).into(), (1., 1.).into()),
         ]);
         assert_eq!(map.size, Point { x: 1., y: 1. });
         assert_eq!(map.vertices.len(), 4);
@@ -135,9 +135,9 @@ mod tests {
         use super::{map::*, utility::*};
         use std::f64::consts::*;
         let map = Map2D::new(vec![
-            Object2D::Rectangle(((0., 0.).into(), (1., 1.).into())),
-            Object2D::Triangle(((0., 0.).into(), (1., 1.).into(), (1., 0.).into())),
-            Object2D::Line(((0., 0.).into(), (1., 1.).into())),
+            Object2D::Rectangle((0., 0.).into(), (1., 1.).into()),
+            Object2D::Triangle((0., 0.).into(), (1., 1.).into(), (1., 0.).into()),
+            Object2D::Line((0., 0.).into(), (1., 1.).into()),
         ]);
         assert_eq!(
             map.raycast(Pose {

@@ -27,10 +27,10 @@ const MAP_OFFSET: Point = Point { x: 25., y: 25. };
 async fn main() -> Result<(), ()> {
     // Cartograph the map
     // THE MAP IS IN MILLIMETERS
-    let map = Arc::new(Map2D::new(vec![Object2D::Rectangle((
+    let map = Arc::new(Map2D::new(vec![Object2D::Rectangle(
         (0., 0.).into(),
         (7000., 2000.).into(),
-    ))]));
+    )]));
     // Initialize networktable entries for output
     let inst = Arc::new(Mutex::new(
         NetworkTables::connect(networktables::DEFAULT_ROBORIO_IP, "nano")
