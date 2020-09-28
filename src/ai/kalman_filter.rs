@@ -1,10 +1,8 @@
-use abomonation::Abomonation;
 use generic_array::ArrayLength;
 use nalgebra::{
-    base::allocator::Allocator, ArrayStorage, DefaultAllocator, DimName, DimNameAdd, DimNameMul,
-    DimSub, Matrix, MatrixMN, MatrixN, RowVector, SliceStorage, U1,
+    base::allocator::Allocator, DefaultAllocator, DimName, DimNameAdd, DimNameMul, DimSub,
+    MatrixMN, MatrixN, U1,
 };
-use std::ops::Mul;
 use typenum::operator_aliases::Prod;
 
 pub struct Config {
@@ -41,7 +39,7 @@ where
     fn control_sigma_matrix(&self) -> MatrixMN<f64, StateDx2, StateD>;
     fn set_control_sigma_matrix(&self, control_sigma_matrix: MatrixMN<f64, StateDx2, StateD>);
     fn sensor_sigma_matrix(&self) -> MatrixMN<f64, StateDx2, SensorD>;
-    fn set_sensor_sigma_matrix(&self, sensor_sigma_matrix: MatrixMN<f64, StateD, SensorD>);
+    fn set_sensor_sigma_matrix(&self, sensor_sigma_matrix: MatrixMN<f64, StateDx2, SensorD>);
     fn config(&self) -> Config;
     fn set_config(&self, config: Config);
     fn known_state(&self) -> MatrixMN<f64, U1, StateD>;
@@ -101,9 +99,13 @@ where
             .map(|elem| elem.clone())
             .collect();
         let dim = self.control_sigma_matrix().ncols();
-        sigma_elements
+        let sigma_rows: Vec<MatrixMN<f64, U1, StateD>> = sigma_elements
             .windows(dim)
-            .map(|row| self.control_update(row, time, &control_input));
+            .map(|row| self.control_update(row, time, &control_input))
+            .collect();
+        self.set_control_sigma_matrix(MatrixMN::<f64, StateDx2, StateD>::from_rows(
+            &sigma_rows[..],
+        ));
 
         let config = self.config();
         let lambda = (config.alpha.powi(2)) * (dim as f64 + config.kappa) - dim as f64;
@@ -148,9 +150,13 @@ where
             .map(|elem| elem.clone())
             .collect();
         let dim = self.control_sigma_matrix().ncols();
-        sigma_elements
+        let sigma_rows: Vec<MatrixMN<f64, U1, SensorD>> = sigma_elements
             .windows(dim)
-            .map(|row| self.sensor_transform(row, &sensor_vec));
+            .map(|row| self.sensor_transform(row, &sensor_vec))
+            .collect();
+        self.set_sensor_sigma_matrix(MatrixMN::<f64, StateDx2, SensorD>::from_rows(
+            &sigma_rows[..],
+        ));
 
         let lambda = (config.alpha.powi(2)) * (dim as f64 + config.kappa) - dim as f64;
         let mut sensor_predicted = MatrixMN::<f64, U1, SensorD>::from_element(0.);
