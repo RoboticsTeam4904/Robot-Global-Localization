@@ -5,7 +5,7 @@ All algorithms assume the following:
 * Sensors that both measure the robot's movement (e.g. imu) and field data are being used
 * A map of data from the field that contains any appropriate data for all sensors used is known
 ## Current Algorithms
-Here is an up to date list of all algorithns implemented / being implemented
+Here is an up to date list of all algorithms implemented / being implemented
 
 ### Monte Carlo Localization
 Monte Carlo localization is a particle filter based approach. The basic idea of this approach is that the position of the robot can be represented by a distribution of likely states, or particles. Over time, particles are moved and resampled based on sensor data from the robot and the distribution of likely states converges to the real state of the robot.
