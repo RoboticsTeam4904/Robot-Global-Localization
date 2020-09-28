@@ -5,9 +5,9 @@ use std::f64::consts::PI;
 
 pub enum Object2D {
     Point(Point),
-    Line((Point, Point)),
-    Triangle((Point, Point, Point)),
-    Rectangle((Point, Point)),
+    Line(Point, Point),
+    Triangle(Point, Point, Point),
+    Rectangle(Point, Point),
 }
 
 /// A Simple 2D map of line segments
@@ -56,8 +56,8 @@ impl Map2D {
 
         for object in objects {
             match object {
-                Object2D::Line(l) => lines.push((add_vert(l.0), add_vert(l.1))),
-                Object2D::Triangle((c1, c2, c3)) => {
+                Object2D::Line(p1, p2) => lines.push((add_vert(p1), add_vert(p2))),
+                Object2D::Triangle(c1, c2, c3) => {
                     let v1 = add_vert(c1);
                     let v2 = add_vert(c2);
                     let v3 = add_vert(c3);
@@ -65,7 +65,7 @@ impl Map2D {
                     lines.push((v2, v3));
                     lines.push((v3, v1));
                 }
-                Object2D::Rectangle((c1, c3)) => {
+                Object2D::Rectangle(c1, c3) => {
                     let c2 = Point { x: c1.x, y: c3.y };
                     let c4 = Point { x: c3.x, y: c1.y };
                     let v1 = add_vert(c1);
@@ -161,7 +161,7 @@ impl Map2D {
         }
         Ok(Self::with_size(
             (width, height).into(),
-            lines.iter().map(|l| Object2D::Line(*l)),
+            lines.iter().map(|&l| Object2D::Line(l.0, l.1)),
         ))
     }
 

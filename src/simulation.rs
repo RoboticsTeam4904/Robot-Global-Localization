@@ -5,17 +5,17 @@ use global_robot_localization::{
         presets,
     },
     map::{Map2D, Object2D},
-    replay::{draw_map, isoceles_triangle, point_cloud},
+    replay::render::{draw_map, isoceles_triangle, point_cloud},
     sensors::{
         dummy::{DummyLidar, DummyPositionSensor, DummyVelocitySensor},
         Sensor,
     },
     utility::{KinematicState, Point, Pose},
 };
-use nalgebra::{Matrix6, Vector6};
+use nalgebra::{Matrix6, RowVector6, Vector6};
 use piston_window::*;
 use rand::{
-    distributions::{Distribution, Normal},
+    distributions::{uniform::Uniform, Distribution, Normal},
     thread_rng,
 };
 use std::{
@@ -28,18 +28,19 @@ use std::{
 const ANGLE_NOISE: f64 = 0.;
 const X_NOISE: f64 = 25.;
 const Y_NOISE: f64 = 3.;
-const X_MCL_NOISE: f64 = 1.;
-const Y_MCL_NOISE: f64 = 1.;
-const ANGLE_MCL_NOISE: f64 = 0.05;
-const CONTROL_X_NOISE: f64 = 0.0005 / 10.;
-const CONTROL_Y_NOISE: f64 = 0.0005 / 10.;
-const CONTROL_ANGLE_NOISE: f64 = 0.000005 / 10.;
-const VELOCITY_X_SENSOR_NOISE: f64 = 0.0005;
-const VELOCITY_Y_SENSOR_NOISE: f64 = 0.0005;
-const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.0005;
+const X_MCL_NOISE: f64 = 5. / 300.; // 10 cm
+const Y_MCL_NOISE: f64 = 5. / 300.; // 10 cm
+const ANGLE_MCL_NOISE: f64 = 1.; // 3 cm
+const CONTROL_X_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
+const CONTROL_Y_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
+
+const CONTROL_ANGLE_NOISE: f64 = 0.007; // 2 degrees / s^2 of noise
+const VELOCITY_X_SENSOR_NOISE: f64 = 1.;
+const VELOCITY_Y_SENSOR_NOISE: f64 = 1.;
+const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.1;
 const MAP_SCALE: f64 = 2.;
-const ROBOT_ACCEL: f64 = 3. / 1000.;
-const ROBOT_ANGLE_ACCEL: f64 = 0.1 / 1000.;
+const ROBOT_ACCEL: f64 = 200.;
+const ROBOT_ANGLE_ACCEL: f64 = 20.;
 
 fn main() {
     let mut rng = thread_rng();
@@ -62,55 +63,48 @@ fn main() {
         VELOCITY_Y_SENSOR_NOISE.powi(2),
     ]));
 
-    let noise_x = Normal::new(0., X_NOISE);
-    let noise_angle = Normal::new(0., ANGLE_NOISE);
-    let noise_y = Normal::new(0., Y_NOISE);
+    let noise_x = Normal::new(100., X_NOISE);
+    let noise_angle = Normal::new(FRAC_PI_2, ANGLE_NOISE);
+    let noise_y = Normal::new(8., Y_NOISE);
     let percieved_map = Arc::new(Map2D::with_size(
         (200., 200.).into(),
         vec![
-            Object2D::Point((0., 200.).into()),
-            Object2D::Point((200., 200.).into()),
-            Object2D::Point((200., 0.).into()),
-            Object2D::Point((0., 0.).into()),
-            Object2D::Line(((0., 0.).into(), (200., 0.).into())),
-            Object2D::Line(((0., 0.).into(), (0., 200.).into())),
-            Object2D::Line(((200., 0.).into(), (200., 200.).into())),
-            Object2D::Line(((0., 200.).into(), (200., 200.).into())),
-            Object2D::Line(((20., 60.).into(), (50., 100.).into())),
-            Object2D::Line(((50., 100.).into(), (80., 50.).into())),
-            Object2D::Line(((80., 50.).into(), (20., 60.).into())),
-            Object2D::Line(((140., 100.).into(), (180., 120.).into())),
-            Object2D::Line(((180., 120.).into(), (160., 90.).into())),
-            Object2D::Line(((160., 90.).into(), (140., 100.).into())),
-            Object2D::Line(((100., 40.).into(), (160., 80.).into())),
+            Object2D::Line((0., 0.).into(), (200., 0.).into()),
+            // Object2D::Line((0., 0.).into(), (0., 200.).into()),
+            // Object2D::Line((200., 0.).into(), (200., 200.).into()),
+            Object2D::Line((0., 200.).into(), (200., 200.).into()),
+            Object2D::Line((20., 60.).into(), (50., 100.).into()),
+            Object2D::Line((50., 100.).into(), (80., 50.).into()),
+            Object2D::Line((80., 50.).into(), (20., 60.).into()),
+            Object2D::Line((140., 100.).into(), (180., 120.).into()),
+            Object2D::Line((180., 120.).into(), (160., 90.).into()),
+            Object2D::Line((160., 90.).into(), (140., 100.).into()),
+            Object2D::Line((100., 40.).into(), (160., 80.).into()),
         ],
     ));
+
     let real_map = Arc::new(Map2D::with_size(
         (200., 200.).into(),
         vec![
-            Object2D::Point((0., 200.).into()),
-            Object2D::Point((200., 200.).into()),
-            Object2D::Point((200., 0.).into()),
-            Object2D::Point((0., 0.).into()),
-            Object2D::Line(((0., 0.).into(), (200., 0.).into())),
-            Object2D::Line(((0., 0.).into(), (0., 200.).into())),
-            Object2D::Line(((200., 0.).into(), (200., 200.).into())),
-            Object2D::Line(((0., 200.).into(), (200., 200.).into())),
-            Object2D::Line(((20., 60.).into(), (50., 100.).into())),
-            Object2D::Line(((50., 100.).into(), (80., 50.).into())),
-            Object2D::Line(((80., 50.).into(), (20., 60.).into())),
-            Object2D::Line(((140., 100.).into(), (180., 120.).into())),
-            Object2D::Line(((180., 120.).into(), (160., 90.).into())),
-            Object2D::Line(((160., 90.).into(), (140., 100.).into())),
-            Object2D::Line(((100., 40.).into(), (160., 80.).into())),
-            Object2D::Triangle(((10., 10.).into(), (30., 30.).into(), (40., 20.).into())),
+            Object2D::Line((0., 0.).into(), (200., 0.).into()),
+            // Object2D::Line((0., 0.).into(), (0., 200.).into())),
+            // Object2D::Line((200., 0.).into(), (200., 200.).into())),
+            Object2D::Line((0., 200.).into(), (200., 200.).into()),
+            Object2D::Line((20., 60.).into(), (50., 100.).into()),
+            Object2D::Line((50., 100.).into(), (80., 50.).into()),
+            Object2D::Line((80., 50.).into(), (20., 60.).into()),
+            Object2D::Line((140., 100.).into(), (180., 120.).into()),
+            Object2D::Line((180., 120.).into(), (160., 90.).into()),
+            Object2D::Line((160., 90.).into(), (140., 100.).into()),
+            Object2D::Line((100., 40.).into(), (160., 80.).into()),
+            Object2D::Triangle((10., 10.).into(), (30., 30.).into(), (40., 20.).into()),
         ],
     ));
     let init_state = KinematicState {
-        angle: FRAC_PI_2 + noise_angle.sample(&mut rng),
+        angle: noise_angle.sample(&mut rng),
         position: Point {
-            x: (100. + noise_x.sample(&mut rng)),
-            y: (8. + noise_y.sample(&mut rng)),
+            x: (noise_x.sample(&mut rng)),
+            y: (noise_y.sample(&mut rng)),
         },
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
@@ -163,8 +157,8 @@ fn main() {
     let mut lidar = DummyLidar::new(
         real_map.clone(),
         robot_state.pose(),
-        Normal::new(0., 0.01),
-        Normal::new(0., 0.01),
+        Normal::new(0., 0.001),
+        Normal::new(0., 0.0005),
         180,
         Pose::default(),
         None,
@@ -176,7 +170,11 @@ fn main() {
             particle_count_threshold: 4_000,
             particle_concentration_threshold: 300.,
         };
-        PoseMCL::new(
+        PoseMCL::from_distributions(
+            (
+                Uniform::new(FRAC_PI_2, FRAC_PI_2 + 1e-3),
+                (Uniform::new(0., 200.), Uniform::new(8., 8. + 1e-3)),
+            ),
             particle_count,
             weight_sum_threshold,
             death_threshold,
@@ -197,13 +195,17 @@ fn main() {
     let control_noise_x = Normal::new(0., CONTROL_X_NOISE);
     let control_noise_y = Normal::new(0., CONTROL_Y_NOISE);
     let mut kalman_error: Pose = Pose::default();
+    let mut mcl_kalman_difference: Pose = Pose::default();
     let mut mcl_error: Pose = Pose::default();
-    let last_time: Instant = Instant::now();
+    let mut last_time: Instant = Instant::now();
     let mut delta_t;
     let start = Instant::now();
+    let mut sensor_noise = RowVector6::from_vec(vec![0.01; 6]);
     while let Some(e) = window.next() {
         delta_t = last_time.elapsed().as_secs_f64();
-        if tick >= 2000 {
+        last_time = Instant::now();
+        println!("{}", delta_t);
+        if tick > 10000 {
             let elapsed = start.elapsed();
             println!(
                 "{}t in {:?}, {}tps",
@@ -219,13 +221,13 @@ fn main() {
         if let Some(Button::Keyboard(key)) = e.press_args() {
             match key {
                 keyboard::Key::W => {
-                    control.position.x += ROBOT_ACCEL / delta_t;
+                    control.position.x += ROBOT_ACCEL;
                 }
                 keyboard::Key::S => {
-                    control.position.x -= ROBOT_ACCEL / delta_t;
+                    control.position.x -= ROBOT_ACCEL;
                 }
-                keyboard::Key::A => control.angle -= ROBOT_ANGLE_ACCEL / delta_t,
-                keyboard::Key::D => control.angle += ROBOT_ANGLE_ACCEL / delta_t,
+                keyboard::Key::A => control.angle -= ROBOT_ANGLE_ACCEL,
+                keyboard::Key::D => control.angle += ROBOT_ANGLE_ACCEL,
 
                 _ => (),
             }
@@ -289,7 +291,7 @@ fn main() {
                 g,
             );
             isoceles_triangle(
-                [0., 0., 1., 1.],
+                [1., 1., 1., 1.],
                 map_visual_margins,
                 MAP_SCALE,
                 0.5,
@@ -310,6 +312,9 @@ fn main() {
         });
 
         // Update the physics simulation
+        // control.angle = 0.;
+        // control.position.y = 0.;
+        // control.position.x = ROBOT_ACCEL;
         robot_state.position.x += robot_state.velocity.x * delta_t;
         robot_state.position.y += robot_state.velocity.y * delta_t;
         robot_state.velocity.x += (control.position.x * robot_state.angle.cos()
@@ -327,11 +332,10 @@ fn main() {
                 end: Point { x: 199.9, y: 199. },
             })
             .into();
-
+        println!("{:?} {:?}", temp, robot_state);
         control.angle -= (robot_state.vel_angle - temp.vel_angle) / delta_t;
         control.position.x -= (robot_state.velocity.x - temp.velocity.x) / delta_t;
         control.position.y -= (robot_state.velocity.y - temp.velocity.y) / delta_t;
-
         let control_noise = Pose {
             angle: control_noise_angle.sample(&mut rng),
             position: (
@@ -347,6 +351,7 @@ fn main() {
             angle: robot_state.vel_angle,
             position: robot_state.velocity,
         });
+        motion_sensor.set_delta_t(delta_t);
         let robot_pose = robot_state.pose();
         position_sensor.update_pose(robot_pose);
         lidar.update_pose(robot_pose);
@@ -358,29 +363,75 @@ fn main() {
         mcl.control_update(&position_sensor);
         mcl.observation_update(&lidar);
         filter.prediction_update(delta_t, control);
-        filter.measurement_update(motion_sensor.sense(), mcl.get_prediction());
+
+        let motion_sensor = motion_sensor.sense();
+        let mcl_prediction = mcl.get_prediction();
+        filter.measurement_update(
+            RowVector6::from_vec(vec![
+                mcl_prediction.angle,
+                mcl_prediction.position.x,
+                mcl_prediction.position.y,
+                motion_sensor.angle,
+                motion_sensor.position.x,
+                motion_sensor.position.y,
+            ]),
+            delta_t,
+            sensor_noise,
+        );
 
         tick += 1;
 
         kalman_error += Pose {
-            angle: (filter_prediction.pose().angle - robot_state.pose().angle).abs(),
+            angle: (filter_prediction.pose().angle - robot_state.pose().angle).powi(2),
             position: Point {
-                x: (filter_prediction.pose().position.x - robot_state.pose().position.x).abs(),
-                y: (filter_prediction.pose().position.y - robot_state.pose().position.y).abs(),
+                x: (filter_prediction.pose().position.x - robot_state.pose().position.x).powi(2),
+                y: (filter_prediction.pose().position.y - robot_state.pose().position.y).powi(2),
             },
         };
         mcl_error += Pose {
-            angle: (mcl_pred.angle - robot_state.pose().angle).abs(),
+            angle: (mcl_pred.angle - robot_state.pose().angle).powi(2),
             position: Point {
-                x: (mcl_pred.position.x - robot_state.pose().position.x).abs(),
-                y: (mcl_pred.position.y - robot_state.pose().position.y).abs(),
+                x: (mcl_pred.position.x - robot_state.pose().position.x).powi(2),
+                y: (mcl_pred.position.y - robot_state.pose().position.y).powi(2),
             },
         };
+        mcl_kalman_difference += Pose {
+            angle: (mcl_pred.angle - filter_prediction.pose().position.x).powi(2),
+            position: Point {
+                x: (mcl_pred.position.x - filter_prediction.pose().position.x).powi(2),
+                y: (mcl_pred.position.y - filter_prediction.pose().position.y).powi(2),
+            },
+        };
+
+        sensor_noise = RowVector6::from_vec(vec![
+            delta_t,
+            delta_t,
+            delta_t,
+            25. / mcl_kalman_difference.angle,
+            1. / mcl_kalman_difference.position.x,
+            1. / mcl_kalman_difference.position.y,
+        ]);
+        mcl_kalman_difference = Pose::default();
+
         if tick % 1000 == 0 {
             println!(
                 "KALMAN: {:?} \n MCL: {:?}\n\n",
-                kalman_error / tick as f64,
-                mcl_error / tick as f64
+                Pose {
+                    angle: kalman_error.angle.sqrt() / tick as f64,
+                    position: (
+                        kalman_error.position.x.sqrt() / tick as f64,
+                        kalman_error.position.y.sqrt() / tick as f64
+                    )
+                        .into()
+                },
+                Pose {
+                    angle: mcl_error.angle.sqrt() / tick as f64,
+                    position: (
+                        mcl_error.position.x.sqrt() / tick as f64,
+                        mcl_error.position.y.sqrt() / tick as f64
+                    )
+                        .into()
+                }
             );
         }
     }

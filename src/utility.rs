@@ -20,6 +20,10 @@ impl Point {
         }
     }
 
+    pub fn normalize(self) -> Self {
+        self / self.mag()
+    }
+
     pub fn rotate(self, angle: f64) -> Self {
         let start_angle = self.angle();
         let mag = self.mag();
@@ -267,8 +271,11 @@ impl KinematicState {
     }
 
     /// Mod `angle` by 2π
+    /// and make magnitude of `position`
+    /// 1
     pub fn normalize(mut self) -> KinematicState {
         self.angle %= 2. * PI;
+        self.position = self.position.normalize();
         self
     }
 
