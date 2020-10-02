@@ -17,19 +17,19 @@ where
     SensorD: DimName + DimNameMul<SensorD> + DimNameAdd<SensorD>,
     StateD::Value: std::ops::Mul<SensorD::Value>,
     Prod<StateD::Value, SensorD::Value>: ArrayLength<f64>,
-    DefaultAllocator: Allocator<f64, StateD, SensorD>,
-    DefaultAllocator: Allocator<f64, SensorD, StateD>,
-    DefaultAllocator: Allocator<f64, U1, StateD>,
-    DefaultAllocator: Allocator<f64, U1, SensorD>,
-    DefaultAllocator: Allocator<f64, SensorD, U1>,
-    DefaultAllocator: Allocator<f64, StateD, StateD>,
-    DefaultAllocator: Allocator<f64, SensorD, SensorD>,
-    DefaultAllocator: Allocator<f64, StateD>,
-    DefaultAllocator: Allocator<f64, <StateD as nalgebra::DimSub<nalgebra::U1>>::Output>,
-    DefaultAllocator: Allocator<f64, StateDx2, StateD>,
-    DefaultAllocator: Allocator<f64, StateD, StateDx2>,
-    DefaultAllocator: Allocator<f64, StateDx2, SensorD>,
-    DefaultAllocator: Allocator<f64, SensorD, StateDx2>,
+    DefaultAllocator: Allocator<f64, StateD, SensorD>
+        + Allocator<f64, SensorD, StateD>
+        + Allocator<f64, U1, StateD>
+        + Allocator<f64, U1, SensorD>
+        + Allocator<f64, SensorD, U1>
+        + Allocator<f64, StateD, StateD>
+        + Allocator<f64, SensorD, SensorD>
+        + Allocator<f64, StateD>
+        + Allocator<f64, <StateD as nalgebra::DimSub<nalgebra::U1>>::Output>
+        + Allocator<f64, StateDx2, StateD>
+        + Allocator<f64, StateD, StateDx2>
+        + Allocator<f64, StateDx2, SensorD>
+        + Allocator<f64, SensorD, StateDx2>,
 {
     fn new(
         covariance_matrix: MatrixMN<f64, StateD, StateD>,
@@ -69,16 +69,6 @@ where
             rows.as_slice(),
         ));
     }
-    // e[1] += e[4] * time;
-    // e[2] += e[5] * time;
-    // e[4] += (control.position.x * e[0].cos()
-    //     + control.position.y * (e[0] - FRAC_PI_2).cos())
-    //     * time;
-    // e[5] += (control.position.x * e[0].sin()
-    //     + control.position.y * (e[0] - FRAC_PI_2).sin())
-    //     * time;
-    // e[0] = (e[0] + e[3] * time) % (2. * PI);
-    // e[3] += control.angle * time;
     fn control_update(
         &self,
         row: &[f64],
