@@ -279,37 +279,45 @@ impl KinematicState {
         self
     }
 
-    pub fn clamp_control_update(self, range: Range<Point>) -> KinematicState {
+    pub fn control_update(&mut self, control: Pose, delta_t: f64) {
+        self.position.x += self.velocity.x * delta_t;
+        self.position.y += self.velocity.y * delta_t;
+        self.velocity.x += (control.position.x * self.angle.cos()
+            + control.position.y * (self.angle - FRAC_PI_2).cos())
+            * delta_t;
+        self.velocity.y += (control.position.x * self.angle.sin()
+            + control.position.y * (self.angle - FRAC_PI_2).sin())
+            * delta_t;
+        self.angle = (self.angle + self.vel_angle * delta_t) % (2. * PI);
+        self.vel_angle += control.angle * delta_t;
+    }
+
+    pub fn clamp_control_update(&mut self, control: Pose, delta_t: f64) {
+        self.control_update(control, delta_t);
+        self.clamp(Range {
+            start: Point { x: 0.1, y: 0.1 },
+            end: Point { x: 199.9, y: 199. },
+        });
+    }
+
+    pub fn clamp(&mut self, range: Range<Point>) {
         let clamped_position = self.position.clamp(range.start, range.end);
-        KinematicState {
-            angle: self.angle,
-            position: clamped_position,
-            vel_angle: if clamped_position != self.position {
-                0.
-            } else {
-                self.vel_angle
-            },
-            velocity: if clamped_position.x != self.position.x
-                && clamped_position.y != self.position.y
-            {
-                Point { x: 0., y: 0. }
-            } else if clamped_position.x != self.position.x {
-                Point {
-                    x: 0.,
-                    y: self.velocity.y,
-                }
-            } else if clamped_position.y != self.position.y {
-                Point {
-                    x: self.velocity.x,
-                    y: 0.,
-                }
-            } else {
-                Point {
-                    x: self.velocity.x,
-                    y: self.velocity.y,
-                }
-            },
-        }
+        self.vel_angle = if clamped_position == self.position {
+            self.vel_angle
+        } else {
+            0.
+        };
+        self.velocity.x = if clamped_position.x == self.position.x {
+            self.velocity.x
+        } else {
+            0.
+        };
+        self.velocity.x = if clamped_position.y == self.position.y {
+            self.velocity.y
+        } else {
+            0.
+        };
+        self.position = clamped_position;
     }
 
     pub fn with_angle(mut self, angle: f64) -> KinematicState {
@@ -355,6 +363,19 @@ impl Into<RowVector6<f64>> for KinematicState {
             self.velocity.x,
             self.velocity.y,
         )
+    }
+}
+
+impl Into<Vec<f64>> for KinematicState {
+    fn into(self) -> Vec<f64> {
+        vec![
+            self.angle,
+            self.position.x,
+            self.position.y,
+            self.vel_angle,
+            self.velocity.x,
+            self.velocity.y,
+        ]
     }
 }
 
@@ -512,6 +533,24 @@ impl std::ops::AddAssign for Pose {
             angle: self.angle + other.angle,
             position: self.position + other.position,
         }
+    }
+}
+
+impl From<Vec<f64>> for Pose {
+    fn from(vector: Vec<f64>) -> Pose {
+        Pose {
+            angle: *vector.get(0).unwrap(),
+            position: Point {
+                x: *vector.get(1).unwrap(),
+                y: *vector.get(2).unwrap(),
+            },
+        }
+    }
+}
+
+impl Into<Vec<f64>> for Pose {
+    fn into(self) -> Vec<f64> {
+        vec![self.angle, self.position.x, self.position.y]
     }
 }
 

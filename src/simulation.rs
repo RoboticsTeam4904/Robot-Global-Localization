@@ -1,6 +1,6 @@
 use global_robot_localization::{
     ai::{
-        kalman_filter::KalmanFilter,
+        kalman_filter::{Config, KalmanFilter, LocalizationFilter},
         localization::{DeathCondition, PoseMCL},
         presets,
     },
@@ -115,7 +115,7 @@ fn main() {
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
-    let mut filter = KalmanFilter::new(
+    let mut filter = LocalizationFilter::new(
         Matrix6::from_diagonal(&Vector6::new(
             ANGLE_NOISE.powi(2),
             X_NOISE.powi(2),
@@ -125,11 +125,7 @@ fn main() {
             0.,
         )),
         init_state.into(),
-        1e-5,
-        0.,
-        2.,
-        q,
-        r,
+        Config::default(),
     );
     let mut motion_sensor = DummyVelocitySensor::new(
         Pose {
@@ -310,32 +306,6 @@ fn main() {
                 g,
             );
         });
-
-        // Update the physics simulation
-        // control.angle = 0.;
-        // control.position.y = 0.;
-        // control.position.x = ROBOT_ACCEL;
-        robot_state.position.x += robot_state.velocity.x * delta_t;
-        robot_state.position.y += robot_state.velocity.y * delta_t;
-        robot_state.velocity.x += (control.position.x * robot_state.angle.cos()
-            + control.position.y * (robot_state.angle - FRAC_PI_2).cos())
-            * delta_t;
-        robot_state.velocity.y += (control.position.x * robot_state.angle.sin()
-            + control.position.y * (robot_state.angle - FRAC_PI_2).sin())
-            * delta_t;
-        robot_state.angle = (robot_state.angle + robot_state.vel_angle * delta_t) % (2. * PI);
-        robot_state.vel_angle += control.angle * delta_t;
-        let temp = robot_state.clone();
-        robot_state = temp
-            .clamp_control_update(Range {
-                start: Point { x: 0.1, y: 0.1 },
-                end: Point { x: 199.9, y: 199. },
-            })
-            .into();
-        println!("{:?} {:?}", temp, robot_state);
-        control.angle -= (robot_state.vel_angle - temp.vel_angle) / delta_t;
-        control.position.x -= (robot_state.velocity.x - temp.velocity.x) / delta_t;
-        control.position.y -= (robot_state.velocity.y - temp.velocity.y) / delta_t;
         let control_noise = Pose {
             angle: control_noise_angle.sample(&mut rng),
             position: (
@@ -344,8 +314,9 @@ fn main() {
             )
                 .into(),
         };
-
         control += control_noise;
+        robot_state.clamp_control_update(control, delta_t);
+
         // update sensors
         motion_sensor.update_pose(Pose {
             angle: robot_state.vel_angle,
@@ -362,7 +333,7 @@ fn main() {
 
         mcl.control_update(&position_sensor);
         mcl.observation_update(&lidar);
-        filter.prediction_update(delta_t, control);
+        filter.prediction_update(delta_t, control.into(), q);
 
         let motion_sensor = motion_sensor.sense();
         let mcl_prediction = mcl.get_prediction();
@@ -375,8 +346,7 @@ fn main() {
                 motion_sensor.position.x,
                 motion_sensor.position.y,
             ]),
-            delta_t,
-            sensor_noise,
+            r,
         );
 
         tick += 1;

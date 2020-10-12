@@ -1,15 +1,29 @@
+use crate::utility::{KinematicState, Point, Pose};
 use generic_array::ArrayLength;
 use nalgebra::{
     base::allocator::Allocator, DefaultAllocator, DimName, DimNameAdd, DimNameMul, DimSub,
-    MatrixMN, MatrixN, U1,
+    MatrixMN, MatrixN, U1, U13, U6,
 };
 use typenum::operator_aliases::Prod;
-
+#[derive(Debug, Clone, Copy)]
 pub struct Config {
     pub alpha: f64,
     pub beta: f64,
     pub kappa: f64,
 }
+
+impl Default for Config {
+    fn default() -> Config {
+        Config {
+            alpha: 1e-5,
+            beta: 0.,
+            kappa: 2.,
+        }
+    }
+}
+type LocalizationStateD = U6;
+type LocalizationSensorD = U6;
+type LocalizationStateDx2 = U13;
 pub trait KalmanFilter<StateD, SensorD, StateDx2>
 where
     StateD: DimName + DimNameMul<StateD> + DimNameAdd<StateD> + DimSub<U1>,
@@ -37,22 +51,23 @@ where
         config: Config,
     ) -> Self;
     fn control_sigma_matrix(&self) -> MatrixMN<f64, StateDx2, StateD>;
-    fn set_control_sigma_matrix(&self, control_sigma_matrix: MatrixMN<f64, StateDx2, StateD>);
+    fn set_control_sigma_matrix(&mut self, control_sigma_matrix: MatrixMN<f64, StateDx2, StateD>);
     fn sensor_sigma_matrix(&self) -> MatrixMN<f64, StateDx2, SensorD>;
-    fn set_sensor_sigma_matrix(&self, sensor_sigma_matrix: MatrixMN<f64, StateDx2, SensorD>);
+    fn set_sensor_sigma_matrix(&mut self, sensor_sigma_matrix: MatrixMN<f64, StateDx2, SensorD>);
     fn config(&self) -> Config;
-    fn set_config(&self, config: Config);
+    fn set_config(&mut self, config: Config);
     fn known_state(&self) -> MatrixMN<f64, U1, StateD>;
-    fn set_known_state(&self, known_state: MatrixMN<f64, U1, StateD>);
+    fn set_known_state(&mut self, known_state: MatrixMN<f64, U1, StateD>);
     fn covariance_matrix(&self) -> MatrixMN<f64, StateD, StateD>;
-    fn set_covariance_matrix(&self, covariance_matrix: MatrixMN<f64, StateD, StateD>);
+    fn set_covariance_matrix(&mut self, covariance_matrix: MatrixMN<f64, StateD, StateD>);
     fn gen_sigma_matrix(&mut self) {
         let mut rows: Vec<MatrixMN<f64, U1, StateD>> = Vec::new();
         rows.push(self.known_state());
         let known_state = self.known_state();
         let config = self.config();
-        let lambda = (config.alpha.powi(2)) * (6. + config.kappa) - 6.;
-        let eigendecomp = (self.covariance_matrix() * (6. + lambda)).symmetric_eigen();
+        let dim = self.control_sigma_matrix().ncols();
+        let lambda = (config.alpha.powi(2)) * (dim as f64 + config.kappa) - dim as f64;
+        let eigendecomp = (self.covariance_matrix() * (dim as f64 + lambda)).symmetric_eigen();
         let mut diagonalization = eigendecomp.eigenvalues.clone();
         diagonalization.apply(|e| e.max(0.).sqrt());
         let square_root_cov = eigendecomp.eigenvectors.clone()
@@ -90,7 +105,7 @@ where
             .collect();
         let dim = self.control_sigma_matrix().ncols();
         let sigma_rows: Vec<MatrixMN<f64, U1, StateD>> = sigma_elements
-            .windows(dim)
+            .chunks(dim)
             .map(|row| self.control_update(row, time, &control_input))
             .collect();
         self.set_control_sigma_matrix(MatrixMN::<f64, StateDx2, StateD>::from_rows(
@@ -125,14 +140,13 @@ where
         temp_covariance_matrix += q;
         self.set_covariance_matrix(temp_covariance_matrix);
     }
-    fn sensor_transform(&self, row: &[f64], sensor_input: &Vec<f64>) -> MatrixMN<f64, U1, SensorD>;
+    fn sensor_transform(&self, row: &[f64]) -> MatrixMN<f64, U1, SensorD>;
     fn measurement_update(
         &mut self,
         sensor_input: MatrixMN<f64, U1, SensorD>,
         r: MatrixMN<f64, SensorD, SensorD>,
     ) {
         let config = self.config();
-        let sensor_vec: Vec<f64> = sensor_input.iter().map(|e| e.clone()).collect();
         let sigma_elements: Vec<f64> = self
             .sensor_sigma_matrix()
             .transpose()
@@ -141,8 +155,8 @@ where
             .collect();
         let dim = self.control_sigma_matrix().ncols();
         let sigma_rows: Vec<MatrixMN<f64, U1, SensorD>> = sigma_elements
-            .windows(dim)
-            .map(|row| self.sensor_transform(row, &sensor_vec))
+            .chunks(dim)
+            .map(|row| self.sensor_transform(row))
             .collect();
         self.set_sensor_sigma_matrix(MatrixMN::<f64, StateDx2, SensorD>::from_rows(
             &sigma_rows[..],
@@ -195,5 +209,98 @@ where
             k.clone() * (sensor_input - sensor_predicted).transpose();
         self.set_known_state(self.known_state() + known_state_transpose.transpose());
         self.set_covariance_matrix(self.covariance_matrix() - (k.clone() * cov_zz * k.transpose()));
+    }
+}
+
+pub struct LocalizationFilter {
+    pub covariance_matrix: MatrixMN<f64, LocalizationStateD, LocalizationStateD>,
+    pub known_state: MatrixMN<f64, U1, LocalizationStateD>,
+    pub control_sigma_matrix: MatrixMN<f64, LocalizationStateDx2, LocalizationStateD>,
+    sensor_sigma_matrix: MatrixMN<f64, LocalizationStateDx2, LocalizationSensorD>,
+    config: Config,
+}
+
+impl KalmanFilter<LocalizationStateD, LocalizationSensorD, LocalizationStateDx2>
+    for LocalizationFilter
+{
+    fn new(
+        covariance_matrix: MatrixMN<f64, LocalizationStateD, U6>,
+        init_state: MatrixMN<f64, U1, LocalizationStateD>,
+        config: Config,
+    ) -> LocalizationFilter {
+        LocalizationFilter {
+            covariance_matrix,
+            known_state: init_state,
+            control_sigma_matrix:
+                MatrixMN::<f64, LocalizationStateDx2, LocalizationStateD>::from_element(0.),
+            sensor_sigma_matrix:
+                MatrixMN::<f64, LocalizationStateDx2, LocalizationSensorD>::from_element(0.),
+            config,
+        }
+    }
+    fn control_sigma_matrix(&self) -> MatrixMN<f64, LocalizationStateDx2, LocalizationStateD> {
+        self.control_sigma_matrix
+    }
+    fn set_control_sigma_matrix(
+        &mut self,
+        control_sigma_matrix: MatrixMN<f64, LocalizationStateDx2, LocalizationStateD>,
+    ) {
+        self.control_sigma_matrix = control_sigma_matrix;
+    }
+    fn sensor_sigma_matrix(&self) -> MatrixMN<f64, LocalizationStateDx2, LocalizationSensorD> {
+        self.sensor_sigma_matrix
+    }
+    fn set_sensor_sigma_matrix(
+        &mut self,
+        sensor_sigma_matrix: MatrixMN<f64, LocalizationStateDx2, LocalizationSensorD>,
+    ) {
+        self.sensor_sigma_matrix = sensor_sigma_matrix;
+    }
+    fn config(&self) -> Config {
+        self.config
+    }
+    fn set_config(&mut self, config: Config) {
+        self.config = config;
+    }
+    fn known_state(&self) -> MatrixMN<f64, U1, LocalizationStateD> {
+        self.known_state
+    }
+    fn set_known_state(&mut self, known_state: MatrixMN<f64, U1, LocalizationStateD>) {
+        self.known_state = known_state;
+    }
+    fn covariance_matrix(&self) -> MatrixMN<f64, LocalizationStateD, LocalizationStateD> {
+        self.covariance_matrix
+    }
+    fn set_covariance_matrix(
+        &mut self,
+        covariance_matrix: MatrixMN<f64, LocalizationStateD, LocalizationStateD>,
+    ) {
+        self.covariance_matrix = covariance_matrix;
+    }
+    fn control_update(
+        &self,
+        row: &[f64],
+        time: f64,
+        control_input: &Vec<f64>,
+    ) -> MatrixMN<f64, U1, LocalizationStateD> {
+        let control: Pose = control_input.clone().into();
+        let mut sigma_state = KinematicState {
+            angle: *row.get(0).unwrap(),
+            position: Point {
+                x: *row.get(1).unwrap(),
+                y: *row.get(2).unwrap(),
+            },
+            vel_angle: *row.get(3).unwrap(),
+            velocity: Point {
+                x: *row.get(4).unwrap(),
+                y: *row.get(5).unwrap(),
+            },
+        };
+        sigma_state.clamp_control_update(control, time);
+        MatrixMN::<f64, U1, LocalizationStateD>::from_vec(sigma_state.into())
+    }
+    fn sensor_transform(&self, row: &[f64]) -> MatrixMN<f64, U1, LocalizationSensorD> {
+        let sigma_state: Vec<f64> = row.iter().cloned().collect();
+        MatrixMN::<f64, U1, LocalizationSensorD>::from_vec(sigma_state)
     }
 }
