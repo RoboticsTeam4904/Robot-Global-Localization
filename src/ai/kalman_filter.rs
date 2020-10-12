@@ -148,7 +148,7 @@ where
     ) {
         let config = self.config();
         let sigma_elements: Vec<f64> = self
-            .sensor_sigma_matrix()
+            .control_sigma_matrix()
             .transpose()
             .iter()
             .map(|elem| elem.clone())

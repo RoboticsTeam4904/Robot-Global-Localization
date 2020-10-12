@@ -30,7 +30,7 @@ const X_NOISE: f64 = 25.;
 const Y_NOISE: f64 = 3.;
 const X_MCL_NOISE: f64 = 5. / 300.; // 10 cm
 const Y_MCL_NOISE: f64 = 5. / 300.; // 10 cm
-const ANGLE_MCL_NOISE: f64 = 1.; // 3 cm
+const ANGLE_MCL_NOISE: f64 = 0.1; // 3 cm
 const CONTROL_X_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
 const CONTROL_Y_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
 
@@ -39,8 +39,8 @@ const VELOCITY_X_SENSOR_NOISE: f64 = 1.;
 const VELOCITY_Y_SENSOR_NOISE: f64 = 1.;
 const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.1;
 const MAP_SCALE: f64 = 2.;
-const ROBOT_ACCEL: f64 = 200.;
-const ROBOT_ANGLE_ACCEL: f64 = 20.;
+const ROBOT_ACCEL: f64 = 400.;
+const ROBOT_ANGLE_ACCEL: f64 = 40.;
 
 fn main() {
     let mut rng = thread_rng();
@@ -306,10 +306,10 @@ fn main() {
             end: Point { x: 199.9, y: 199. },
         });
         if diff_vel != Pose::default() {
-            control = Pose {
-                angle: 0.,
-                position: Point { x: 100000., y: 0. },
-            };
+            // control = Pose {
+            //     angle: 0.,
+            //     position: Point { x: 0., y: 0. },
+            // };
         }
         control += control_noise;
 
@@ -343,12 +343,12 @@ fn main() {
         let motion_sensor = motion_sensor.sense();
         let mcl_prediction = mcl.get_prediction();
         r = Matrix6::from_diagonal(&Vector6::from_vec(vec![
-            delta_t * ANGLE_MCL_NOISE.powi(2),
-            delta_t * X_MCL_NOISE.powi(2),
-            delta_t * Y_MCL_NOISE.powi(2),
-            ROTATIONAL_VELOCITY_SENSOR_NOISE.powi(2),
-            VELOCITY_X_SENSOR_NOISE.powi(2),
-            VELOCITY_Y_SENSOR_NOISE.powi(2),
+            delta_t.powi(2) * ROTATIONAL_VELOCITY_SENSOR_NOISE.powi(2),
+            delta_t.powi(2) * VELOCITY_X_SENSOR_NOISE.powi(2),
+            delta_t.powi(2) * VELOCITY_Y_SENSOR_NOISE.powi(2),
+            ANGLE_MCL_NOISE.powi(2),
+            X_MCL_NOISE.powi(2),
+            Y_MCL_NOISE.powi(2),
         ]));
         filter.measurement_update(
             RowVector6::from_vec(vec![
