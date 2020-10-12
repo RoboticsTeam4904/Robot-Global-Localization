@@ -16,8 +16,8 @@ impl Default for Config {
     fn default() -> Config {
         Config {
             alpha: 1e-5,
-            beta: 0.,
-            kappa: 2.,
+            beta: 2.,
+            kappa: 0.,
         }
     }
 }
@@ -296,7 +296,7 @@ impl KalmanFilter<LocalizationStateD, LocalizationSensorD, LocalizationStateDx2>
                 y: *row.get(5).unwrap(),
             },
         };
-        sigma_state.clamp_control_update(control, time);
+        sigma_state.control_update(control, time);
         MatrixMN::<f64, U1, LocalizationStateD>::from_vec(sigma_state.into())
     }
     fn sensor_transform(&self, row: &[f64]) -> MatrixMN<f64, U1, LocalizationSensorD> {

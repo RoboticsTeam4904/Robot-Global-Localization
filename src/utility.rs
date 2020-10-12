@@ -292,32 +292,29 @@ impl KinematicState {
         self.vel_angle += control.angle * delta_t;
     }
 
-    pub fn clamp_control_update(&mut self, control: Pose, delta_t: f64) {
-        self.control_update(control, delta_t);
-        self.clamp(Range {
-            start: Point { x: 0.1, y: 0.1 },
-            end: Point { x: 199.9, y: 199. },
-        });
-    }
-
-    pub fn clamp(&mut self, range: Range<Point>) {
+    pub fn clamp(&mut self, range: Range<Point>) -> Pose {
         let clamped_position = self.position.clamp(range.start, range.end);
-        self.vel_angle = if clamped_position == self.position {
-            self.vel_angle
-        } else {
-            0.
-        };
+        if clamped_position == self.position {
+            return Pose::default();
+        }
+        let mut diff_vel = Pose::default();
+        diff_vel.angle = -self.vel_angle;
+        self.vel_angle = 0.;
+
         self.velocity.x = if clamped_position.x == self.position.x {
             self.velocity.x
         } else {
+            diff_vel.position.x = -self.velocity.x;
             0.
         };
-        self.velocity.x = if clamped_position.y == self.position.y {
+        self.velocity.y = if clamped_position.y == self.position.y {
             self.velocity.y
         } else {
+            diff_vel.position.y = -self.velocity.y;
             0.
         };
         self.position = clamped_position;
+        diff_vel
     }
 
     pub fn with_angle(mut self, angle: f64) -> KinematicState {

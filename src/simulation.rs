@@ -45,23 +45,9 @@ const ROBOT_ANGLE_ACCEL: f64 = 20.;
 fn main() {
     let mut rng = thread_rng();
 
-    let q: Matrix6<f64> = Matrix6::from_diagonal(&Vector6::new(
-        0.00000,
-        0.00000,
-        0.00000,
-        CONTROL_ANGLE_NOISE.powi(2),
-        CONTROL_X_NOISE.powi(2),
-        CONTROL_Y_NOISE.powi(2),
-    ));
+    let mut q: Matrix6<f64>;
 
-    let r: Matrix6<f64> = Matrix6::from_diagonal(&Vector6::from_vec(vec![
-        ANGLE_MCL_NOISE.powi(2),
-        X_MCL_NOISE.powi(2),
-        Y_MCL_NOISE.powi(2),
-        ROTATIONAL_VELOCITY_SENSOR_NOISE.powi(2),
-        VELOCITY_X_SENSOR_NOISE.powi(2),
-        VELOCITY_Y_SENSOR_NOISE.powi(2),
-    ]));
+    let mut r: Matrix6<f64>;
 
     let noise_x = Normal::new(100., X_NOISE);
     let noise_angle = Normal::new(FRAC_PI_2, ANGLE_NOISE);
@@ -314,8 +300,18 @@ fn main() {
             )
                 .into(),
         };
+        robot_state.control_update(control, delta_t);
+        let diff_vel = robot_state.clamp(Range {
+            start: Point { x: 0.1, y: 0.1 },
+            end: Point { x: 199.9, y: 199. },
+        });
+        if diff_vel != Pose::default() {
+            control = Pose {
+                angle: 0.,
+                position: Point { x: 100000., y: 0. },
+            };
+        }
         control += control_noise;
-        robot_state.clamp_control_update(control, delta_t);
 
         // update sensors
         motion_sensor.update_pose(Pose {
@@ -333,10 +329,27 @@ fn main() {
 
         mcl.control_update(&position_sensor);
         mcl.observation_update(&lidar);
+        q = delta_t.powi(2)
+            * Matrix6::from_diagonal(&Vector6::new(
+                0.00000,
+                0.00000,
+                0.00000,
+                CONTROL_ANGLE_NOISE.powi(2),
+                CONTROL_X_NOISE.powi(2),
+                CONTROL_Y_NOISE.powi(2),
+            ));
         filter.prediction_update(delta_t, control.into(), q);
 
         let motion_sensor = motion_sensor.sense();
         let mcl_prediction = mcl.get_prediction();
+        r = Matrix6::from_diagonal(&Vector6::from_vec(vec![
+            delta_t * ANGLE_MCL_NOISE.powi(2),
+            delta_t * X_MCL_NOISE.powi(2),
+            delta_t * Y_MCL_NOISE.powi(2),
+            ROTATIONAL_VELOCITY_SENSOR_NOISE.powi(2),
+            VELOCITY_X_SENSOR_NOISE.powi(2),
+            VELOCITY_Y_SENSOR_NOISE.powi(2),
+        ]));
         filter.measurement_update(
             RowVector6::from_vec(vec![
                 mcl_prediction.angle,
