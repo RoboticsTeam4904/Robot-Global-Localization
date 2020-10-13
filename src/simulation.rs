@@ -39,8 +39,8 @@ const VELOCITY_X_SENSOR_NOISE: f64 = 1.;
 const VELOCITY_Y_SENSOR_NOISE: f64 = 1.;
 const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.1;
 const MAP_SCALE: f64 = 2.;
-const ROBOT_ACCEL: f64 = 400.;
-const ROBOT_ANGLE_ACCEL: f64 = 40.;
+const ROBOT_ACCEL: f64 = 100.;
+const ROBOT_ANGLE_ACCEL: f64 = 10.;
 
 fn main() {
     let mut rng = thread_rng();
@@ -183,6 +183,7 @@ fn main() {
     let mut delta_t;
     let start = Instant::now();
     let mut sensor_noise = RowVector6::from_vec(vec![0.01; 6]);
+    let mut control = Pose::default();
     while let Some(e) = window.next() {
         delta_t = last_time.elapsed().as_secs_f64();
         last_time = Instant::now();
@@ -199,17 +200,31 @@ fn main() {
         }
         println!("T = {}", tick);
         // User input
-        let mut control = Pose::default();
+
         if let Some(Button::Keyboard(key)) = e.press_args() {
             match key {
                 keyboard::Key::W => {
-                    control.position.x += ROBOT_ACCEL;
+                    control.position.x = ROBOT_ACCEL;
                 }
                 keyboard::Key::S => {
-                    control.position.x -= ROBOT_ACCEL;
+                    control.position.x = -ROBOT_ACCEL;
                 }
-                keyboard::Key::A => control.angle -= ROBOT_ANGLE_ACCEL,
-                keyboard::Key::D => control.angle += ROBOT_ANGLE_ACCEL,
+                keyboard::Key::D => control.angle = ROBOT_ANGLE_ACCEL,
+                keyboard::Key::A => control.angle = -ROBOT_ANGLE_ACCEL,
+
+                _ => (),
+            }
+        }
+        if let Some(Button::Keyboard(key)) = e.release_args() {
+            match key {
+                keyboard::Key::W => {
+                    control.position.x = 0.;
+                }
+                keyboard::Key::S => {
+                    control.position.x = 0.;
+                }
+                keyboard::Key::D => control.angle = 0.,
+                keyboard::Key::A => control.angle = 0.,
 
                 _ => (),
             }
