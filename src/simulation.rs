@@ -315,7 +315,7 @@ fn main() {
             )
                 .into(),
         };
-        robot_state.control_update(control, delta_t, &perceived_map);
+        robot_state.control_update(control, delta_t, &real_map);
         control += control_noise;
 
         // update sensors
