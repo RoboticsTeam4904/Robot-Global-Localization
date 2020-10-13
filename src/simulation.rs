@@ -40,7 +40,8 @@ const VELOCITY_Y_SENSOR_NOISE: f64 = 1.;
 const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.1;
 const MAP_SCALE: f64 = 2.;
 const ROBOT_ACCEL: f64 = 100.;
-const ROBOT_ANGLE_ACCEL: f64 = 10.;
+const ROBOT_ANGLE_ACCEL: f64 = 5.;
+const WHEEL_DISTANCE: f64 = 30.;
 
 fn main() {
     let mut rng = thread_rng();
@@ -56,8 +57,8 @@ fn main() {
         (200., 200.).into(),
         vec![
             Object2D::Line((0., 0.).into(), (200., 0.).into()),
-            // Object2D::Line((0., 0.).into(), (0., 200.).into()),
-            // Object2D::Line((200., 0.).into(), (200., 200.).into()),
+            Object2D::Line((0., 0.).into(), (0., 200.).into()),
+            Object2D::Line((200., 0.).into(), (200., 200.).into()),
             Object2D::Line((0., 200.).into(), (200., 200.).into()),
             Object2D::Line((20., 60.).into(), (50., 100.).into()),
             Object2D::Line((50., 100.).into(), (80., 50.).into()),
@@ -73,8 +74,8 @@ fn main() {
         (200., 200.).into(),
         vec![
             Object2D::Line((0., 0.).into(), (200., 0.).into()),
-            // Object2D::Line((0., 0.).into(), (0., 200.).into())),
-            // Object2D::Line((200., 0.).into(), (200., 200.).into())),
+            Object2D::Line((0., 0.).into(), (0., 200.).into()),
+            Object2D::Line((200., 0.).into(), (200., 200.).into()),
             Object2D::Line((0., 200.).into(), (200., 200.).into()),
             Object2D::Line((20., 60.).into(), (50., 100.).into()),
             Object2D::Line((50., 100.).into(), (80., 50.).into()),
@@ -183,8 +184,9 @@ fn main() {
     let mut delta_t;
     let start = Instant::now();
     let mut sensor_noise = RowVector6::from_vec(vec![0.01; 6]);
-    let mut control = Pose::default();
+    let mut wheel_control = Point::default();
     while let Some(e) = window.next() {
+        let mut control: Pose = Pose::default();
         delta_t = last_time.elapsed().as_secs_f64();
         last_time = Instant::now();
         println!("{}", delta_t);
@@ -204,27 +206,42 @@ fn main() {
         if let Some(Button::Keyboard(key)) = e.press_args() {
             match key {
                 keyboard::Key::W => {
-                    control.position.x = ROBOT_ACCEL;
+                    wheel_control.x = ROBOT_ACCEL;
                 }
                 keyboard::Key::S => {
-                    control.position.x = -ROBOT_ACCEL;
+                    wheel_control.x = -ROBOT_ACCEL;
                 }
-                keyboard::Key::D => control.angle = ROBOT_ANGLE_ACCEL,
-                keyboard::Key::A => control.angle = -ROBOT_ANGLE_ACCEL,
-
+                keyboard::Key::Up => wheel_control.y = ROBOT_ACCEL,
+                keyboard::Key::Down => wheel_control.y = -ROBOT_ACCEL,
+                keyboard::Key::Space => {
+                    wheel_control = Point::default();
+                    control += Pose {
+                        angle: -robot_state.vel_angle / delta_t,
+                        position: Point {
+                            x: Point { x: 1., y: 0. }
+                                .rotate(robot_state.angle)
+                                .dot(robot_state.velocity)
+                                / delta_t,
+                            y: Point { x: 1., y: 0. }
+                                .rotate(robot_state.angle - FRAC_PI_2)
+                                .dot(robot_state.velocity)
+                                / delta_t,
+                        },
+                    };
+                }
                 _ => (),
             }
         }
         if let Some(Button::Keyboard(key)) = e.release_args() {
             match key {
                 keyboard::Key::W => {
-                    control.position.x = 0.;
+                    wheel_control.x = 0.;
                 }
                 keyboard::Key::S => {
-                    control.position.x = 0.;
+                    wheel_control.x = 0.;
                 }
-                keyboard::Key::D => control.angle = 0.,
-                keyboard::Key::A => control.angle = 0.,
+                keyboard::Key::Up => wheel_control.y = 0.,
+                keyboard::Key::Down => wheel_control.y = 0.,
 
                 _ => (),
             }
@@ -315,7 +332,29 @@ fn main() {
             )
                 .into(),
         };
-        robot_state.control_update(control, delta_t, &real_map);
+
+        control += Pose {
+            angle: (wheel_control.y - wheel_control.x) / WHEEL_DISTANCE,
+            position: Point {
+                x: (wheel_control.y + wheel_control.x) / 2.,
+                y: 0.,
+            },
+        };
+        if robot_state.mapped_control_update(control, delta_t, &real_map) {
+            control.angle = -robot_state.vel_angle / delta_t;
+            control.position = Point {
+                x: Point { x: 1., y: 0. }
+                    .rotate(robot_state.angle)
+                    .dot(robot_state.velocity)
+                    / delta_t,
+                y: Point { x: 1., y: 0. }
+                    .rotate(robot_state.angle - FRAC_PI_2)
+                    .dot(robot_state.velocity)
+                    / delta_t,
+            };
+            robot_state.vel_angle = 0.;
+            robot_state.velocity = Point::default();
+        };
         control += control_noise;
 
         // update sensors
@@ -343,7 +382,7 @@ fn main() {
                 CONTROL_X_NOISE.powi(2),
                 CONTROL_Y_NOISE.powi(2),
             ));
-        filter.prediction_update(delta_t, control.into(), q, &perceived_map);
+        filter.prediction_update(delta_t, control.into(), q);
 
         let motion_sensor = motion_sensor.sense();
         let mcl_prediction = mcl.get_prediction();

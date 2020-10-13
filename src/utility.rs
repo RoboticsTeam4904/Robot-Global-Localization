@@ -281,12 +281,7 @@ impl KinematicState {
         self
     }
 
-    pub fn control_update(&mut self, control: Pose, delta_t: f64, map: &Arc<Map2D>) {
-        let init_pose = Pose {
-            angle: (self.velocity.y).atan2(self.velocity.x),
-            position: self.position,
-        };
-
+    pub fn control_update(&mut self, control: Pose, delta_t: f64) {
         self.position.x += self.velocity.x * delta_t;
         self.position.y += self.velocity.y * delta_t;
         self.velocity.x += (control.position.x * self.angle.cos()
@@ -297,15 +292,34 @@ impl KinematicState {
             * delta_t;
         self.angle = (self.angle + self.vel_angle * delta_t) % (2. * PI);
         self.vel_angle += control.angle * delta_t;
+    }
+
+    pub fn mapped_control_update(&mut self, control: Pose, delta_t: f64, map: &Arc<Map2D>) -> bool {
+        let init_pose = Pose {
+            angle: (self.velocity.y).atan2(self.velocity.x),
+            position: self.position,
+        };
+
+        self.position.x += self.velocity.x * delta_t;
+        self.position.y += self.velocity.y * delta_t;
+        self.angle = (self.angle + self.vel_angle * delta_t) % (2. * PI);
+
         if let Some(end_point) = map.raycast(init_pose) {
             let max_length = (end_point - init_pose.position).mag();
             if max_length <= (self.position - init_pose.position).mag() {
-                self.velocity = Point::default();
-                self.vel_angle = 0.;
                 self.position = init_pose.position
-                    + (end_point - init_pose.position) / max_length * (max_length - 0.01)
+                    + (end_point - init_pose.position) / max_length * (max_length - 0.01);
+                return true;
             }
         }
+        self.velocity.x += (control.position.x * self.angle.cos()
+            + control.position.y * (self.angle - FRAC_PI_2).cos())
+            * delta_t;
+        self.velocity.y += (control.position.x * self.angle.sin()
+            + control.position.y * (self.angle - FRAC_PI_2).sin())
+            * delta_t;
+        self.vel_angle += control.angle * delta_t;
+        false
     }
 
     pub fn clamp(&mut self, range: Range<Point>) -> Pose {
@@ -535,6 +549,18 @@ impl std::ops::Div<f64> for Pose {
         Pose {
             angle: (self.angle / other) % (2. * PI),
             position: self.position * (1. / other),
+        }
+    }
+}
+
+impl std::ops::Mul<f64> for Pose {
+    type Output = Pose;
+
+    /// Does normalize angle
+    fn mul(self, other: f64) -> Pose {
+        Pose {
+            angle: (self.angle * other) % (2. * PI),
+            position: self.position * other,
         }
     }
 }
