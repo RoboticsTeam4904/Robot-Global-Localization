@@ -52,7 +52,7 @@ fn main() {
     let noise_x = Normal::new(100., X_NOISE);
     let noise_angle = Normal::new(FRAC_PI_2, ANGLE_NOISE);
     let noise_y = Normal::new(8., Y_NOISE);
-    let percieved_map = Arc::new(Map2D::with_size(
+    let perceived_map = Arc::new(Map2D::with_size(
         (200., 200.).into(),
         vec![
             Object2D::Line((0., 0.).into(), (200., 0.).into()),
@@ -160,7 +160,7 @@ fn main() {
             particle_count,
             weight_sum_threshold,
             death_threshold,
-            percieved_map.clone(),
+            perceived_map.clone(),
             presets::exp_weight(1.05),
             presets::lidar_error(1.2, 1.),
             presets::uniform_resampler(0.001, 0.7),
@@ -230,7 +230,7 @@ fn main() {
                 g,
             );
             draw_map(
-                percieved_map.clone(),
+                perceived_map.clone(),
                 [0., 0., 0., 1.],
                 0.5,
                 1.,
@@ -300,17 +300,7 @@ fn main() {
             )
                 .into(),
         };
-        robot_state.control_update(control, delta_t);
-        let diff_vel = robot_state.clamp(Range {
-            start: Point { x: 0.1, y: 0.1 },
-            end: Point { x: 199.9, y: 199. },
-        });
-        if diff_vel != Pose::default() {
-            // control = Pose {
-            //     angle: 0.,
-            //     position: Point { x: 0., y: 0. },
-            // };
-        }
+        robot_state.control_update(control, delta_t, &perceived_map);
         control += control_noise;
 
         // update sensors
@@ -338,7 +328,7 @@ fn main() {
                 CONTROL_X_NOISE.powi(2),
                 CONTROL_Y_NOISE.powi(2),
             ));
-        filter.prediction_update(delta_t, control.into(), q);
+        filter.prediction_update(delta_t, control.into(), q, &perceived_map);
 
         let motion_sensor = motion_sensor.sense();
         let mcl_prediction = mcl.get_prediction();

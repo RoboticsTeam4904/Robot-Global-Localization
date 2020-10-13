@@ -1,9 +1,11 @@
+use crate::map::Map2D;
 use crate::utility::{KinematicState, Point, Pose};
 use generic_array::ArrayLength;
 use nalgebra::{
     base::allocator::Allocator, DefaultAllocator, DimName, DimNameAdd, DimNameMul, DimSub,
     MatrixMN, MatrixN, U1, U13, U6,
 };
+use std::sync::Arc;
 use typenum::operator_aliases::Prod;
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
@@ -89,12 +91,14 @@ where
         row: &[f64],
         time: f64,
         control_input: &Vec<f64>,
+        map: &Arc<Map2D>,
     ) -> MatrixMN<f64, U1, StateD>;
     fn prediction_update(
         &mut self,
         time: f64,
         control_input: Vec<f64>,
         q: MatrixMN<f64, StateD, StateD>,
+        map: &Arc<Map2D>,
     ) {
         self.gen_sigma_matrix();
         let sigma_elements: Vec<f64> = self
@@ -106,7 +110,7 @@ where
         let dim = self.control_sigma_matrix().ncols();
         let sigma_rows: Vec<MatrixMN<f64, U1, StateD>> = sigma_elements
             .chunks(dim)
-            .map(|row| self.control_update(row, time, &control_input))
+            .map(|row| self.control_update(row, time, &control_input, map))
             .collect();
         self.set_control_sigma_matrix(MatrixMN::<f64, StateDx2, StateD>::from_rows(
             &sigma_rows[..],
@@ -282,6 +286,7 @@ impl KalmanFilter<LocalizationStateD, LocalizationSensorD, LocalizationStateDx2>
         row: &[f64],
         time: f64,
         control_input: &Vec<f64>,
+        map: &Arc<Map2D>,
     ) -> MatrixMN<f64, U1, LocalizationStateD> {
         let control: Pose = control_input.clone().into();
         let mut sigma_state = KinematicState {
@@ -296,7 +301,7 @@ impl KalmanFilter<LocalizationStateD, LocalizationSensorD, LocalizationStateDx2>
                 y: *row.get(5).unwrap(),
             },
         };
-        sigma_state.control_update(control, time);
+        sigma_state.control_update(control, time, map);
         MatrixMN::<f64, U1, LocalizationStateD>::from_vec(sigma_state.into())
     }
     fn sensor_transform(&self, row: &[f64]) -> MatrixMN<f64, U1, LocalizationSensorD> {

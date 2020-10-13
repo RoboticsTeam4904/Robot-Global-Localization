@@ -1,8 +1,10 @@
+use crate::map::Map2D;
 use nalgebra::RowVector6;
 use rand::prelude::*;
 use std::{
     f64::consts::{FRAC_PI_2, PI},
     ops::Range,
+    sync::Arc,
 };
 
 /// Generic 2d point
@@ -279,7 +281,12 @@ impl KinematicState {
         self
     }
 
-    pub fn control_update(&mut self, control: Pose, delta_t: f64) {
+    pub fn control_update(&mut self, control: Pose, delta_t: f64, map: &Arc<Map2D>) {
+        let init_pose = Pose {
+            angle: (self.velocity.y).atan2(self.velocity.x),
+            position: self.position,
+        };
+
         self.position.x += self.velocity.x * delta_t;
         self.position.y += self.velocity.y * delta_t;
         self.velocity.x += (control.position.x * self.angle.cos()
@@ -290,6 +297,15 @@ impl KinematicState {
             * delta_t;
         self.angle = (self.angle + self.vel_angle * delta_t) % (2. * PI);
         self.vel_angle += control.angle * delta_t;
+        if let Some(end_point) = map.raycast(init_pose) {
+            let max_length = (end_point - init_pose.position).mag();
+            if max_length <= (self.position - init_pose.position).mag() {
+                self.velocity = Point::default();
+                self.vel_angle = 0.;
+                self.position = init_pose.position
+                    + (end_point - init_pose.position) / max_length * (max_length - 0.01)
+            }
+        }
     }
 
     pub fn clamp(&mut self, range: Range<Point>) -> Pose {
