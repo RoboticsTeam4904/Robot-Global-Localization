@@ -10,7 +10,7 @@ use global_robot_localization::{
         dummy::{DummyLidar, DummyPositionSensor, DummyVelocitySensor},
         Sensor,
     },
-    utility::{KinematicState, Point, Pose},
+    utility::{DifferentialDriveState, KinematicState, Point, Pose},
 };
 use nalgebra::{Matrix6, RowVector6, Vector6};
 use piston_window::*;
@@ -40,8 +40,7 @@ const VELOCITY_Y_SENSOR_NOISE: f64 = 1.;
 const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.1;
 const MAP_SCALE: f64 = 2.;
 const ROBOT_ACCEL: f64 = 100.;
-const ROBOT_ANGLE_ACCEL: f64 = 5.;
-const WHEEL_DISTANCE: f64 = 30.;
+const WHEEL_DIST: f64 = 10.;
 
 fn main() {
     let mut rng = thread_rng();
@@ -183,8 +182,9 @@ fn main() {
     let mut last_time: Instant = Instant::now();
     let mut delta_t;
     let start = Instant::now();
-    let mut sensor_noise = RowVector6::from_vec(vec![0.01; 6]);
     let mut wheel_control = Point::default();
+    let mut wheel_robot_state = DifferentialDriveState::default();
+    wheel_robot_state.set_wheel_dist(WHEEL_DIST);
     while let Some(e) = window.next() {
         let mut control: Pose = Pose::default();
         delta_t = last_time.elapsed().as_secs_f64();
@@ -228,6 +228,7 @@ fn main() {
                                 / delta_t,
                         },
                     };
+                    wheel_robot_state.reset_velocity();
                 }
                 _ => (),
             }
@@ -332,25 +333,22 @@ fn main() {
             )
                 .into(),
         };
+        control += wheel_robot_state.control_update(wheel_control, delta_t, robot_state.angle);
 
-        control += Pose {
-            angle: (wheel_control.y - wheel_control.x) / WHEEL_DISTANCE,
-            position: Point {
-                x: (wheel_control.y + wheel_control.x) / 2.,
-                y: 0.,
-            },
-        };
         if robot_state.mapped_control_update(control, delta_t, &real_map) {
-            control.angle = -robot_state.vel_angle / delta_t;
+            wheel_robot_state.reset_velocity();
+            control.angle = -robot_state.vel_angle / delta_t + control.angle;
             control.position = Point {
                 x: Point { x: 1., y: 0. }
                     .rotate(robot_state.angle)
                     .dot(robot_state.velocity)
-                    / delta_t,
+                    / delta_t
+                    + control.position.x,
                 y: Point { x: 1., y: 0. }
                     .rotate(robot_state.angle - FRAC_PI_2)
                     .dot(robot_state.velocity)
-                    / delta_t,
+                    / delta_t
+                    + control.position.y,
             };
             robot_state.vel_angle = 0.;
             robot_state.velocity = Point::default();
@@ -429,15 +427,6 @@ fn main() {
                 y: (mcl_pred.position.y - filter_prediction.pose().position.y).powi(2),
             },
         };
-
-        sensor_noise = RowVector6::from_vec(vec![
-            delta_t,
-            delta_t,
-            delta_t,
-            25. / mcl_kalman_difference.angle,
-            1. / mcl_kalman_difference.position.x,
-            1. / mcl_kalman_difference.position.y,
-        ]);
         mcl_kalman_difference = Pose::default();
 
         if tick % 1000 == 0 {

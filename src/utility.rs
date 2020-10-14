@@ -221,6 +221,49 @@ impl std::ops::SubAssign for Point {
     }
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct DifferentialDriveState {
+    pub wheel_dist: f64,
+    pub velocity: Point,
+    pub robot_velocity: Pose,
+}
+
+impl DifferentialDriveState {
+    /// return velocity for the robot, given wheel velocities
+    pub fn robot_velocity(&self, delta_t: f64, robot_angle: f64) -> Pose {
+        let omega = (self.velocity.y - self.velocity.x) / self.wheel_dist;
+        let d_angle = omega * delta_t;
+        let r = (self.velocity.y + self.velocity.x) / 2.;
+        Pose {
+            angle: omega,
+            position: Point {
+                x: r * d_angle.cos(),
+                y: r * d_angle.sin(),
+            }
+            .rotate(-robot_angle),
+        }
+    }
+    /// Returns the appropriate control update for the given wheel control.
+    pub fn control_update(&mut self, wheel_control: Point, delta_t: f64, robot_angle: f64) -> Pose {
+        self.velocity += wheel_control * delta_t;
+        let new_velocity = self.robot_velocity(delta_t, robot_angle);
+        let diff_vel = new_velocity - self.robot_velocity;
+        self.robot_velocity = new_velocity;
+        Pose {
+            angle: diff_vel.angle / delta_t,
+            position: diff_vel.position.rotate(robot_angle) / delta_t,
+        }
+    }
+    pub fn reset_velocity(&mut self) {
+        self.velocity = Point::default();
+        self.robot_velocity = Pose::default();
+    }
+
+    pub fn set_wheel_dist(&mut self, wheel_dist: f64) {
+        self.wheel_dist = wheel_dist;
+    }
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct KinematicState {
     pub angle: f64,
@@ -282,19 +325,27 @@ impl KinematicState {
     }
 
     pub fn control_update(&mut self, control: Pose, delta_t: f64) {
-        self.position.x += self.velocity.x * delta_t;
-        self.position.y += self.velocity.y * delta_t;
         self.velocity.x += (control.position.x * self.angle.cos()
             + control.position.y * (self.angle - FRAC_PI_2).cos())
             * delta_t;
         self.velocity.y += (control.position.x * self.angle.sin()
             + control.position.y * (self.angle - FRAC_PI_2).sin())
             * delta_t;
-        self.angle = (self.angle + self.vel_angle * delta_t) % (2. * PI);
         self.vel_angle += control.angle * delta_t;
+        self.position.x += self.velocity.x * delta_t;
+        self.position.y += self.velocity.y * delta_t;
+
+        self.angle = (self.angle + self.vel_angle * delta_t) % (2. * PI);
     }
 
     pub fn mapped_control_update(&mut self, control: Pose, delta_t: f64, map: &Arc<Map2D>) -> bool {
+        self.velocity.x += (control.position.x * self.angle.cos()
+            + control.position.y * (self.angle - FRAC_PI_2).cos())
+            * delta_t;
+        self.velocity.y += (control.position.x * self.angle.sin()
+            + control.position.y * (self.angle - FRAC_PI_2).sin())
+            * delta_t;
+        self.vel_angle += control.angle * delta_t;
         let init_pose = Pose {
             angle: (self.velocity.y).atan2(self.velocity.x),
             position: self.position,
@@ -312,13 +363,7 @@ impl KinematicState {
                 return true;
             }
         }
-        self.velocity.x += (control.position.x * self.angle.cos()
-            + control.position.y * (self.angle - FRAC_PI_2).cos())
-            * delta_t;
-        self.velocity.y += (control.position.x * self.angle.sin()
-            + control.position.y * (self.angle - FRAC_PI_2).sin())
-            * delta_t;
-        self.vel_angle += control.angle * delta_t;
+
         false
     }
 
