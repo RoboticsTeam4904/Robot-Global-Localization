@@ -381,12 +381,12 @@ fn main() {
         let mcl_prediction = mcl.get_prediction();
         let mcl_uncertainty = variance_poses(&mcl.belief);
         r = Matrix6::from_diagonal(&Vector6::from_vec(vec![
+            mcl_uncertainty.angle,
+            mcl_uncertainty.position.x,
+            mcl_uncertainty.position.y,
             delta_t.powi(2) * ROTATIONAL_VELOCITY_SENSOR_NOISE.powi(2),
             delta_t.powi(2) * VELOCITY_X_SENSOR_NOISE.powi(2),
             delta_t.powi(2) * VELOCITY_Y_SENSOR_NOISE.powi(2),
-            mcl_uncertainty.angle + 1000.,
-            mcl_uncertainty.position.x + 1000.,
-            mcl_uncertainty.position.y + 1000.,
         ]));
         filter.measurement_update(
             RowVector6::from_vec(vec![
