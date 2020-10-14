@@ -638,6 +638,38 @@ impl Into<Vec<f64>> for Pose {
     }
 }
 
+pub fn mean(list: &Vec<f64>) -> f64 {
+    list.iter().sum::<f64>() / (list.len() as f64)
+}
+
+pub fn variance(list: &Vec<f64>) -> f64 {
+    let average = mean(list);
+    mean(
+        &list
+            .iter()
+            .map(|elem| (average - elem).powi(2))
+            .collect::<Vec<f64>>(),
+    )
+}
+
+pub fn variance_poses(poses: &Vec<Pose>) -> Pose {
+    let mut angles: Vec<f64> = Vec::new();
+    let mut x_coords: Vec<f64> = Vec::new();
+    let mut y_coords: Vec<f64> = Vec::new();
+    for pose in poses {
+        angles.push(pose.angle);
+        x_coords.push(pose.position.x);
+        y_coords.push(pose.position.y);
+    }
+    Pose {
+        angle: variance(&angles),
+        position: Point {
+            x: variance(&x_coords),
+            y: variance(&y_coords),
+        },
+    }
+}
+
 /// Clamps the `num` to the range `[lower, upper)`
 ///
 /// If `T` is unsigned, do not use an `upper` of `0` because `upper` is tested exclusively

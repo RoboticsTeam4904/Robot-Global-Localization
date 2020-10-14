@@ -1,11 +1,9 @@
-use crate::map::Map2D;
 use crate::utility::{KinematicState, Point, Pose};
 use generic_array::ArrayLength;
 use nalgebra::{
     base::allocator::Allocator, DefaultAllocator, DimName, DimNameAdd, DimNameMul, DimSub,
     MatrixMN, MatrixN, U1, U13, U6,
 };
-use std::sync::Arc;
 use typenum::operator_aliases::Prod;
 #[derive(Debug, Clone, Copy)]
 pub struct Config {

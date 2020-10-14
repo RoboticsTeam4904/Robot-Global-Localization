@@ -10,7 +10,7 @@ use global_robot_localization::{
         dummy::{DummyLidar, DummyPositionSensor, DummyVelocitySensor},
         Sensor,
     },
-    utility::{DifferentialDriveState, KinematicState, Point, Pose},
+    utility::{variance_poses, DifferentialDriveState, KinematicState, Point, Pose},
 };
 use nalgebra::{Matrix6, RowVector6, Vector6};
 use piston_window::*;
@@ -19,8 +19,7 @@ use rand::{
     thread_rng,
 };
 use std::{
-    f64::consts::{FRAC_PI_2, FRAC_PI_8, PI},
-    ops::Range,
+    f64::consts::{FRAC_PI_2, FRAC_PI_8},
     sync::Arc,
     time::Instant,
 };
@@ -28,9 +27,6 @@ use std::{
 const ANGLE_NOISE: f64 = 0.;
 const X_NOISE: f64 = 25.;
 const Y_NOISE: f64 = 3.;
-const X_MCL_NOISE: f64 = 5. / 300.; // 10 cm
-const Y_MCL_NOISE: f64 = 5. / 300.; // 10 cm
-const ANGLE_MCL_NOISE: f64 = 0.1; // 3 cm
 const CONTROL_X_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
 const CONTROL_Y_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
 
@@ -40,7 +36,7 @@ const VELOCITY_Y_SENSOR_NOISE: f64 = 1.;
 const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.1;
 const MAP_SCALE: f64 = 2.;
 const ROBOT_ACCEL: f64 = 100.;
-const WHEEL_DIST: f64 = 10.;
+const WHEEL_DIST: f64 = 30.;
 
 fn main() {
     let mut rng = thread_rng();
@@ -177,7 +173,6 @@ fn main() {
     let control_noise_x = Normal::new(0., CONTROL_X_NOISE);
     let control_noise_y = Normal::new(0., CONTROL_Y_NOISE);
     let mut kalman_error: Pose = Pose::default();
-    let mut mcl_kalman_difference: Pose = Pose::default();
     let mut mcl_error: Pose = Pose::default();
     let mut last_time: Instant = Instant::now();
     let mut delta_t;
@@ -382,24 +377,25 @@ fn main() {
             ));
         filter.prediction_update(delta_t, control.into(), q);
 
-        let motion_sensor = motion_sensor.sense();
+        let motion_measurements = motion_sensor.sense();
         let mcl_prediction = mcl.get_prediction();
+        let mcl_uncertainty = variance_poses(&mcl.belief);
         r = Matrix6::from_diagonal(&Vector6::from_vec(vec![
             delta_t.powi(2) * ROTATIONAL_VELOCITY_SENSOR_NOISE.powi(2),
             delta_t.powi(2) * VELOCITY_X_SENSOR_NOISE.powi(2),
             delta_t.powi(2) * VELOCITY_Y_SENSOR_NOISE.powi(2),
-            ANGLE_MCL_NOISE.powi(2),
-            X_MCL_NOISE.powi(2),
-            Y_MCL_NOISE.powi(2),
+            mcl_uncertainty.angle + 1000.,
+            mcl_uncertainty.position.x + 1000.,
+            mcl_uncertainty.position.y + 1000.,
         ]));
         filter.measurement_update(
             RowVector6::from_vec(vec![
                 mcl_prediction.angle,
                 mcl_prediction.position.x,
                 mcl_prediction.position.y,
-                motion_sensor.angle,
-                motion_sensor.position.x,
-                motion_sensor.position.y,
+                motion_measurements.angle,
+                motion_measurements.position.x,
+                motion_measurements.position.y,
             ]),
             r,
         );
@@ -420,35 +416,24 @@ fn main() {
                 y: (mcl_pred.position.y - robot_state.pose().position.y).powi(2),
             },
         };
-        mcl_kalman_difference += Pose {
-            angle: (mcl_pred.angle - filter_prediction.pose().position.x).powi(2),
-            position: Point {
-                x: (mcl_pred.position.x - filter_prediction.pose().position.x).powi(2),
-                y: (mcl_pred.position.y - filter_prediction.pose().position.y).powi(2),
-            },
-        };
-        mcl_kalman_difference = Pose::default();
-
-        if tick % 1000 == 0 {
-            println!(
-                "KALMAN: {:?} \n MCL: {:?}\n\n",
-                Pose {
-                    angle: kalman_error.angle.sqrt() / tick as f64,
-                    position: (
-                        kalman_error.position.x.sqrt() / tick as f64,
-                        kalman_error.position.y.sqrt() / tick as f64
-                    )
-                        .into()
-                },
-                Pose {
-                    angle: mcl_error.angle.sqrt() / tick as f64,
-                    position: (
-                        mcl_error.position.x.sqrt() / tick as f64,
-                        mcl_error.position.y.sqrt() / tick as f64
-                    )
-                        .into()
-                }
-            );
-        }
     }
+    println!(
+        "KALMAN: {:?} \n MCL: {:?}\n\n",
+        Pose {
+            angle: kalman_error.angle.sqrt() / tick as f64,
+            position: (
+                kalman_error.position.x.sqrt() / tick as f64,
+                kalman_error.position.y.sqrt() / tick as f64
+            )
+                .into()
+        },
+        Pose {
+            angle: mcl_error.angle.sqrt() / tick as f64,
+            position: (
+                mcl_error.position.x.sqrt() / tick as f64,
+                mcl_error.position.y.sqrt() / tick as f64
+            )
+                .into()
+        }
+    );
 }
