@@ -58,20 +58,7 @@ impl Point {
 
     /// Angle of `self` relative to `other`
     pub fn angle_to(&self, other: Point) -> f64 {
-        let dif = other - *self;
-        if dif.x == 0. {
-            if other.y > self.y {
-                FRAC_PI_2
-            } else {
-                PI + FRAC_PI_2
-            }
-        } else {
-            let mut angle = (dif.y / dif.x).atan();
-            if dif.x < 0. {
-                angle += PI;
-            }
-            angle % (2. * PI)
-        }
+        (other.y - self.y).atan2(other.x - self.x)
     }
 
     pub fn mag(&self) -> f64 {
@@ -217,6 +204,253 @@ impl std::ops::SubAssign for Point {
         *self = Point {
             x: self.x - other.x,
             y: self.y - other.y,
+        }
+    }
+}
+
+/// Generic 2d point
+#[derive(Default, Debug, PartialEq, Clone, Copy)]
+pub struct Point3D {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+impl Point3D {
+    pub fn cylindrical(angle: f64, radius: f64, z: f64) -> Self {
+        Self {
+            x: radius * angle.cos(),
+            y: radius * angle.sin(),
+            z,
+        }
+    }
+    pub fn spherical(inclination: f64, azimuth: f64, radius: f64) -> Self {
+        Self {
+            x: radius * inclination.cos() * azimuth.cos(),
+            y: radius * inclination.cos() * azimuth.sin(),
+            z: radius * inclination.sin(),
+        }
+    }
+
+    pub fn normalize(self) -> Self {
+        self / self.mag()
+    }
+
+    pub fn rotate(self, inclination: f64, azimuth: f64) -> Self {
+        Self::spherical(
+            self.inclination() + inclination,
+            self.azimuth() + azimuth,
+            self.mag(),
+        )
+    }
+
+    pub fn clamp(self, lower: Self, upper: Self) -> Self {
+        Self {
+            x: if self.x > upper.x {
+                upper.x
+            } else if self.x < lower.x {
+                lower.x
+            } else {
+                self.x
+            },
+            y: if self.y > upper.y {
+                upper.y
+            } else if self.y < lower.y {
+                lower.y
+            } else {
+                self.y
+            },
+            z: if self.z > upper.z {
+                upper.z
+            } else if self.z < lower.z {
+                lower.z
+            } else {
+                self.z
+            },
+        }
+    }
+
+    /// Angle of `self` relative to origin
+    pub fn azimuth(&self) -> f64 {
+        self.azimuth_to(Point3D::default())
+    }
+
+    /// Angle of `self` relative to origin
+    pub fn inclination(&self) -> f64 {
+        self.inclination_to(Point3D::default())
+    }
+
+    /// Angle of `self` relative to `other`
+    pub fn azimuth_to(&self, other: Point3D) -> f64 {
+        let point: Point = self.clone().into();
+        point.angle_to(other.into())
+    }
+
+    /// Inclination angle of `self` relative to `other`
+    pub fn inclination_to(&self, other: Point3D) -> f64 {
+        let point: Point = self.clone().into();
+        (other.z - self.z).atan2(point.mag())
+    }
+
+    pub fn mag(&self) -> f64 {
+        (self.x.powi(2) + self.y.powi(2) + self.z.powi(2)).sqrt()
+    }
+
+    pub fn dist(&self, other: Point3D) -> f64 {
+        ((self.x - other.x).powi(2) + (self.y - other.y).powi(2) + (self.z - other.z).powi(2))
+            .sqrt()
+    }
+
+    pub fn dot(&self, other: Point3D) -> f64 {
+        self.x * other.x + self.y * other.y + self.z * other.z
+    }
+}
+
+impl Into<Point3D> for (f64, f64, f64) {
+    fn into(self) -> Point3D {
+        Point3D {
+            x: self.0,
+            y: self.1,
+            z: self.2,
+        }
+    }
+}
+
+impl Into<[f64; 3]> for Point3D {
+    fn into(self) -> [f64; 3] {
+        [self.x, self.y, self.z]
+    }
+}
+
+impl Into<Point> for Point3D {
+    fn into(self) -> Point {
+        Point {
+            x: self.x,
+            y: self.y,
+        }
+    }
+}
+
+impl std::ops::Add for Point3D {
+    type Output = Point3D;
+
+    fn add(self, other: Point3D) -> Point3D {
+        Self {
+            x: self.x + other.x,
+            y: self.y + other.y,
+            z: self.z + other.z,
+        }
+    }
+}
+
+impl std::ops::Sub for Point3D {
+    type Output = Point3D;
+
+    fn sub(self, other: Point3D) -> Point3D {
+        Point3D {
+            x: self.x - other.x,
+            y: self.y - other.y,
+            z: self.z - other.z,
+        }
+    }
+}
+
+impl std::ops::Mul for Point3D {
+    type Output = Point3D;
+
+    fn mul(self, other: Self) -> Self {
+        Point3D {
+            x: self.x * other.x,
+            y: self.y * other.y,
+            z: self.z * other.z,
+        }
+    }
+}
+
+impl std::ops::Div for Point3D {
+    type Output = Self;
+
+    fn div(self, other: Self) -> Self {
+        Self {
+            x: self.x / other.x,
+            y: self.y / other.y,
+            z: self.z / other.z,
+        }
+    }
+}
+
+impl std::ops::Add<(f64, f64, f64)> for Point3D {
+    type Output = Point3D;
+
+    fn add(self, other: (f64, f64, f64)) -> Point3D {
+        let other: Point3D = other.into();
+        self + other
+    }
+}
+
+impl std::ops::Sub<(f64, f64, f64)> for Point3D {
+    type Output = Self;
+
+    fn sub(self, other: (f64, f64, f64)) -> Self {
+        let other: Self = other.into();
+        self - other
+    }
+}
+
+impl std::ops::Add<f64> for Point3D {
+    type Output = Self;
+
+    fn add(self, other: f64) -> Self {
+        Self {
+            x: self.x + other,
+            y: self.y + other,
+            z: self.z + other,
+        }
+    }
+}
+
+impl std::ops::Mul<f64> for Point3D {
+    type Output = Self;
+
+    fn mul(self, other: f64) -> Point3D {
+        Point3D {
+            x: self.x * other,
+            y: self.y * other,
+            z: self.z * other,
+        }
+    }
+}
+
+impl std::ops::Div<f64> for Point3D {
+    type Output = Point3D;
+
+    fn div(self, other: f64) -> Point3D {
+        Point3D {
+            x: self.x / other,
+            y: self.y / other,
+            z: self.z / other,
+        }
+    }
+}
+
+impl std::ops::AddAssign for Point3D {
+    /// Does not normalize angle
+    fn add_assign(&mut self, other: Self) {
+        *self = Self {
+            x: self.x + other.x,
+            y: self.y + other.y,
+            z: self.z + other.z,
+        }
+    }
+}
+
+impl std::ops::SubAssign for Point3D {
+    /// Does not normalize angle
+    fn sub_assign(&mut self, other: Self) {
+        *self = Point3D {
+            x: self.x - other.x,
+            y: self.y - other.y,
+            z: self.z - other.z,
         }
     }
 }
@@ -661,6 +895,10 @@ pub fn variance_poses(poses: &Vec<Pose>) -> Pose {
         x_coords.push(pose.position.x);
         y_coords.push(pose.position.y);
     }
+    angles = angles
+        .iter()
+        .map(|angle| (angle - mean(&angles)).abs() % PI)
+        .collect();
     Pose {
         angle: variance(&angles),
         position: Point {

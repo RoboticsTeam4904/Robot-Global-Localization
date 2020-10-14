@@ -103,6 +103,45 @@ impl LimitedSensor<f64> for DummyObjectSensor {
         Some(self.fov)
     }
 }
+#[derive(Clone)]
+pub struct Tape {
+    pose: Pose,
+    height: f64,
+}
+
+impl Tape {
+    pub fn relative_distance(&self, pose: Pose, fov: f64, map: &Arc<Map2D>) -> Option<Pose> {
+        Some(Pose::default())
+    }
+}
+
+#[derive(Clone)]
+pub struct DummyTapeSensor {
+    tapes: Vec<Tape>,
+    fov: f64,
+    robot_pose: Pose,
+    relative_pose: Pose,
+    pub map: Arc<Map2D>,
+}
+
+impl DummyTapeSensor {
+    pub fn update_pose(&mut self, robot_pose: Pose) {
+        self.robot_pose = robot_pose;
+    }
+}
+
+impl Sensor for DummyTapeSensor {
+    type Output = Vec<(Pose, f64)>;
+    fn sense(&self) -> Self::Output {
+        let mut output: Vec<(Pose, f64)> = Vec::new();
+        for tape in &self.tapes {
+            if let Some(pose) = tape.relative_distance(self.robot_pose, self.fov, &self.map) {
+                output.push((pose, tape.height));
+            }
+        }
+        output
+    }
+}
 
 #[derive(Clone)]
 pub struct DummyDistanceSensor {
