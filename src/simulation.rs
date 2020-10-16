@@ -10,7 +10,7 @@ use global_robot_localization::{
         dummy::{DummyLidar, DummyPositionSensor, DummyVelocitySensor},
         Sensor,
     },
-    utility::{variance_poses, DifferentialDriveState, KinematicState, Point, Pose},
+    utility::{variance_poses, DifferentialDriveState, KinematicState, Point, Pose, Pose3D},
 };
 use nalgebra::{Matrix6, RowVector6, Vector6};
 use piston_window::*;
@@ -19,14 +19,14 @@ use rand::{
     thread_rng,
 };
 use std::{
-    f64::consts::{FRAC_PI_2, FRAC_PI_8},
+    f64::consts::{FRAC_PI_2, FRAC_PI_8, PI},
     sync::Arc,
     time::Instant,
 };
 
 const ANGLE_NOISE: f64 = 0.;
-const X_NOISE: f64 = 25.;
-const Y_NOISE: f64 = 3.;
+const X_NOISE: f64 = 3.;
+const Y_NOISE: f64 = 274.;
 const CONTROL_X_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
 const CONTROL_Y_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
 
@@ -37,6 +37,8 @@ const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.2;
 const MAP_SCALE: f64 = 0.6;
 const ROBOT_ACCEL: f64 = 400.;
 const WHEEL_DIST: f64 = 120.;
+const CAMERA_HEIGHT: f64 = 0.;
+const CAMERA_ANGLE: f64 = 0.;
 
 fn main() {
     let mut rng = thread_rng();
@@ -45,18 +47,18 @@ fn main() {
 
     let mut r: Matrix6<f64>;
 
-    let noise_x = Normal::new(100., X_NOISE);
-    let noise_angle = Normal::new(FRAC_PI_2, ANGLE_NOISE);
+    let noise_x = Normal::new(410.5, X_NOISE);
+    let noise_angle = Normal::new(0., ANGLE_NOISE);
     let noise_y = Normal::new(8., Y_NOISE);
-    let perceived_map = Arc::new(Map2D::with_size(
+    let sensor_map = Arc::new(Map2D::with_size(
         (1598., 821.).into(),
         vec![
-            Object2D::Line((59.9, 0.).into(), (0., 164.4).into()),
-            Object2D::Line((59.9, 821.).into(), (0., 656.6).into()),
-            Object2D::Line((0., 656.6).into(), (0., 164.4).into()),
-            Object2D::Line((1538.1, 0.).into(), (1598., 164.4).into()),
-            Object2D::Line((1538.1, 821.).into(), (1598., 656.6).into()),
-            Object2D::Line((1598., 656.6).into(), (1598., 164.4).into()),
+            Object2D::Line((64.98, 0.).into(), (0., 178.54).into()),
+            Object2D::Line((64.98, 821.).into(), (0., 642.46).into()),
+            Object2D::Line((0., 642.46).into(), (0., 178.54).into()),
+            Object2D::Line((1533.02, 0.).into(), (1598., 178.54).into()),
+            Object2D::Line((1533.02, 821.).into(), (1598., 642.46).into()),
+            Object2D::Line((1598., 642.46).into(), (1598., 178.54).into()),
             // Trench
             Object2D::Rectangle((630.54, 680.).into(), (706.54, 821.).into()),
             Object2D::Rectangle((974.5, 141.).into(), (898.5, 0.).into()),
@@ -85,20 +87,118 @@ fn main() {
                 (532.83, 289.97).into(),
                 (530.27, 297.02).into(),
             ),
+            Object2D::Target(Pose3D {
+                angle: Point {
+                    x: PI,
+                    y: -CAMERA_ANGLE,
+                },
+                position: (1598., 239.54, 0. - CAMERA_HEIGHT).into(),
+            }),
+            Object2D::Target(Pose3D {
+                angle: Point {
+                    x: PI,
+                    y: -CAMERA_ANGLE,
+                },
+                position: (1598., 566.54, 0. - CAMERA_HEIGHT).into(),
+            }),
+            Object2D::Target(Pose3D {
+                angle: Point {
+                    x: 0.,
+                    y: -CAMERA_ANGLE,
+                },
+                position: (0., 581.54, 0. - CAMERA_HEIGHT).into(),
+            }),
+            Object2D::Target(Pose3D {
+                angle: Point {
+                    x: 0.,
+                    y: -CAMERA_ANGLE,
+                },
+                position: (0., 254.54, 0. - CAMERA_HEIGHT).into(),
+            }),
+        ],
+    ));
+
+    let perceived_map = Arc::new(Map2D::with_size(
+        (1598., 821.).into(),
+        vec![
+            Object2D::Line((64.98, 0.).into(), (0., 178.54).into()),
+            Object2D::Line((64.98, 821.).into(), (0., 642.46).into()),
+            Object2D::Line((0., 642.46).into(), (0., 178.54).into()),
+            Object2D::Line((1533.02, 0.).into(), (1598., 178.54).into()),
+            Object2D::Line((1533.02, 821.).into(), (1598., 642.46).into()),
+            Object2D::Line((1598., 642.46).into(), (1598., 178.54).into()),
+            Object2D::Line((64.98, 0.).into(), (1533.02, 0.).into()),
+            Object2D::Line((64.98, 821.).into(), (1533.02, 821.).into()),
+            // Trench
+            Object2D::Rectangle((630.54, 680.).into(), (706.54, 821.).into()),
+            Object2D::Rectangle((974.5, 141.).into(), (898.5, 0.).into()),
+            // Shield Generator
+            Object2D::RectangleFour(
+                (1065.17, 531.03).into(),
+                (1072.22, 533.59).into(),
+                (1074.78, 526.54).into(),
+                (1067.73, 523.98).into(),
+            ),
+            Object2D::RectangleFour(
+                (928.50, 141.).into(),
+                (935.55, 143.57).into(),
+                (932.98, 150.61).into(),
+                (925.93, 148.05).into(),
+            ),
+            Object2D::RectangleFour(
+                (665.02, 670.39).into(),
+                (662.46, 677.44).into(),
+                (669.5, 680.).into(),
+                (672.07, 672.95).into(),
+            ),
+            Object2D::RectangleFour(
+                (523.2, 294.46).into(),
+                (525.78, 287.41).into(),
+                (532.83, 289.97).into(),
+                (530.27, 297.02).into(),
+            ),
+            Object2D::Target(Pose3D {
+                angle: Point {
+                    x: PI,
+                    y: -CAMERA_ANGLE,
+                },
+                position: (1598., 239.54, 0. - CAMERA_HEIGHT).into(),
+            }),
+            Object2D::Target(Pose3D {
+                angle: Point {
+                    x: PI,
+                    y: -CAMERA_ANGLE,
+                },
+                position: (1598., 566.54, 0. - CAMERA_HEIGHT).into(),
+            }),
+            Object2D::Target(Pose3D {
+                angle: Point {
+                    x: 0.,
+                    y: -CAMERA_ANGLE,
+                },
+                position: (0., 581.54, 0. - CAMERA_HEIGHT).into(),
+            }),
+            Object2D::Target(Pose3D {
+                angle: Point {
+                    x: 0.,
+                    y: -CAMERA_ANGLE,
+                },
+                position: (0., 254.54, 0. - CAMERA_HEIGHT).into(),
+            }),
         ],
     ));
 
     let real_map = Arc::new(Map2D::with_size(
         (1598., 821.).into(),
         vec![
-            Object2D::Line((59.9, 0.).into(), (0., 164.4).into()),
-            Object2D::Line((59.9, 821.).into(), (0., 656.6).into()),
-            Object2D::Line((0., 656.6).into(), (0., 164.4).into()),
-            Object2D::Line((1538.1, 0.).into(), (1598., 164.4).into()),
-            Object2D::Line((1538.1, 821.).into(), (1598., 656.6).into()),
-            Object2D::Line((1598., 656.6).into(), (1598., 164.4).into()),
-            Object2D::Line((59.9, 0.).into(), (1538.1, 0.).into()),
-            Object2D::Line((59.9, 821.).into(), (1538.1, 821.).into()),
+            Object2D::Line((64.98, 0.).into(), (0., 178.54).into()),
+            Object2D::Line((64.98, 821.).into(), (0., 642.46).into()),
+            Object2D::Line((0., 642.46).into(), (0., 178.54).into()),
+            Object2D::Line((1533.02, 0.).into(), (1598., 178.54).into()),
+            Object2D::Line((1533.02, 821.).into(), (1598., 642.46).into()),
+            Object2D::Line((1598., 642.46).into(), (1598., 178.54).into()),
+            Object2D::Line((64.98, 0.).into(), (1533.02, 0.).into()),
+            Object2D::Line((64.98, 821.).into(), (1533.02, 821.).into()),
             // Trench
             Object2D::Rectangle((630.54, 680.).into(), (706.54, 821.).into()),
             Object2D::Rectangle((974.5, 141.).into(), (898.5, 0.).into()),
@@ -127,6 +227,34 @@ fn main() {
                 (532.83, 289.97).into(),
                 (530.27, 297.02).into(),
             ),
+            Object2D::Target(Pose3D {
+                angle: Point {
+                    x: PI,
+                    y: -CAMERA_ANGLE,
+                },
+                position: (1598., 239.54, 0. - CAMERA_HEIGHT).into(),
+            }),
+            Object2D::Target(Pose3D {
+                angle: Point {
+                    x: PI,
+                    y: -CAMERA_ANGLE,
+                },
+                position: (1598., 566.54, 0. - CAMERA_HEIGHT).into(),
+            }),
+            Object2D::Target(Pose3D {
+                angle: Point {
+                    x: 0.,
+                    y: -CAMERA_ANGLE,
+                },
+                position: (0., 581.54, 0. - CAMERA_HEIGHT).into(),
+            }),
+            Object2D::Target(Pose3D {
+                angle: Point {
+                    x: 0.,
+                    y: -CAMERA_ANGLE,
+                },
+                position: (0., 254.54, 0. - CAMERA_HEIGHT).into(),
+            }),
         ],
     ));
     let marker_map = Arc::new(Map2D::with_size(
@@ -160,8 +288,8 @@ fn main() {
         velocity: Point { x: 0., y: 0. },
     };
     let mut robot_state = KinematicState {
-        angle: FRAC_PI_2,
-        position: Point { x: 100., y: 8. },
+        angle: 0.,
+        position: Point { x: 10., y: 410.5 },
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
@@ -201,7 +329,7 @@ fn main() {
         },
     );
     let mut lidar = DummyLidar::new(
-        real_map.clone(),
+        sensor_map.clone(),
         robot_state.pose(),
         Normal::new(0., 0.001),
         Normal::new(0., 0.0005),
@@ -218,13 +346,13 @@ fn main() {
         };
         PoseMCL::from_distributions(
             (
-                Uniform::new(FRAC_PI_2, FRAC_PI_2 + 1e-3),
-                (Uniform::new(0., 200.), Uniform::new(8., 8. + 1e-3)),
+                Uniform::new(0., 0. + 1e-3),
+                (Uniform::new(10., 10. + 1e-3), Uniform::new(0., 821.)),
             ),
             particle_count,
             weight_sum_threshold,
             death_threshold,
-            perceived_map.clone(),
+            sensor_map.clone(),
             presets::exp_weight(1.05),
             presets::lidar_error(1.2, 1.),
             presets::uniform_resampler(0.001, 0.7),
@@ -318,7 +446,8 @@ fn main() {
             draw_map(
                 marker_map.clone(),
                 [0., 0., 1., 1.],
-                0.5,
+                [0., 0.5, 0., 1.],
+                5.,
                 1.,
                 MAP_SCALE,
                 map_visual_margins,
@@ -328,7 +457,8 @@ fn main() {
             draw_map(
                 real_map.clone(),
                 [1., 0., 1., 1.],
-                0.5,
+                [1., 0.5, 0., 1.],
+                5.,
                 1.,
                 MAP_SCALE,
                 map_visual_margins,
@@ -336,9 +466,10 @@ fn main() {
                 g,
             );
             draw_map(
-                perceived_map.clone(),
+                sensor_map.clone(),
                 [0., 0., 0., 1.],
-                0.5,
+                [1., 0.5, 0., 1.],
+                5.,
                 1.,
                 MAP_SCALE,
                 map_visual_margins,
@@ -390,7 +521,7 @@ fn main() {
             );
             let filter_prediction: KinematicState = filter.known_state.into();
             isoceles_triangle(
-                [0., 1., 0., 1.],
+                [0., 0.75, 0., 1.],
                 map_visual_margins,
                 MAP_SCALE,
                 0.5,

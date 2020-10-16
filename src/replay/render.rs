@@ -12,7 +12,8 @@ pub const BLUE: [f32; 4] = [0., 0., 1., 1.];
 
 pub fn draw_map<G>(
     map: Arc<Map2D>,
-    color: [f32; 4],
+    line_color: [f32; 4],
+    target_color: [f32; 4],
     point_radius: f64,
     line_radius: f64,
     scale: f64,
@@ -25,7 +26,7 @@ pub fn draw_map<G>(
     let point_radius: Point = (point_radius, point_radius).into();
     for line in map.lines.clone() {
         line_from_to(
-            color,
+            line_color,
             line_radius,
             map.vertices[line.0] * scale + offset,
             map.vertices[line.1] * scale + offset,
@@ -35,7 +36,13 @@ pub fn draw_map<G>(
     }
     for &point in &map.targets {
         let v: Point = point.position.clone().without_z() * scale + offset;
-        ellipse_from_to(color, v + point_radius, v - point_radius, transform, g);
+        ellipse_from_to(
+            target_color,
+            v + point_radius,
+            v - point_radius,
+            transform,
+            g,
+        );
     }
 }
 
