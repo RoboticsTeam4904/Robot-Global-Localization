@@ -34,9 +34,9 @@ const CONTROL_ANGLE_NOISE: f64 = 0.007; // 2 degrees / s^2 of noise
 const VELOCITY_X_SENSOR_NOISE: f64 = 2.;
 const VELOCITY_Y_SENSOR_NOISE: f64 = 2.;
 const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.2;
-const MAP_SCALE: f64 = 2.;
-const ROBOT_ACCEL: f64 = 100.;
-const WHEEL_DIST: f64 = 30.;
+const MAP_SCALE: f64 = 0.6;
+const ROBOT_ACCEL: f64 = 400.;
+const WHEEL_DIST: f64 = 120.;
 
 fn main() {
     let mut rng = thread_rng();
@@ -49,37 +49,105 @@ fn main() {
     let noise_angle = Normal::new(FRAC_PI_2, ANGLE_NOISE);
     let noise_y = Normal::new(8., Y_NOISE);
     let perceived_map = Arc::new(Map2D::with_size(
-        (200., 200.).into(),
+        (1598., 821.).into(),
         vec![
-            Object2D::Line((0., 0.).into(), (200., 0.).into()),
-            Object2D::Line((0., 0.).into(), (0., 200.).into()),
-            Object2D::Line((200., 0.).into(), (200., 200.).into()),
-            Object2D::Line((0., 200.).into(), (200., 200.).into()),
-            Object2D::Line((20., 60.).into(), (50., 100.).into()),
-            Object2D::Line((50., 100.).into(), (80., 50.).into()),
-            Object2D::Line((80., 50.).into(), (20., 60.).into()),
-            Object2D::Line((140., 100.).into(), (180., 120.).into()),
-            Object2D::Line((180., 120.).into(), (160., 90.).into()),
-            Object2D::Line((160., 90.).into(), (140., 100.).into()),
-            Object2D::Line((100., 40.).into(), (160., 80.).into()),
+            Object2D::Line((59.9, 0.).into(), (0., 164.4).into()),
+            Object2D::Line((59.9, 821.).into(), (0., 656.6).into()),
+            Object2D::Line((0., 656.6).into(), (0., 164.4).into()),
+            Object2D::Line((1538.1, 0.).into(), (1598., 164.4).into()),
+            Object2D::Line((1538.1, 821.).into(), (1598., 656.6).into()),
+            Object2D::Line((1598., 656.6).into(), (1598., 164.4).into()),
+            // Trench
+            Object2D::Rectangle((630.54, 680.).into(), (706.54, 821.).into()),
+            Object2D::Rectangle((974.5, 141.).into(), (898.5, 0.).into()),
+            // Shield Generator
+            Object2D::RectangleFour(
+                (523.2, 531.03).into(),
+                (530.27, 533.59).into(),
+                (532.83, 526.54).into(),
+                (525.78, 523.98).into(),
+            ),
+            Object2D::RectangleFour(
+                (665.02, 141.).into(),
+                (672.07, 143.57).into(),
+                (669.5, 150.61).into(),
+                (662.46, 148.05).into(),
+            ),
+            Object2D::RectangleFour(
+                (928.50, 670.39).into(),
+                (925.93, 677.44).into(),
+                (932.98, 680.).into(),
+                (935.55, 672.95).into(),
+            ),
+            Object2D::RectangleFour(
+                (1065.17, 294.46).into(),
+                (1067.73, 287.41).into(),
+                (1074.78, 289.97).into(),
+                (1072.22, 297.02).into(),
+            ),
         ],
     ));
 
     let real_map = Arc::new(Map2D::with_size(
-        (200., 200.).into(),
+        (1598., 821.).into(),
         vec![
-            Object2D::Line((0., 0.).into(), (200., 0.).into()),
-            Object2D::Line((0., 0.).into(), (0., 200.).into()),
-            Object2D::Line((200., 0.).into(), (200., 200.).into()),
-            Object2D::Line((0., 200.).into(), (200., 200.).into()),
-            Object2D::Line((20., 60.).into(), (50., 100.).into()),
-            Object2D::Line((50., 100.).into(), (80., 50.).into()),
-            Object2D::Line((80., 50.).into(), (20., 60.).into()),
-            Object2D::Line((140., 100.).into(), (180., 120.).into()),
-            Object2D::Line((180., 120.).into(), (160., 90.).into()),
-            Object2D::Line((160., 90.).into(), (140., 100.).into()),
-            Object2D::Line((100., 40.).into(), (160., 80.).into()),
-            Object2D::Triangle((10., 10.).into(), (30., 30.).into(), (40., 20.).into()),
+            Object2D::Line((59.9, 0.).into(), (0., 164.4).into()),
+            Object2D::Line((59.9, 821.).into(), (0., 656.6).into()),
+            Object2D::Line((0., 656.6).into(), (0., 164.4).into()),
+            Object2D::Line((1538.1, 0.).into(), (1598., 164.4).into()),
+            Object2D::Line((1538.1, 821.).into(), (1598., 656.6).into()),
+            Object2D::Line((1598., 656.6).into(), (1598., 164.4).into()),
+            Object2D::Line((59.9, 0.).into(), (1538.1, 0.).into()),
+            Object2D::Line((59.9, 821.).into(), (1538.1, 821.).into()),
+            // Trench
+            Object2D::Rectangle((630.54, 680.).into(), (706.54, 821.).into()),
+            Object2D::Rectangle((974.5, 141.).into(), (898.5, 0.).into()),
+            // Shield Generator
+            Object2D::RectangleFour(
+                (523.2, 531.03).into(),
+                (530.27, 533.59).into(),
+                (532.83, 526.54).into(),
+                (525.78, 523.98).into(),
+            ),
+            Object2D::RectangleFour(
+                (665.02, 141.).into(),
+                (672.07, 143.57).into(),
+                (669.5, 150.61).into(),
+                (662.46, 148.05).into(),
+            ),
+            Object2D::RectangleFour(
+                (928.50, 670.39).into(),
+                (925.93, 677.44).into(),
+                (932.98, 680.).into(),
+                (935.55, 672.95).into(),
+            ),
+            Object2D::RectangleFour(
+                (1065.17, 294.46).into(),
+                (1067.73, 287.41).into(),
+                (1074.78, 289.97).into(),
+                (1072.22, 297.02).into(),
+            ),
+        ],
+    ));
+    let marker_map = Arc::new(Map2D::with_size(
+        (1598., 821.).into(),
+        vec![
+            Object2D::Line((305., 0.).into(), (305., 821.).into()),
+            Object2D::Line((1293., 0.).into(), (1293., 821.).into()),
+            Object2D::Line((1073.5, 0.).into(), (1073.5, 141.).into()),
+            Object2D::Line((524.5, 0.).into(), (524.5, 141.).into()),
+            Object2D::Line((524.5, 141.).into(), (898.5, 141.).into()),
+            Object2D::Line((974.5, 141.).into(), (1073.5, 141.).into()),
+            Object2D::Line((1073.5, 821.).into(), (1073.5, 680.).into()),
+            Object2D::Line((524.5, 821.).into(), (524.5, 680.).into()),
+            Object2D::Line((524.5, 680.).into(), (630.54, 680.).into()),
+            Object2D::Line((706.54, 680.).into(), (1073.5, 680.).into()),
+            Object2D::RectangleFour(
+                (528.77, 528.785).into(),
+                (667.26, 145.81).into(),
+                (1069.98, 292.22).into(),
+                (930.74, 675.20).into(),
+            ),
         ],
     ));
     let init_state = KinematicState {
@@ -267,6 +335,16 @@ fn main() {
                 c.transform,
                 g,
             );
+            draw_map(
+                marker_map.clone(),
+                [0., 0., 1., 1.],
+                0.5,
+                1.,
+                MAP_SCALE,
+                map_visual_margins,
+                c.transform,
+                g,
+            );
             point_cloud(
                 &lidar
                     .sense()
@@ -280,17 +358,17 @@ fn main() {
                 c.transform,
                 g,
             );
-            // for particle in &mcl.belief {
-            //     isoceles_triangle(
-            //         [1., 0., 0., 1.],
-            //         map_visual_margins,
-            //         MAP_SCALE,
-            //         0.2,
-            //         *particle,
-            //         c.transform,
-            //         g,
-            //     )
-            // }
+            for particle in &mcl.belief {
+                isoceles_triangle(
+                    [1., 0., 0., 1.],
+                    map_visual_margins,
+                    MAP_SCALE,
+                    0.2,
+                    *particle,
+                    c.transform,
+                    g,
+                )
+            }
             isoceles_triangle(
                 [0., 0., 0., 1.],
                 map_visual_margins,

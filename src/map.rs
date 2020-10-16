@@ -8,6 +8,7 @@ pub enum Object2D {
     Line(Point, Point),
     Triangle(Point, Point, Point),
     Rectangle(Point, Point),
+    RectangleFour(Point, Point, Point, Point),
 }
 
 /// A Simple 2D map of line segments
@@ -68,6 +69,16 @@ impl Map2D {
                 Object2D::Rectangle(c1, c3) => {
                     let c2 = Point { x: c1.x, y: c3.y };
                     let c4 = Point { x: c3.x, y: c1.y };
+                    let v1 = add_vert(c1);
+                    let v2 = add_vert(c2);
+                    let v3 = add_vert(c3);
+                    let v4 = add_vert(c4);
+                    lines.push((v1, v2));
+                    lines.push((v2, v3));
+                    lines.push((v3, v4));
+                    lines.push((v4, v1));
+                }
+                Object2D::RectangleFour(c1, c2, c3, c4) => {
                     let v1 = add_vert(c1);
                     let v2 = add_vert(c2);
                     let v3 = add_vert(c3);
