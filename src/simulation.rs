@@ -232,28 +232,28 @@ fn main() {
                     x: PI,
                     y: -CAMERA_ANGLE,
                 },
-                position: (1598., 239.54, 0. - CAMERA_HEIGHT).into(),
+                position: (1598., 239.54, 41.91 - CAMERA_HEIGHT).into(),
             }),
             Object2D::Target(Pose3D {
                 angle: Point {
                     x: PI,
                     y: -CAMERA_ANGLE,
                 },
-                position: (1598., 566.54, 0. - CAMERA_HEIGHT).into(),
+                position: (1598., 566.54, 249.55 - CAMERA_HEIGHT).into(),
             }),
             Object2D::Target(Pose3D {
                 angle: Point {
                     x: 0.,
                     y: -CAMERA_ANGLE,
                 },
-                position: (0., 581.54, 0. - CAMERA_HEIGHT).into(),
+                position: (0., 581.54, 41.91 - CAMERA_HEIGHT).into(),
             }),
             Object2D::Target(Pose3D {
                 angle: Point {
                     x: 0.,
                     y: -CAMERA_ANGLE,
                 },
-                position: (0., 254.54, 0. - CAMERA_HEIGHT).into(),
+                position: (0., 254.54, 249.55 - CAMERA_HEIGHT).into(),
             }),
         ],
     ));
