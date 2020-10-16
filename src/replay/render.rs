@@ -33,8 +33,8 @@ pub fn draw_map<G>(
             g,
         );
     }
-    for &point in &map.points {
-        let v: Point = map.vertices[point] * scale + offset;
+    for &point in &map.targets {
+        let v: Point = point.position.clone().without_z() * scale + offset;
         ellipse_from_to(color, v + point_radius, v - point_radius, transform, g);
     }
 }

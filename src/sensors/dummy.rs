@@ -1,7 +1,7 @@
 use crate::{
     map::Map2D,
     sensors::{LimitedSensor, Sensor, SensorSink},
-    utility::{Point, Pose},
+    utility::{Point, Point3D, Pose, Pose3D},
 };
 use rand::{
     distributions::{Distribution, Normal},
@@ -40,6 +40,83 @@ impl<T> SensorSink for DummySensor<T> {
 
     fn push(&mut self, input: Self::Input) {
         self.latest_data = input
+    }
+}
+
+/// A sensor which senses all objects' relative positions within a certain fov
+pub struct DummyObjectSensor3D {
+    pub map: Arc<Map2D>,
+    pub relative_pose: Pose,
+    pub robot_pose: Pose,
+    /// x fov is azimuth angle fov, y fov is inclination angle fov
+    fov: Point,
+    max_dist: f64,
+    x_noise_distr: Normal,
+    y_noise_distr: Normal,
+    z_noise_distr: Normal,
+    azimuth_noise_distr: Normal,
+}
+
+impl DummyObjectSensor3D {
+    /// noise margins are inputted as standard deviations
+    pub fn new(
+        fov: Point,
+        map: Arc<Map2D>,
+        relative_pose: Pose,
+        robot_pose: Pose,
+        noise_margins: Pose3D,
+        max_dist: f64,
+    ) -> Self {
+        Self {
+            fov,
+            map,
+            relative_pose,
+            robot_pose,
+            x_noise_distr: Normal::new(0., noise_margins.position.x),
+            y_noise_distr: Normal::new(0., noise_margins.position.y),
+            z_noise_distr: Normal::new(0., noise_margins.position.z),
+            azimuth_noise_distr: Normal::new(0., noise_margins.angle.x),
+            max_dist,
+        }
+    }
+
+    pub fn update_pose(&mut self, new_pose: Pose) {
+        self.robot_pose = new_pose
+    }
+}
+
+impl Sensor for DummyObjectSensor3D {
+    type Output = Vec<Pose3D>;
+
+    fn relative_pose(&self) -> Pose {
+        self.relative_pose
+    }
+
+    fn sense(&self) -> Self::Output {
+        let sensor_pose = self.robot_pose + self.relative_pose();
+        self.map
+            .cull_points(sensor_pose, self.fov)
+            .iter()
+            .map(|o| {
+                *o + Pose3D {
+                    angle: Point {
+                        x: self.azimuth_noise_distr.sample(&mut thread_rng()),
+                        y: 0.,
+                    },
+                    position: Point3D {
+                        x: self.x_noise_distr.sample(&mut thread_rng()),
+                        y: self.y_noise_distr.sample(&mut thread_rng()),
+                        z: self.z_noise_distr.sample(&mut thread_rng()),
+                    },
+                }
+            })
+            .collect()
+    }
+}
+
+impl LimitedSensor<(Point, f64)> for DummyObjectSensor3D {
+    fn range(&self) -> Option<(Point, f64)> {
+        Some((self.fov, self.max_dist))
     }
 }
 
@@ -86,13 +163,20 @@ impl Sensor for DummyObjectSensor {
     fn sense(&self) -> Self::Output {
         let sensor_pose = self.robot_pose + self.relative_pose();
         self.map
-            .cull_points(sensor_pose, self.fov)
+            .cull_points(
+                sensor_pose,
+                Point {
+                    x: self.fov,
+                    y: 2. * PI,
+                },
+            )
             .iter()
             .map(|o| {
-                *o + Point {
-                    x: self.x_noise_distr.sample(&mut thread_rng()),
-                    y: self.y_noise_distr.sample(&mut thread_rng()),
-                }
+                Point::from(o.position.clone().without_z())
+                    + Point {
+                        x: self.x_noise_distr.sample(&mut thread_rng()),
+                        y: self.y_noise_distr.sample(&mut thread_rng()),
+                    }
             })
             .collect()
     }
@@ -101,45 +185,6 @@ impl Sensor for DummyObjectSensor {
 impl LimitedSensor<f64> for DummyObjectSensor {
     fn range(&self) -> Option<f64> {
         Some(self.fov)
-    }
-}
-#[derive(Clone)]
-pub struct Tape {
-    pose: Pose,
-    height: f64,
-}
-
-impl Tape {
-    pub fn relative_distance(&self, pose: Pose, fov: f64, map: &Arc<Map2D>) -> Option<Pose> {
-        Some(Pose::default())
-    }
-}
-
-#[derive(Clone)]
-pub struct DummyTapeSensor {
-    tapes: Vec<Tape>,
-    fov: f64,
-    robot_pose: Pose,
-    relative_pose: Pose,
-    pub map: Arc<Map2D>,
-}
-
-impl DummyTapeSensor {
-    pub fn update_pose(&mut self, robot_pose: Pose) {
-        self.robot_pose = robot_pose;
-    }
-}
-
-impl Sensor for DummyTapeSensor {
-    type Output = Vec<(Pose, f64)>;
-    fn sense(&self) -> Self::Output {
-        let mut output: Vec<(Pose, f64)> = Vec::new();
-        for tape in &self.tapes {
-            if let Some(pose) = tape.relative_distance(self.robot_pose, self.fov, &self.map) {
-                output.push((pose, tape.height));
-            }
-        }
-        output
     }
 }
 

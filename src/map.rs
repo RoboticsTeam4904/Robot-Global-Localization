@@ -1,10 +1,10 @@
-use crate::utility::{Point, Pose};
+use crate::utility::{Point, Point3D, Pose, Pose3D};
 use std::f64::consts::PI;
 
 // TODO: this file is lazy
 
 pub enum Object2D {
-    Point(Point),
+    Target(Pose3D),
     Line(Point, Point),
     Triangle(Point, Point, Point),
     Rectangle(Point, Point),
@@ -14,9 +14,9 @@ pub enum Object2D {
 #[derive(Debug)]
 pub struct Map2D {
     pub size: Point,
+    pub targets: Vec<Pose3D>,
     pub vertices: Vec<Point>,
     pub lines: Vec<(usize, usize)>,
-    pub points: Vec<usize>,
 }
 
 impl Map2D {
@@ -44,7 +44,7 @@ impl Map2D {
     {
         let mut vertices = Vec::new();
         let mut lines = Vec::new();
-        let mut points = Vec::new();
+        let mut targets = Vec::new();
         let mut add_vert = |point: Point| -> usize {
             if let Some(idx) = vertices.iter().position(|&v| v == point) {
                 idx
@@ -77,7 +77,7 @@ impl Map2D {
                     lines.push((v3, v4));
                     lines.push((v4, v1));
                 }
-                Object2D::Point(p) => points.push(add_vert(p)),
+                Object2D::Target(p) => targets.push(p),
             };
         }
 
@@ -85,7 +85,7 @@ impl Map2D {
             size,
             vertices,
             lines,
-            points,
+            targets,
         }
     }
 
@@ -199,13 +199,13 @@ impl Map2D {
                 }
             }
         }
-        for point in &self.points {
-            let point = self.get_vertex(*point);
+        for target in &self.targets {
             // TODO: tune? fuzzy comparison for slope comparison
-            if (start.position.angle_to(point) - start.angle).abs() < 0.01 {
-                let dist = point.dist(start.position);
+            let point2d = target.position.clone().without_z();
+            if (start.position.angle_to(point2d) - start.angle).abs() < 0.01 {
+                let dist = point2d.dist(start.position);
                 if closest_intersection == None || closest_intersection_dist > dist {
-                    closest_intersection = Some(point);
+                    closest_intersection = Some(point2d);
                     closest_intersection_dist = dist;
                 }
             }
@@ -214,19 +214,22 @@ impl Map2D {
     }
 
     // TODO: name this wtf
-    pub fn cull_points(&self, start: Pose, fov: f64) -> Vec<Point> {
+    pub fn cull_points(&self, start: Pose, fov: Point) -> Vec<Pose3D> {
         let mut sensed_objects = Vec::new();
-        for object in &self.points {
-            let object = self.get_vertex(*object);
-            let object_angle = start.position.angle_to(object);
-            let rel_angle = PI - (PI - (start.angle - object_angle).abs()).abs();
-            if fov / 2. >= rel_angle
+        let start_pose: Point3D = start.position.into();
+        for object in &self.targets {
+            let object_angle = start_pose.angle_to(object.clone().position);
+            let rel_angle = Point{x: PI - (PI - (start.angle - object_angle.x).abs()).abs(), y: -object_angle.y};
+            if fov.x / 2. >= rel_angle.x && fov.y / 2. >= rel_angle.y
                 && self
-                    .raycast(start.with_angle(object_angle))
+                    .raycast(start.with_angle(object_angle.x)) 
                     .unwrap() // if this panics then soemthing went wrong. it should at least return object
-                    == object
+                    == object.clone().position.without_z()
             {
-                sensed_objects.push(object - start.position);
+                sensed_objects.push(Pose3D{
+                    angle: Point{x: object.angle.x - start.angle, y: -object_angle.y},
+                    position: object.position.clone() - start.position
+                    });
             }
         }
         sensed_objects

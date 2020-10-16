@@ -87,6 +87,16 @@ impl Into<Point> for (f64, f64) {
     }
 }
 
+impl Into<Point3D> for Point {
+    fn into(self) -> Point3D {
+        Point3D {
+            x: self.x,
+            y: self.y,
+            z: 0.,
+        }
+    }
+}
+
 impl Into<[f64; 2]> for Point {
     fn into(self) -> [f64; 2] {
         [self.x, self.y]
@@ -280,15 +290,24 @@ impl Point3D {
         self.inclination_to(Point3D::default())
     }
 
-    /// Angle of `self` relative to `other`
-    pub fn azimuth_to(&self, other: Point3D) -> f64 {
-        let point: Point = self.clone().into();
-        point.angle_to(other.into())
+    /// Angles of `self` relative to `other`
+    pub fn angle_to(&self, other: Point3D) -> Point {
+        let point: Point = self.clone().without_z();
+        Point {
+            x: point.angle_to(other.without_z()),
+            y: (other.z - self.z).atan2(point.mag()),
+        }
     }
 
-    /// Inclination angle of `self` relative to `other`
+    /// Angles of `self` relative to `other`
+    pub fn azimuth_to(&self, other: Point3D) -> f64 {
+        let point: Point = self.clone().without_z();
+        point.angle_to(other.without_z())
+    }
+
+    /// Angles of `self` relative to `other`
     pub fn inclination_to(&self, other: Point3D) -> f64 {
-        let point: Point = self.clone().into();
+        let point: Point = self.clone().without_z();
         (other.z - self.z).atan2(point.mag())
     }
 
@@ -303,6 +322,13 @@ impl Point3D {
 
     pub fn dot(&self, other: Point3D) -> f64 {
         self.x * other.x + self.y * other.y + self.z * other.z
+    }
+
+    pub fn without_z(&self) -> Point {
+        Point {
+            x: self.x,
+            y: self.y,
+        }
     }
 }
 
@@ -319,15 +345,6 @@ impl Into<Point3D> for (f64, f64, f64) {
 impl Into<[f64; 3]> for Point3D {
     fn into(self) -> [f64; 3] {
         [self.x, self.y, self.z]
-    }
-}
-
-impl Into<Point> for Point3D {
-    fn into(self) -> Point {
-        Point {
-            x: self.x,
-            y: self.y,
-        }
     }
 }
 
@@ -351,6 +368,30 @@ impl std::ops::Sub for Point3D {
             x: self.x - other.x,
             y: self.y - other.y,
             z: self.z - other.z,
+        }
+    }
+}
+
+impl std::ops::Add<Point> for Point3D {
+    type Output = Point3D;
+
+    fn add(self, other: Point) -> Point3D {
+        Self {
+            x: self.x + other.x,
+            y: self.y + other.y,
+            z: self.z,
+        }
+    }
+}
+
+impl std::ops::Sub<Point> for Point3D {
+    type Output = Point3D;
+
+    fn sub(self, other: Point) -> Point3D {
+        Self {
+            x: self.x - other.x,
+            y: self.y - other.y,
+            z: self.z,
         }
     }
 }
@@ -738,7 +779,6 @@ impl std::ops::AddAssign for KinematicState {
         }
     }
 }
-
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct Pose {
     pub angle: f64,
@@ -872,39 +912,15 @@ impl Into<Vec<f64>> for Pose {
     }
 }
 
-pub fn mean(list: &Vec<f64>) -> f64 {
-    list.iter().sum::<f64>() / (list.len() as f64)
-}
-
-pub fn variance(list: &Vec<f64>) -> f64 {
-    let average = mean(list);
-    mean(
-        &list
-            .iter()
-            .map(|elem| (average - elem).powi(2))
-            .collect::<Vec<f64>>(),
-    )
-}
-
-pub fn variance_poses(poses: &Vec<Pose>) -> Pose {
-    let mut angles: Vec<f64> = Vec::new();
-    let mut x_coords: Vec<f64> = Vec::new();
-    let mut y_coords: Vec<f64> = Vec::new();
-    for pose in poses {
-        angles.push(pose.angle);
-        x_coords.push(pose.position.x);
-        y_coords.push(pose.position.y);
-    }
-    angles = angles
-        .iter()
-        .map(|angle| (angle - mean(&angles)).abs() % PI)
-        .collect();
-    Pose {
-        angle: variance(&angles),
-        position: Point {
-            x: variance(&x_coords),
-            y: variance(&y_coords),
-        },
+impl Into<Pose3D> for Pose {
+    fn into(self) -> Pose3D {
+        Pose3D {
+            angle: Point {
+                x: self.angle,
+                y: 0.,
+            },
+            position: self.position.into(),
+        }
     }
 }
 
@@ -942,4 +958,240 @@ where
         _ => num,
     }
     .into()
+}
+
+#[derive(Default, Debug, Clone, Copy, PartialEq)]
+pub struct Pose3D {
+    /// x coordinate is azimuth angle, y coordinate is inclination angle
+    pub angle: Point,
+    pub position: Point3D,
+}
+
+impl Pose3D {
+    /// Creates a random pose from uniform distribitions for each range
+    pub fn random(
+        azimuth_range: Range<f64>,
+        inclination_range: Range<f64>,
+        x_range: Range<f64>,
+        y_range: Range<f64>,
+        z_range: Range<f64>,
+    ) -> Pose3D {
+        let mut rng = thread_rng();
+        Pose3D {
+            angle: Point {
+                x: rng.gen_range(azimuth_range.start, azimuth_range.end),
+                y: rng.gen_range(inclination_range.start, inclination_range.end),
+            },
+            position: Point3D {
+                x: rng.gen_range(x_range.start, x_range.end),
+                y: rng.gen_range(y_range.start, y_range.end),
+                z: rng.gen_range(z_range.start, z_range.end),
+            },
+        }
+    }
+
+    pub fn random_from_range(range: Pose3D) -> Pose3D {
+        Pose3D::random(
+            -range.angle.x..range.angle.x,
+            -range.angle.y..range.angle.y,
+            -range.position.x..range.position.x,
+            -range.position.y..range.position.y,
+            -range.position.z..range.position.z,
+        )
+    }
+
+    /// Mod `angle` by 2π
+    pub fn normalize(mut self) -> Pose3D {
+        self.angle.x %= 2. * PI;
+        self.angle.y %= 2. * PI;
+        self
+    }
+
+    pub fn clamp(self, lower: Pose3D, upper: Pose3D) -> Pose3D {
+        Pose3D {
+            angle: self.angle.clamp(lower.angle, upper.angle),
+            position: self.position.clamp(lower.position, upper.position),
+        }
+    }
+
+    pub fn with_angle(self, angle: Point) -> Pose3D {
+        Pose3D {
+            angle: angle,
+            position: self.position,
+        }
+    }
+
+    pub fn with_position(self, position: Point3D) -> Pose3D {
+        Pose3D {
+            angle: self.angle,
+            position: position,
+        }
+    }
+}
+
+impl std::ops::Add for Pose3D {
+    type Output = Pose3D;
+
+    /// Does normalize angle
+    fn add(self, other: Pose3D) -> Pose3D {
+        Pose3D {
+            angle: Point {
+                x: (self.angle.x + other.angle.x) % (2. * PI),
+                y: (self.angle.y + other.angle.y) % (2. * PI),
+            },
+            position: self.position + other.position,
+        }
+    }
+}
+
+impl std::ops::Sub for Pose3D {
+    type Output = Pose3D;
+
+    /// Does normalize angle
+    fn sub(self, other: Pose3D) -> Pose3D {
+        Pose3D {
+            angle: Point {
+                x: (self.angle.x - other.angle.x) % (2. * PI),
+                y: (self.angle.y - other.angle.y) % (2. * PI),
+            },
+            position: self.position - other.position,
+        }
+    }
+}
+
+impl std::ops::Add<Pose> for Pose3D {
+    type Output = Pose3D;
+
+    /// Does normalize angle
+    fn add(self, other: Pose) -> Pose3D {
+        Pose3D {
+            angle: Point {
+                x: (self.angle.x + other.angle) % (2. * PI),
+                y: (self.angle.y) % (2. * PI),
+            },
+            position: self.position + other.position,
+        }
+    }
+}
+
+impl std::ops::Sub<Pose> for Pose3D {
+    type Output = Pose3D;
+
+    /// Does normalize angle
+    fn sub(self, other: Pose) -> Pose3D {
+        Pose3D {
+            angle: Point {
+                x: (self.angle.x - other.angle) % (2. * PI),
+                y: self.angle.y,
+            },
+            position: self.position - other.position,
+        }
+    }
+}
+
+impl std::ops::Div<f64> for Pose3D {
+    type Output = Pose3D;
+
+    /// Does normalize angle
+    fn div(self, other: f64) -> Pose3D {
+        Pose3D {
+            angle: Point {
+                x: (self.angle.x / other) % (2. * PI),
+                y: (self.angle.y / other) % (2. * PI),
+            },
+            position: self.position / other,
+        }
+    }
+}
+
+impl std::ops::Mul<f64> for Pose3D {
+    type Output = Pose3D;
+
+    /// Does normalize angle
+    fn mul(self, other: f64) -> Pose3D {
+        Pose3D {
+            angle: Point {
+                x: (self.angle.x * other) % (2. * PI),
+                y: (self.angle.y * other) % (2. * PI),
+            },
+            position: self.position * other,
+        }
+    }
+}
+
+impl std::ops::AddAssign for Pose3D {
+    /// Does not normalize angle
+    fn add_assign(&mut self, other: Pose3D) {
+        *self = Pose3D {
+            angle: Point {
+                x: (self.angle.x + other.angle.x) % (2. * PI),
+                y: (self.angle.y + other.angle.y) % (2. * PI),
+            },
+            position: self.position + other.position,
+        }
+    }
+}
+
+impl From<Vec<f64>> for Pose3D {
+    fn from(vector: Vec<f64>) -> Pose3D {
+        Pose3D {
+            angle: Point {
+                x: *vector.get(0).unwrap(),
+                y: *vector.get(1).unwrap(),
+            },
+            position: Point3D {
+                x: *vector.get(2).unwrap(),
+                y: *vector.get(3).unwrap(),
+                z: *vector.get(4).unwrap(),
+            },
+        }
+    }
+}
+
+impl Into<Vec<f64>> for Pose3D {
+    fn into(self) -> Vec<f64> {
+        vec![
+            self.angle.x,
+            self.angle.y,
+            self.position.x,
+            self.position.y,
+            self.position.z,
+        ]
+    }
+}
+
+pub fn mean(list: &Vec<f64>) -> f64 {
+    list.iter().sum::<f64>() / (list.len() as f64)
+}
+
+pub fn variance(list: &Vec<f64>) -> f64 {
+    let average = mean(list);
+    mean(
+        &list
+            .iter()
+            .map(|elem| (average - elem).powi(2))
+            .collect::<Vec<f64>>(),
+    )
+}
+
+pub fn variance_poses(poses: &Vec<Pose>) -> Pose {
+    let mut angles: Vec<f64> = Vec::new();
+    let mut x_coords: Vec<f64> = Vec::new();
+    let mut y_coords: Vec<f64> = Vec::new();
+    for pose in poses {
+        angles.push(pose.angle);
+        x_coords.push(pose.position.x);
+        y_coords.push(pose.position.y);
+    }
+    angles = angles
+        .iter()
+        .map(|angle| (angle - mean(&angles)).abs() % PI)
+        .collect();
+    Pose {
+        angle: variance(&angles),
+        position: Point {
+            x: variance(&x_coords),
+            y: variance(&y_coords),
+        },
+    }
 }

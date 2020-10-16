@@ -107,11 +107,21 @@ where
         let mut sum_error = 0.;
         let mut pred_observation = map.cull_points(
             sample + object_detector.relative_pose(),
-            object_detector.range().unwrap_or(2. * PI), // FOV
+            Point {
+                x: object_detector.range().unwrap_or(2. * PI),
+                y: 2. * PI,
+            }, // FOV
         );
         let mut observation = object_detector.sense();
         observation.sort_by(|a, b| a.mag().partial_cmp(&b.mag()).unwrap());
-        pred_observation.sort_by(|a, b| a.mag().partial_cmp(&b.mag()).unwrap());
+        pred_observation.sort_by(|a, b| {
+            a.position
+                .clone()
+                .without_z()
+                .mag()
+                .partial_cmp(&b.position.clone().without_z().mag())
+                .unwrap()
+        });
         // TODO: This method of calculating error is not entirely sound
         for (&real, &pred) in observation
             .iter()
@@ -119,10 +129,10 @@ where
             .zip(
                 pred_observation
                     .iter()
-                    .take_while(|p| detector_range.contains(&p.mag())),
+                    .take_while(|p| detector_range.contains(&p.position.clone().without_z().mag())),
             )
         {
-            sum_error += (real - pred).mag();
+            sum_error += (real - pred.position.clone().without_z()).mag();
         }
         sum_error +=
             discrepancy_factor * (observation.len() as f64 - pred_observation.len() as f64).abs();

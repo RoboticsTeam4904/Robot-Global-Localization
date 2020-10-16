@@ -31,9 +31,9 @@ const CONTROL_X_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
 const CONTROL_Y_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
 
 const CONTROL_ANGLE_NOISE: f64 = 0.007; // 2 degrees / s^2 of noise
-const VELOCITY_X_SENSOR_NOISE: f64 = 1.;
-const VELOCITY_Y_SENSOR_NOISE: f64 = 1.;
-const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.1;
+const VELOCITY_X_SENSOR_NOISE: f64 = 2.;
+const VELOCITY_Y_SENSOR_NOISE: f64 = 2.;
+const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.2;
 const MAP_SCALE: f64 = 2.;
 const ROBOT_ACCEL: f64 = 100.;
 const WHEEL_DIST: f64 = 30.;
@@ -280,17 +280,17 @@ fn main() {
                 c.transform,
                 g,
             );
-            for particle in &mcl.belief {
-                isoceles_triangle(
-                    [1., 0., 0., 1.],
-                    map_visual_margins,
-                    MAP_SCALE,
-                    0.2,
-                    *particle,
-                    c.transform,
-                    g,
-                )
-            }
+            // for particle in &mcl.belief {
+            //     isoceles_triangle(
+            //         [1., 0., 0., 1.],
+            //         map_visual_margins,
+            //         MAP_SCALE,
+            //         0.2,
+            //         *particle,
+            //         c.transform,
+            //         g,
+            //     )
+            // }
             isoceles_triangle(
                 [0., 0., 0., 1.],
                 map_visual_margins,
