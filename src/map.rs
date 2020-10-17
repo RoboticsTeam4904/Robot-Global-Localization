@@ -1,5 +1,5 @@
 use crate::utility::{Point, Point3D, Pose, Pose3D};
-use std::f64::consts::PI;
+use std::f64::{consts::PI, INFINITY};
 
 // TODO: this file is lazy
 
@@ -225,9 +225,10 @@ impl Map2D {
     }
 
     // TODO: name this wtf
-    pub fn cull_points(&self, start: Pose, fov: Point) -> Vec<Pose3D> {
+    pub fn cull_points(&self, start: Pose, fov: Point, max_dist: Option<f64>) -> Vec<Pose3D> {
         let mut sensed_objects = Vec::new();
         let start_pose: Point3D = start.position.into();
+        let dist_range = 0.0..max_dist.unwrap_or(INFINITY);
         for object in &self.targets {
             let object_angle = start_pose.angle_to(object.clone().position);
             let rel_angle = Point{x: PI - (PI - (start.angle - object_angle.x).abs()).abs(), y: -object_angle.y};
@@ -237,10 +238,12 @@ impl Map2D {
                     .unwrap() // if this panics then soemthing went wrong. it should at least return object
                     == object.clone().position.without_z()
             {
+                let sensed_position = object.position.clone() - start.position;
+                if dist_range.contains(&sensed_position.mag()){
                 sensed_objects.push(Pose3D{
                     angle: Point{x: object.angle.x - start.angle, y: -object_angle.y},
-                    position: object.position.clone() - start.position
-                    });
+                    position: sensed_position
+                    });}
             }
         }
         sensed_objects

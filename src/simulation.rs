@@ -7,10 +7,12 @@ use global_robot_localization::{
     map::{Map2D, Object2D},
     replay::render::{draw_map, isoceles_triangle, point_cloud},
     sensors::{
-        dummy::{DummyLidar, DummyPositionSensor, DummyVelocitySensor},
+        dummy::{DummyLidar, DummyObjectSensor3D, DummyPositionSensor, DummyVelocitySensor},
         Sensor,
     },
-    utility::{variance_poses, DifferentialDriveState, KinematicState, Point, Pose, Pose3D},
+    utility::{
+        variance_poses, DifferentialDriveState, KinematicState, Point, Point3D, Pose, Pose3D,
+    },
 };
 use nalgebra::{Matrix6, RowVector6, Vector6};
 use piston_window::*;
@@ -39,6 +41,11 @@ const ROBOT_ACCEL: f64 = 400.;
 const WHEEL_DIST: f64 = 120.;
 const CAMERA_HEIGHT: f64 = 0.;
 const CAMERA_ANGLE: f64 = 0.;
+const CAMERA_FOV: Point = Point {
+    x: 1.229,
+    y: 0.7557,
+};
+const VISION_MAX_DIST: Option<f64> = Some(800.);
 
 fn main() {
     let mut rng = thread_rng();
@@ -337,6 +344,21 @@ fn main() {
         Pose::default(),
         None,
     );
+    let mut object_sensor = DummyObjectSensor3D::new(
+        CAMERA_FOV,
+        sensor_map.clone(),
+        Pose::default(),
+        robot_state.pose(),
+        Pose3D {
+            angle: Point { x: 0.0005, y: 0. },
+            position: Point3D {
+                x: 0.001,
+                y: 0.001,
+                z: 1.,
+            },
+        },
+        VISION_MAX_DIST,
+    );
     let mut mcl = {
         let particle_count = 40_000;
         let weight_sum_threshold = 200.;
@@ -355,6 +377,7 @@ fn main() {
             sensor_map.clone(),
             presets::exp_weight(1.05),
             presets::lidar_error(1.2, 1.),
+            presets::object_3d_detection_error(1.2, 20., 1.),
             presets::uniform_resampler(0.001, 0.7),
         )
     };
@@ -569,13 +592,14 @@ fn main() {
         let robot_pose = robot_state.pose();
         position_sensor.update_pose(robot_pose);
         lidar.update_pose(robot_pose);
+        object_sensor.update_pose(robot_pose);
 
         println!("\tP = {}", mcl.belief.len());
         // update localization
         let mcl_pred = mcl.get_prediction();
 
         mcl.control_update(&position_sensor);
-        mcl.observation_update(&lidar);
+        mcl.observation_update(&lidar, &object_sensor);
         q = delta_t.powi(2)
             * Matrix6::from_diagonal(&Vector6::new(
                 0.00000,

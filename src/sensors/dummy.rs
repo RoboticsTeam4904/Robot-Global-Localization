@@ -42,6 +42,76 @@ impl<T> SensorSink for DummySensor<T> {
         self.latest_data = input
     }
 }
+/// A sensor which senses all objects' relative positions within a certain fov
+pub struct DummyObjectSensor {
+    pub map: Arc<Map2D>,
+    pub relative_pose: Pose,
+    pub robot_pose: Pose,
+    fov: f64,
+    max_dist: Option<f64>,
+    x_noise_distr: Normal,
+    y_noise_distr: Normal,
+}
+
+impl DummyObjectSensor {
+    pub fn new(
+        fov: f64,
+        map: Arc<Map2D>,
+        relative_pose: Pose,
+        robot_pose: Pose,
+        max_dist: Option<f64>,
+        noise_margins: Point,
+    ) -> Self {
+        Self {
+            fov,
+            map,
+            relative_pose,
+            robot_pose,
+            max_dist,
+            x_noise_distr: Normal::new(0., noise_margins.x / 3.),
+            y_noise_distr: Normal::new(0., noise_margins.y / 3.),
+        }
+    }
+
+    pub fn update_pose(&mut self, new_pose: Pose) {
+        self.robot_pose = new_pose
+    }
+}
+
+impl Sensor for DummyObjectSensor {
+    type Output = Vec<Point>;
+
+    fn relative_pose(&self) -> Pose {
+        self.relative_pose
+    }
+
+    fn sense(&self) -> Self::Output {
+        let sensor_pose = self.robot_pose + self.relative_pose();
+        self.map
+            .cull_points(
+                sensor_pose,
+                Point {
+                    x: self.fov,
+                    y: 2. * PI,
+                },
+                self.max_dist,
+            )
+            .iter()
+            .map(|o| {
+                Point::from(o.position.clone().without_z())
+                    + Point {
+                        x: self.x_noise_distr.sample(&mut thread_rng()),
+                        y: self.y_noise_distr.sample(&mut thread_rng()),
+                    }
+            })
+            .collect()
+    }
+}
+impl LimitedSensor<(f64, f64)> for DummyObjectSensor {
+    fn range(&self) -> Option<(f64, f64)> {
+        Some((self.fov, self.max_dist.unwrap_or(INFINITY)))
+    }
+}
 
 /// A sensor which senses all objects' relative positions within a certain fov
 pub struct DummyObjectSensor3D {
@@ -50,7 +120,7 @@ pub struct DummyObjectSensor3D {
     pub robot_pose: Pose,
     /// x fov is azimuth angle fov, y fov is inclination angle fov
     fov: Point,
-    max_dist: f64,
+    max_dist: Option<f64>,
     x_noise_distr: Normal,
     y_noise_distr: Normal,
     z_noise_distr: Normal,
@@ -65,7 +135,7 @@ impl DummyObjectSensor3D {
         relative_pose: Pose,
         robot_pose: Pose,
         noise_margins: Pose3D,
-        max_dist: f64,
+        max_dist: Option<f64>,
     ) -> Self {
         Self {
             fov,
@@ -95,7 +165,7 @@ impl Sensor for DummyObjectSensor3D {
     fn sense(&self) -> Self::Output {
         let sensor_pose = self.robot_pose + self.relative_pose();
         self.map
-            .cull_points(sensor_pose, self.fov)
+            .cull_points(sensor_pose, self.fov, self.max_dist)
             .iter()
             .map(|o| {
                 *o + Pose3D {
@@ -113,78 +183,9 @@ impl Sensor for DummyObjectSensor3D {
             .collect()
     }
 }
-
 impl LimitedSensor<(Point, f64)> for DummyObjectSensor3D {
     fn range(&self) -> Option<(Point, f64)> {
-        Some((self.fov, self.max_dist))
-    }
-}
-
-/// A sensor which senses all objects' relative positions within a certain fov
-pub struct DummyObjectSensor {
-    pub map: Arc<Map2D>,
-    pub relative_pose: Pose,
-    pub robot_pose: Pose,
-    fov: f64,
-    x_noise_distr: Normal,
-    y_noise_distr: Normal,
-}
-
-impl DummyObjectSensor {
-    pub fn new(
-        fov: f64,
-        map: Arc<Map2D>,
-        relative_pose: Pose,
-        robot_pose: Pose,
-        noise_margins: Point,
-    ) -> Self {
-        Self {
-            fov,
-            map,
-            relative_pose,
-            robot_pose,
-            x_noise_distr: Normal::new(0., noise_margins.x / 3.),
-            y_noise_distr: Normal::new(0., noise_margins.y / 3.),
-        }
-    }
-
-    pub fn update_pose(&mut self, new_pose: Pose) {
-        self.robot_pose = new_pose
-    }
-}
-
-impl Sensor for DummyObjectSensor {
-    type Output = Vec<Point>;
-
-    fn relative_pose(&self) -> Pose {
-        self.relative_pose
-    }
-
-    fn sense(&self) -> Self::Output {
-        let sensor_pose = self.robot_pose + self.relative_pose();
-        self.map
-            .cull_points(
-                sensor_pose,
-                Point {
-                    x: self.fov,
-                    y: 2. * PI,
-                },
-            )
-            .iter()
-            .map(|o| {
-                Point::from(o.position.clone().without_z())
-                    + Point {
-                        x: self.x_noise_distr.sample(&mut thread_rng()),
-                        y: self.y_noise_distr.sample(&mut thread_rng()),
-                    }
-            })
-            .collect()
-    }
-}
-
-impl LimitedSensor<f64> for DummyObjectSensor {
-    fn range(&self) -> Option<f64> {
-        Some(self.fov)
+        Some((self.fov, self.max_dist.unwrap_or(INFINITY)))
     }
 }
 

@@ -2,7 +2,7 @@ use crate::{
     ai::localization::{ErrorCalculator, ResampleNoiseCalculator, WeightCalculator},
     map::Map2D,
     sensors::{LimitedSensor, Sensor},
-    utility::{Point, Pose},
+    utility::{Point, Pose, Pose3D},
 };
 use rand::{distributions::Normal, prelude::*};
 use rayon::prelude::*;
@@ -56,7 +56,7 @@ pub fn lidar_error<S>(discrepancy_pow: f64, error_scale: f64) -> impl ErrorCalcu
 where
     S: Sensor<Output = Vec<Point>> + LimitedSensor<Range<f64>>,
 {
-    move |&sample: &Pose, lidar: &S, map: Arc<Map2D>| -> f64 {
+    move |&sample: &Pose, lidar: &S, map: &Arc<Map2D>| -> f64 {
         let sample = sample + lidar.relative_pose();
         let lidar_scan = lidar.sense();
         let len = lidar_scan.len() as f64;
@@ -100,39 +100,74 @@ pub fn object_detection_error<S>(
     error_scale: f64,
 ) -> impl ErrorCalculator<S>
 where
-    S: Sensor<Output = Vec<Point>> + LimitedSensor<f64> + LimitedSensor<Range<f64>>,
+    S: Sensor<Output = Vec<Point>> + LimitedSensor<(f64, f64)>,
 {
-    move |&sample: &Pose, object_detector: &S, map: Arc<Map2D>| {
-        let detector_range = object_detector.range().unwrap_or(0.0..INFINITY);
+    move |&sample: &Pose, object_detector: &S, map: &Arc<Map2D>| {
+        let fov: f64;
+        let max_dist: Option<f64>;
+        if let Some((sensor_fov, sensor_max_dist)) = object_detector.range() {
+            fov = sensor_fov;
+            max_dist = Some(sensor_max_dist);
+        } else {
+            fov = 2. * PI;
+            max_dist = None;
+        }
+
         let mut sum_error = 0.;
-        let mut pred_observation = map.cull_points(
-            sample + object_detector.relative_pose(),
-            Point {
-                x: object_detector.range().unwrap_or(2. * PI),
-                y: 2. * PI,
-            }, // FOV
-        );
+        let mut pred_observation: Vec<Point> = map
+            .cull_points(
+                sample + object_detector.relative_pose(),
+                Point { x: fov, y: 2. * PI },
+                max_dist,
+            )
+            .iter()
+            .map(|elem| elem.position.clone().without_z())
+            .collect();
         let mut observation = object_detector.sense();
         observation.sort_by(|a, b| a.mag().partial_cmp(&b.mag()).unwrap());
-        pred_observation.sort_by(|a, b| {
-            a.position
-                .clone()
-                .without_z()
-                .mag()
-                .partial_cmp(&b.position.clone().without_z().mag())
-                .unwrap()
-        });
+        pred_observation.sort_by(|a, b| a.mag().partial_cmp(&b.mag()).unwrap());
         // TODO: This method of calculating error is not entirely sound
-        for (&real, &pred) in observation
+        for (&real, &pred) in observation.iter().zip(pred_observation.iter()) {
+            sum_error += (real - pred).mag();
+        }
+        sum_error +=
+            discrepancy_factor * (observation.len() as f64 - pred_observation.len() as f64).abs();
+        sum_error * error_scale
+    }
+}
+
+pub fn object_3d_detection_error<S>(
+    discrepancy_factor: f64,
+    angle_factor: f64,
+    error_scale: f64,
+) -> impl ErrorCalculator<S>
+where
+    S: Sensor<Output = Vec<Pose3D>> + LimitedSensor<(Point, f64)>,
+{
+    move |&sample: &Pose, object_detector: &S, map: &Arc<Map2D>| {
+        let fov: Point;
+        let max_dist: Option<f64>;
+        if let Some((sensor_fov, sensor_max_dist)) = object_detector.range() {
+            fov = sensor_fov;
+            max_dist = Some(sensor_max_dist);
+        } else {
+            fov = (2. * PI, 2. * PI).into();
+            max_dist = None;
+        }
+
+        let mut sum_error = 0.;
+        let mut pred_observation: Vec<Pose3D> = map
+            .cull_points(sample + object_detector.relative_pose(), fov, max_dist)
             .iter()
-            .take_while(|p| detector_range.contains(&p.mag()))
-            .zip(
-                pred_observation
-                    .iter()
-                    .take_while(|p| detector_range.contains(&p.position.clone().without_z().mag())),
-            )
-        {
-            sum_error += (real - pred.position.clone().without_z()).mag();
+            .map(|elem| elem.clone())
+            .collect();
+        let mut observation = object_detector.sense();
+        observation.sort_by(|a, b| a.position.mag().partial_cmp(&b.position.mag()).unwrap());
+        pred_observation.sort_by(|a, b| a.position.mag().partial_cmp(&b.position.mag()).unwrap());
+        // TODO: This method of calculating error is not entirely sound
+        for (&real, &pred) in observation.iter().zip(pred_observation.iter()) {
+            sum_error += (real.position - pred.position).mag();
+            sum_error += angle_factor * (real.angle - pred.angle).mag();
         }
         sum_error +=
             discrepancy_factor * (observation.len() as f64 - pred_observation.len() as f64).abs();
