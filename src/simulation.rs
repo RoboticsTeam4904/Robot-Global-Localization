@@ -18,6 +18,7 @@ use nalgebra::{Matrix6, RowVector6, Vector6};
 use piston_window::*;
 use rand::{
     distributions::{uniform::Uniform, Distribution, Normal},
+    seq::IteratorRandom,
     thread_rng,
 };
 use std::{
@@ -169,28 +170,28 @@ fn main() {
                     x: PI,
                     y: -CAMERA_ANGLE,
                 },
-                position: (1598., 239.54, 0. - CAMERA_HEIGHT).into(),
+                position: (1598., 239.54, 41.91 - CAMERA_HEIGHT).into(),
             }),
             Object2D::Target(Pose3D {
                 angle: Point {
                     x: PI,
                     y: -CAMERA_ANGLE,
                 },
-                position: (1598., 566.54, 0. - CAMERA_HEIGHT).into(),
+                position: (1598., 566.54, 249.55 - CAMERA_HEIGHT).into(),
             }),
             Object2D::Target(Pose3D {
                 angle: Point {
                     x: 0.,
                     y: -CAMERA_ANGLE,
                 },
-                position: (0., 581.54, 0. - CAMERA_HEIGHT).into(),
+                position: (0., 581.54, 41.91 - CAMERA_HEIGHT).into(),
             }),
             Object2D::Target(Pose3D {
                 angle: Point {
                     x: 0.,
                     y: -CAMERA_ANGLE,
                 },
-                position: (0., 254.54, 0. - CAMERA_HEIGHT).into(),
+                position: (0., 254.54, 249.55 - CAMERA_HEIGHT).into(),
             }),
         ],
     ));
@@ -338,8 +339,8 @@ fn main() {
     let mut lidar = DummyLidar::new(
         sensor_map.clone(),
         robot_state.pose(),
-        Normal::new(0., 0.001),
-        Normal::new(0., 0.0005),
+        Normal::new(0., 1.),
+        Normal::new(0., 0.005),
         180,
         Pose::default(),
         None,
@@ -350,17 +351,17 @@ fn main() {
         Pose::default(),
         robot_state.pose(),
         Pose3D {
-            angle: Point { x: 0.0005, y: 0. },
+            angle: Point { x: 0.05, y: 0. },
             position: Point3D {
-                x: 0.001,
-                y: 0.001,
-                z: 1.,
+                x: 1.,
+                y: 1.,
+                z: 0.5,
             },
         },
         VISION_MAX_DIST,
     );
     let mut mcl = {
-        let particle_count = 40_000;
+        let particle_count = 1_000;
         let weight_sum_threshold = 200.;
         let death_threshold = DeathCondition {
             particle_count_threshold: 4_000,
@@ -600,6 +601,7 @@ fn main() {
 
         mcl.control_update(&position_sensor);
         mcl.observation_update(&lidar, &object_sensor);
+
         q = delta_t.powi(2)
             * Matrix6::from_diagonal(&Vector6::new(
                 0.00000,
@@ -613,7 +615,13 @@ fn main() {
 
         let motion_measurements = motion_sensor.sense();
         let mcl_prediction = mcl.get_prediction();
-        let mcl_uncertainty = variance_poses(&mcl.belief);
+
+        let mcl_uncertainty = variance_poses(
+            &mcl.belief
+                .clone()
+                .into_iter()
+                .choose_multiple(&mut rng, 500),
+        );
         r = Matrix6::from_diagonal(&Vector6::from_vec(vec![
             mcl_uncertainty.angle,
             mcl_uncertainty.position.x,
@@ -622,6 +630,7 @@ fn main() {
             delta_t.powi(2) * VELOCITY_X_SENSOR_NOISE.powi(2),
             delta_t.powi(2) * VELOCITY_Y_SENSOR_NOISE.powi(2),
         ]));
+
         filter.measurement_update(
             RowVector6::from_vec(vec![
                 mcl_prediction.angle,
