@@ -377,8 +377,17 @@ fn main() {
             death_threshold,
             sensor_map.clone(),
             presets::exp_weight(1.05),
-            presets::lidar_error(1.2, 1.),
-            presets::object_3d_detection_error(1.2, 20., 1.),
+            move |&sample: &Pose,
+                  object_detector: &(DummyLidar, DummyObjectSensor3D),
+                  map: &Arc<Map2D>|
+                  -> f64 {
+                presets::lidar_error(1.2, 1.)(&sample, &object_detector.0, map)
+                    + presets::object_3d_detection_error(10., 10., 1.)(
+                        &sample,
+                        &object_detector.1,
+                        map,
+                    )
+            },
             presets::uniform_resampler(0.001, 0.7),
         )
     };
@@ -600,7 +609,7 @@ fn main() {
         let mcl_pred = mcl.get_prediction();
 
         mcl.control_update(&position_sensor);
-        mcl.observation_update(&lidar, &object_sensor);
+        mcl.observation_update(&(lidar, object_sensor));
 
         q = delta_t.powi(2)
             * Matrix6::from_diagonal(&Vector6::new(

@@ -100,11 +100,10 @@ impl DeathCondition {
 /// `errors_from_sense` calculates the error of each particle from its sensor data
 ///
 /// `resampling_noise` calculates the amount of noise to add to each particle during resampling
-pub struct PoseMCL<W, L, O, R, Y, Z>
+pub struct PoseMCL<W, E, R, Z>
 where
     W: WeightCalculator,
-    L: ErrorCalculator<Y>,
-    O: ErrorCalculator<Z>,
+    E: ErrorCalculator<Z>,
     R: ResampleNoiseCalculator,
 {
     pub map: Arc<Map2D>,
@@ -113,20 +112,16 @@ where
     weight_sum_threshold: f64,
     death_condition: DeathCondition,
     weight_from_error: W,
-    errors_from_lidar: L,
-    errors_from_object: O,
+    errors_from_sense: E,
     resampling_noise: R,
-    lidar_data_type: PhantomData<Y>,
-    object_data_type: PhantomData<Z>,
+    data_type: PhantomData<Z>,
 }
 
-impl<W, L, O, R, Y, Z> PoseMCL<W, L, O, R, Y, Z>
+impl<W, E, R, Z> PoseMCL<W, E, R, Z>
 where
     W: WeightCalculator + Send + Sync,
-    L: ErrorCalculator<Y> + Send + Sync,
-    O: ErrorCalculator<Z> + Send + Sync,
+    E: ErrorCalculator<Z> + Send + Sync,
     R: ResampleNoiseCalculator + Send + Sync,
-    Y: Sync + Send,
     Z: Sync + Send,
 {
     pub fn new(
@@ -135,8 +130,7 @@ where
         death_condition: DeathCondition,
         map: Arc<Map2D>,
         weight_from_error: W,
-        errors_from_lidar: L,
-        errors_from_object: O,
+        errors_from_sense: E,
         resampling_noise: R,
     ) -> Self {
         let belief = PoseBelief::new(max_particle_count, map.size);
@@ -147,11 +141,9 @@ where
             death_condition,
             weight_sum_threshold,
             weight_from_error,
-            errors_from_lidar,
-            errors_from_object,
+            errors_from_sense,
             resampling_noise,
-            lidar_data_type: PhantomData,
-            object_data_type: PhantomData,
+            data_type: PhantomData,
         }
     }
 
@@ -162,8 +154,7 @@ where
         death_condition: DeathCondition,
         map: Arc<Map2D>,
         weight_from_error: W,
-        errors_from_lidar: L,
-        errors_from_object: O,
+        errors_from_sense: E,
         resampling_noise: R,
     ) -> Self
     where
@@ -177,12 +168,10 @@ where
             death_condition,
             map,
             weight_from_error,
-            errors_from_lidar,
-            errors_from_object,
+            errors_from_sense,
             belief,
             resampling_noise,
-            lidar_data_type: PhantomData,
-            object_data_type: PhantomData,
+            data_type: PhantomData,
         }
     }
 
@@ -195,14 +184,11 @@ where
     /// Resamples the belief based on sensor data from `z`.
     ///
     /// Calculates error for each particle in parallel.
-    pub fn observation_update(&mut self, y: &Y, z: &Z) {
+    pub fn observation_update(&mut self, z: &Z) {
         let errors: Vec<_> = self
             .belief
             .par_iter()
-            .map(|sample| {
-                (&self.errors_from_lidar)(sample, y, &self.map)
-                    + (&self.errors_from_object)(sample, z, &self.map)
-            })
+            .map(|sample| (&self.errors_from_sense)(sample, z, &self.map))
             .collect();
 
         let mut new_particles = Vec::new();
