@@ -299,6 +299,7 @@ impl Sensor for DummyLidar {
         let mut rng = thread_rng();
         let mut scan = vec![];
         let increment = 2. * PI / self.resolution as f64;
+        let mut lidar_dist;
         for i in 0..self.resolution {
             match self.map.raycast(
                 self.robot_pose
@@ -314,11 +315,11 @@ impl Sensor for DummyLidar {
                         .unwrap_or(0.0..INFINITY)
                         .contains(&scan_point.dist(self.robot_pose.position)) =>
                 {
+                    lidar_dist = scan_point.dist(self.robot_pose.position);
                     scan.push(Point::polar(
                         scan_point.angle_to(self.robot_pose.position) - self.robot_pose.angle
                             + self.angle_noise.sample(&mut rng),
-                        scan_point.dist(self.robot_pose.position)
-                            + self.dist_noise.sample(&mut rng),
+                        lidar_dist + lidar_dist * self.dist_noise.sample(&mut rng),
                     ))
                 }
                 _ => (),
