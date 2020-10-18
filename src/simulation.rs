@@ -20,7 +20,7 @@ use rand::{
     thread_rng,
 };
 use std::{
-    f64::consts::{FRAC_PI_2, FRAC_PI_8, PI},
+    f64::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_8, PI},
     sync::Arc,
     time::Instant,
 };
@@ -45,7 +45,67 @@ const CAMERA_FOV: Point = Point {
     y: 0.7557,
 };
 const VISION_MAX_DIST: Option<f64> = Some(800.);
+#[derive(Clone)]
+struct DummyRobot {
+    left_noise_distr: Normal,
+    right_noise_distr: Normal,
+    control: Pose,
+    robot_state: KinematicState,
+    wheel_state: DifferentialDriveState,
+    radius: f64,
+}
 
+impl DummyRobot {
+    pub fn new(
+        noise_margins: Point,
+        robot_state: KinematicState,
+        radius: f64,
+        wheel_state: DifferentialDriveState,
+    ) -> Self {
+        DummyRobot {
+            left_noise_distr: Normal::new(0., noise_margins.x),
+            right_noise_distr: Normal::new(0., noise_margins.y),
+            control: Pose::default(),
+            robot_state,
+            wheel_state,
+            radius,
+        }
+    }
+
+    pub fn with_robot_state(mut self, robot_state: KinematicState) -> Self {
+        self.robot_state = robot_state;
+        self
+    }
+    // pub fn
+    pub fn shape(&self) -> Object2D {
+        let forward_point = Point {
+            x: self.radius,
+            y: 0.,
+        }
+        .rotate(self.robot_state.angle);
+        Object2D::Triangle(
+            self.robot_state.position + forward_point * 1.5,
+            self.robot_state.position + forward_point.rotate(FRAC_PI_3),
+            self.robot_state.position + forward_point.rotate(-FRAC_PI_3),
+        )
+    }
+    pub fn control_update(&mut self, delta_t: f64, map: &Arc<Map2D>) {
+        let mut rng = thread_rng();
+        let control = self
+            .wheel_state
+            .control_update(delta_t, self.robot_state.angle);
+        self.robot_state
+            .mapped_control_update(control, delta_t, vec![map.clone()]);
+        if self.robot_state.vel_angle == 0. && self.robot_state.velocity == Point::default() {
+            self.wheel_state.control = (-5., 10.).into();
+        } else {
+            self.wheel_state.control += Point {
+                x: self.left_noise_distr.sample(&mut rng),
+                y: self.right_noise_distr.sample(&mut rng),
+            } * delta_t;
+        }
+    }
+}
 fn main() {
     let mut rng = thread_rng();
 
@@ -56,261 +116,125 @@ fn main() {
     let noise_x = Normal::new(410.5, X_NOISE);
     let noise_angle = Normal::new(0., ANGLE_NOISE);
     let noise_y = Normal::new(8., Y_NOISE);
+    let mut robot_state = KinematicState {
+        angle: 0.,
+        position: Point { x: 10., y: 410.5 },
+        vel_angle: 0.,
+        velocity: Point { x: 0., y: 0. },
+    };
+    let dummy_robot = DummyRobot::new(
+        (20., 20.).into(),
+        KinematicState::default(),
+        15.,
+        DifferentialDriveState::default().with_wheel_dist(WHEEL_DIST),
+    );
+    let mut dummy_robots: Vec<DummyRobot> = vec![
+        dummy_robot.clone().with_robot_state(
+            KinematicState::default()
+                .with_position((415., 415.).into())
+                .with_angle(FRAC_PI_2),
+        ),
+        dummy_robot.clone().with_robot_state(
+            KinematicState::default()
+                .with_position((1200., 390.).into())
+                .with_angle(0.),
+        ),
+        dummy_robot.clone().with_robot_state(
+            KinematicState::default()
+                .with_position((1350., 700.).into())
+                .with_angle(PI),
+        ),
+        dummy_robot.clone().with_robot_state(
+            KinematicState::default()
+                .with_position((750., 250.).into())
+                .with_angle(FRAC_PI_3),
+        ),
+        dummy_robot.clone().with_robot_state(
+            KinematicState::default()
+                .with_position((350., 700.).into())
+                .with_angle(-FRAC_PI_2),
+        ),
+    ];
+    let universal_objects = vec![
+        Object2D::Line((64.98, 0.).into(), (0., 178.54).into()),
+        Object2D::Line((64.98, 821.).into(), (0., 642.46).into()),
+        Object2D::Line((0., 642.46).into(), (0., 178.54).into()),
+        Object2D::Line((1533.02, 0.).into(), (1598., 178.54).into()),
+        Object2D::Line((1533.02, 821.).into(), (1598., 642.46).into()),
+        Object2D::Line((1598., 642.46).into(), (1598., 178.54).into()),
+        // Trench
+        Object2D::Rectangle((630.54, 680.).into(), (706.54, 821.).into()),
+        Object2D::Rectangle((974.5, 141.).into(), (898.5, 0.).into()),
+        // Shield Generator
+        Object2D::RectangleFour(
+            (1065.17, 531.03).into(),
+            (1072.22, 533.59).into(),
+            (1074.78, 526.54).into(),
+            (1067.73, 523.98).into(),
+        ),
+        Object2D::RectangleFour(
+            (928.50, 141.).into(),
+            (935.55, 143.57).into(),
+            (932.98, 150.61).into(),
+            (925.93, 148.05).into(),
+        ),
+        Object2D::RectangleFour(
+            (665.02, 670.39).into(),
+            (662.46, 677.44).into(),
+            (669.5, 680.).into(),
+            (672.07, 672.95).into(),
+        ),
+        Object2D::RectangleFour(
+            (523.2, 294.46).into(),
+            (525.78, 287.41).into(),
+            (532.83, 289.97).into(),
+            (530.27, 297.02).into(),
+        ),
+        Object2D::Target(Pose3D {
+            angle: Point {
+                x: PI,
+                y: -CAMERA_ANGLE,
+            },
+            position: (1598., 239.54, 41.91 - CAMERA_HEIGHT).into(),
+        }),
+        Object2D::Target(Pose3D {
+            angle: Point {
+                x: PI,
+                y: -CAMERA_ANGLE,
+            },
+            position: (1598., 566.54, 249.55 - CAMERA_HEIGHT).into(),
+        }),
+        Object2D::Target(Pose3D {
+            angle: Point {
+                x: 0.,
+                y: -CAMERA_ANGLE,
+            },
+            position: (0., 581.54, 41.91 - CAMERA_HEIGHT).into(),
+        }),
+        Object2D::Target(Pose3D {
+            angle: Point {
+                x: 0.,
+                y: -CAMERA_ANGLE,
+            },
+            position: (0., 254.54, 249.55 - CAMERA_HEIGHT).into(),
+        }),
+    ];
+    let sensor_objects = universal_objects.clone();
     let sensor_map = Arc::new(Map2D::with_size(
         (1598., 821.).into(),
-        vec![
-            Object2D::Line((64.98, 0.).into(), (0., 178.54).into()),
-            Object2D::Line((64.98, 821.).into(), (0., 642.46).into()),
-            Object2D::Line((0., 642.46).into(), (0., 178.54).into()),
-            Object2D::Line((1533.02, 0.).into(), (1598., 178.54).into()),
-            Object2D::Line((1533.02, 821.).into(), (1598., 642.46).into()),
-            Object2D::Line((1598., 642.46).into(), (1598., 178.54).into()),
-            // Trench
-            Object2D::Rectangle((630.54, 680.).into(), (706.54, 821.).into()),
-            Object2D::Rectangle((974.5, 141.).into(), (898.5, 0.).into()),
-            // Shield Generator
-            Object2D::RectangleFour(
-                (1065.17, 531.03).into(),
-                (1072.22, 533.59).into(),
-                (1074.78, 526.54).into(),
-                (1067.73, 523.98).into(),
-            ),
-            Object2D::RectangleFour(
-                (928.50, 141.).into(),
-                (935.55, 143.57).into(),
-                (932.98, 150.61).into(),
-                (925.93, 148.05).into(),
-            ),
-            Object2D::RectangleFour(
-                (665.02, 670.39).into(),
-                (662.46, 677.44).into(),
-                (669.5, 680.).into(),
-                (672.07, 672.95).into(),
-            ),
-            Object2D::RectangleFour(
-                (523.2, 294.46).into(),
-                (525.78, 287.41).into(),
-                (532.83, 289.97).into(),
-                (530.27, 297.02).into(),
-            ),
-            Object2D::Target(Pose3D {
-                angle: Point {
-                    x: PI,
-                    y: -CAMERA_ANGLE,
-                },
-                position: (1598., 239.54, 41.91 - CAMERA_HEIGHT).into(),
-            }),
-            Object2D::Target(Pose3D {
-                angle: Point {
-                    x: PI,
-                    y: -CAMERA_ANGLE,
-                },
-                position: (1598., 566.54, 249.55 - CAMERA_HEIGHT).into(),
-            }),
-            Object2D::Target(Pose3D {
-                angle: Point {
-                    x: 0.,
-                    y: -CAMERA_ANGLE,
-                },
-                position: (0., 581.54, 41.91 - CAMERA_HEIGHT).into(),
-            }),
-            Object2D::Target(Pose3D {
-                angle: Point {
-                    x: 0.,
-                    y: -CAMERA_ANGLE,
-                },
-                position: (0., 254.54, 249.55 - CAMERA_HEIGHT).into(),
-            }),
-            Object2D::Triangle(
-                (400., 400.).into(),
-                (430., 400.).into(),
-                (415., 430.).into(),
-            ),
-            Object2D::Triangle(
-                (320., 700.).into(),
-                (350., 700.).into(),
-                (335., 670.).into(),
-            ),
-            Object2D::Triangle(
-                (760., 240.).into(),
-                (760., 270.).into(),
-                (730., 255.).into(),
-            ),
-            Object2D::Triangle(
-                (1350., 680.).into(),
-                (1350., 710.).into(),
-                (1380., 695.).into(),
-            ),
-            Object2D::Triangle(
-                (1200., 390.).into(),
-                (1230., 390.).into(),
-                (1215., 360.).into(),
-            ),
-        ],
+        sensor_objects.clone(),
     ));
 
     let perceived_map = Arc::new(Map2D::with_size(
         (1598., 821.).into(),
-        vec![
-            Object2D::Line((64.98, 0.).into(), (0., 178.54).into()),
-            Object2D::Line((64.98, 821.).into(), (0., 642.46).into()),
-            Object2D::Line((0., 642.46).into(), (0., 178.54).into()),
-            Object2D::Line((1533.02, 0.).into(), (1598., 178.54).into()),
-            Object2D::Line((1533.02, 821.).into(), (1598., 642.46).into()),
-            Object2D::Line((1598., 642.46).into(), (1598., 178.54).into()),
-            // Trench
-            Object2D::Rectangle((630.54, 680.).into(), (706.54, 821.).into()),
-            Object2D::Rectangle((974.5, 141.).into(), (898.5, 0.).into()),
-            // Shield Generator
-            Object2D::RectangleFour(
-                (1065.17, 531.03).into(),
-                (1072.22, 533.59).into(),
-                (1074.78, 526.54).into(),
-                (1067.73, 523.98).into(),
-            ),
-            Object2D::RectangleFour(
-                (928.50, 141.).into(),
-                (935.55, 143.57).into(),
-                (932.98, 150.61).into(),
-                (925.93, 148.05).into(),
-            ),
-            Object2D::RectangleFour(
-                (665.02, 670.39).into(),
-                (662.46, 677.44).into(),
-                (669.5, 680.).into(),
-                (672.07, 672.95).into(),
-            ),
-            Object2D::RectangleFour(
-                (523.2, 294.46).into(),
-                (525.78, 287.41).into(),
-                (532.83, 289.97).into(),
-                (530.27, 297.02).into(),
-            ),
-            Object2D::Target(Pose3D {
-                angle: Point {
-                    x: PI,
-                    y: -CAMERA_ANGLE,
-                },
-                position: (1598., 239.54, 41.91 - CAMERA_HEIGHT).into(),
-            }),
-            Object2D::Target(Pose3D {
-                angle: Point {
-                    x: PI,
-                    y: -CAMERA_ANGLE,
-                },
-                position: (1598., 566.54, 249.55 - CAMERA_HEIGHT).into(),
-            }),
-            Object2D::Target(Pose3D {
-                angle: Point {
-                    x: 0.,
-                    y: -CAMERA_ANGLE,
-                },
-                position: (0., 581.54, 41.91 - CAMERA_HEIGHT).into(),
-            }),
-            Object2D::Target(Pose3D {
-                angle: Point {
-                    x: 0.,
-                    y: -CAMERA_ANGLE,
-                },
-                position: (0., 254.54, 249.55 - CAMERA_HEIGHT).into(),
-            }),
-        ],
+        universal_objects.clone(),
     ));
-
-    let real_map = Arc::new(Map2D::with_size(
-        (1598., 821.).into(),
-        vec![
-            Object2D::Line((64.98, 0.).into(), (0., 178.54).into()),
-            Object2D::Line((64.98, 821.).into(), (0., 642.46).into()),
-            Object2D::Line((0., 642.46).into(), (0., 178.54).into()),
-            Object2D::Line((1533.02, 0.).into(), (1598., 178.54).into()),
-            Object2D::Line((1533.02, 821.).into(), (1598., 642.46).into()),
-            Object2D::Line((1598., 642.46).into(), (1598., 178.54).into()),
-            Object2D::Line((64.98, 0.).into(), (1533.02, 0.).into()),
-            Object2D::Line((64.98, 821.).into(), (1533.02, 821.).into()),
-            // Trench
-            Object2D::Rectangle((630.54, 680.).into(), (706.54, 821.).into()),
-            Object2D::Rectangle((974.5, 141.).into(), (898.5, 0.).into()),
-            // Shield Generator
-            Object2D::RectangleFour(
-                (1065.17, 531.03).into(),
-                (1072.22, 533.59).into(),
-                (1074.78, 526.54).into(),
-                (1067.73, 523.98).into(),
-            ),
-            Object2D::RectangleFour(
-                (928.50, 141.).into(),
-                (935.55, 143.57).into(),
-                (932.98, 150.61).into(),
-                (925.93, 148.05).into(),
-            ),
-            Object2D::RectangleFour(
-                (665.02, 670.39).into(),
-                (662.46, 677.44).into(),
-                (669.5, 680.).into(),
-                (672.07, 672.95).into(),
-            ),
-            Object2D::RectangleFour(
-                (523.2, 294.46).into(),
-                (525.78, 287.41).into(),
-                (532.83, 289.97).into(),
-                (530.27, 297.02).into(),
-            ),
-            Object2D::Target(Pose3D {
-                angle: Point {
-                    x: PI,
-                    y: -CAMERA_ANGLE,
-                },
-                position: (1598., 239.54, 41.91 - CAMERA_HEIGHT).into(),
-            }),
-            Object2D::Target(Pose3D {
-                angle: Point {
-                    x: PI,
-                    y: -CAMERA_ANGLE,
-                },
-                position: (1598., 566.54, 249.55 - CAMERA_HEIGHT).into(),
-            }),
-            Object2D::Target(Pose3D {
-                angle: Point {
-                    x: 0.,
-                    y: -CAMERA_ANGLE,
-                },
-                position: (0., 581.54, 41.91 - CAMERA_HEIGHT).into(),
-            }),
-            Object2D::Target(Pose3D {
-                angle: Point {
-                    x: 0.,
-                    y: -CAMERA_ANGLE,
-                },
-                position: (0., 254.54, 249.55 - CAMERA_HEIGHT).into(),
-            }),
-            Object2D::Triangle(
-                (400., 400.).into(),
-                (430., 400.).into(),
-                (415., 430.).into(),
-            ),
-            Object2D::Triangle(
-                (320., 700.).into(),
-                (350., 700.).into(),
-                (335., 670.).into(),
-            ),
-            Object2D::Triangle(
-                (760., 240.).into(),
-                (760., 270.).into(),
-                (730., 255.).into(),
-            ),
-            Object2D::Triangle(
-                (1350., 680.).into(),
-                (1350., 710.).into(),
-                (1380., 695.).into(),
-            ),
-            Object2D::Triangle(
-                (1200., 390.).into(),
-                (1230., 390.).into(),
-                (1215., 360.).into(),
-            ),
-        ],
-    ));
+    let mut real_objects = universal_objects.clone();
+    real_objects.extend(vec![
+        Object2D::Line((64.98, 0.).into(), (1533.02, 0.).into()),
+        Object2D::Line((64.98, 821.).into(), (1533.02, 821.).into()),
+    ]);
+    let real_map = Arc::new(Map2D::with_size((1598., 821.).into(), real_objects));
     let marker_map = Arc::new(Map2D::with_size(
         (1598., 821.).into(),
         vec![
@@ -341,12 +265,7 @@ fn main() {
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
-    let mut robot_state = KinematicState {
-        angle: 0.,
-        position: Point { x: 10., y: 410.5 },
-        vel_angle: 0.,
-        velocity: Point { x: 0., y: 0. },
-    };
+
     let mut filter = LocalizationFilter::new(
         Matrix6::from_diagonal(&Vector6::new(
             ANGLE_NOISE.powi(2),
@@ -379,7 +298,7 @@ fn main() {
         },
         Pose {
             angle: FRAC_PI_8 / 4.,
-            position: Point { x: 1., y: 1. },
+            position: Point { x: 2., y: 2. },
         },
     );
     let mut lidar = DummyLidar::new(
@@ -403,7 +322,7 @@ fn main() {
         VISION_MAX_DIST,
     );
     let mut mcl = {
-        let particle_count = 500;
+        let particle_count = 300;
         let weight_sum_threshold = 200.;
         let death_threshold = DeathCondition {
             particle_count_threshold: 4_000,
@@ -439,9 +358,7 @@ fn main() {
     let mut last_time: Instant = Instant::now();
     let mut delta_t;
     let start = Instant::now();
-    let mut wheel_control = Point::default();
-    let mut wheel_robot_state = DifferentialDriveState::default();
-    wheel_robot_state.set_wheel_dist(WHEEL_DIST);
+    let mut wheel_robot_state = DifferentialDriveState::default().with_wheel_dist(WHEEL_DIST);
     while let Some(e) = window.next() {
         let mut control: Pose = Pose::default();
         delta_t = last_time.elapsed().as_secs_f64();
@@ -463,15 +380,15 @@ fn main() {
         if let Some(Button::Keyboard(key)) = e.press_args() {
             match key {
                 keyboard::Key::W => {
-                    wheel_control.x = ROBOT_ACCEL;
+                    wheel_robot_state.control.x = ROBOT_ACCEL;
                 }
                 keyboard::Key::S => {
-                    wheel_control.x = -ROBOT_ACCEL;
+                    wheel_robot_state.control.x = -ROBOT_ACCEL;
                 }
-                keyboard::Key::Up => wheel_control.y = ROBOT_ACCEL,
-                keyboard::Key::Down => wheel_control.y = -ROBOT_ACCEL,
+                keyboard::Key::Up => wheel_robot_state.control.y = ROBOT_ACCEL,
+                keyboard::Key::Down => wheel_robot_state.control.y = -ROBOT_ACCEL,
                 keyboard::Key::Space => {
-                    wheel_control = Point::default();
+                    wheel_robot_state.control = Point::default();
                     control += Pose {
                         angle: -robot_state.vel_angle / delta_t,
                         position: Point {
@@ -490,22 +407,30 @@ fn main() {
                 _ => (),
             }
         }
+
         if let Some(Button::Keyboard(key)) = e.release_args() {
             match key {
                 keyboard::Key::W => {
-                    wheel_control.x = 0.;
+                    wheel_robot_state.control.x = 0.;
                 }
                 keyboard::Key::S => {
-                    wheel_control.x = 0.;
+                    wheel_robot_state.control.x = 0.;
                 }
-                keyboard::Key::Up => wheel_control.y = 0.,
-                keyboard::Key::Down => wheel_control.y = 0.,
+                keyboard::Key::Up => wheel_robot_state.control.y = 0.,
+                keyboard::Key::Down => wheel_robot_state.control.y = 0.,
 
                 _ => (),
             }
         }
         let filter_prediction: KinematicState = filter.known_state.into();
-
+        let dummy_map = Arc::new(Map2D::with_size(
+            (1598., 821.).into(),
+            dummy_robots
+                .iter()
+                .map(|dummy_robot| dummy_robot.shape())
+                .collect::<Vec<Object2D>>(),
+        ));
+        lidar.update_with_maps(vec![dummy_map.clone()]);
         // Rendering
         window.draw_2d(&e, |c, g, _device| {
             clear([1.0; 4], g);
@@ -546,6 +471,17 @@ fn main() {
                 sensor_map.clone(),
                 [0., 0., 0., 1.],
                 [1., 0.5, 0., 1.],
+                5.,
+                1.,
+                MAP_SCALE,
+                map_visual_margins,
+                c.transform,
+                g,
+            );
+            draw_map(
+                dummy_map.clone(),
+                [0., 0., 0., 1.],
+                [0.5, 0.5, 0.5, 1.],
                 5.,
                 1.,
                 MAP_SCALE,
@@ -615,9 +551,13 @@ fn main() {
             )
                 .into(),
         };
-        control += wheel_robot_state.control_update(wheel_control, delta_t, robot_state.angle);
+        control += wheel_robot_state.control_update(delta_t, robot_state.angle);
 
-        if robot_state.mapped_control_update(control, delta_t, &real_map) {
+        if robot_state.mapped_control_update(
+            control,
+            delta_t,
+            vec![real_map.clone(), dummy_map.clone()],
+        ) {
             wheel_robot_state.reset_velocity();
             control.angle = -robot_state.vel_angle / delta_t + control.angle;
             control.position = Point {
@@ -644,6 +584,10 @@ fn main() {
             position: robot_state.velocity,
         });
         let robot_pose = robot_state.pose();
+        for dummy_robot in &mut dummy_robots {
+            dummy_robot.control_update(delta_t, &real_map);
+        }
+        position_sensor.set_delta_t(delta_t);
         position_sensor.update_pose(robot_pose);
         lidar.update_pose(robot_pose);
         object_sensor.update_pose(robot_pose);

@@ -510,6 +510,7 @@ pub struct DifferentialDriveState {
     pub wheel_dist: f64,
     pub velocity: Point,
     pub robot_velocity: Pose,
+    pub control: Point,
 }
 
 impl DifferentialDriveState {
@@ -528,8 +529,8 @@ impl DifferentialDriveState {
         }
     }
     /// Returns the appropriate control update for the given wheel control.
-    pub fn control_update(&mut self, wheel_control: Point, delta_t: f64, robot_angle: f64) -> Pose {
-        self.velocity += wheel_control * delta_t;
+    pub fn control_update(&mut self, delta_t: f64, robot_angle: f64) -> Pose {
+        self.velocity += self.control * delta_t;
         let new_velocity = self.robot_velocity(delta_t, robot_angle);
         let diff_vel = new_velocity - self.robot_velocity;
         self.robot_velocity = new_velocity;
@@ -543,8 +544,9 @@ impl DifferentialDriveState {
         self.robot_velocity = Pose::default();
     }
 
-    pub fn set_wheel_dist(&mut self, wheel_dist: f64) {
+    pub fn with_wheel_dist(mut self, wheel_dist: f64) -> Self {
         self.wheel_dist = wheel_dist;
+        self
     }
 }
 
@@ -622,7 +624,12 @@ impl KinematicState {
         self.angle = (self.angle + self.vel_angle * delta_t) % (2. * PI);
     }
 
-    pub fn mapped_control_update(&mut self, control: Pose, delta_t: f64, map: &Arc<Map2D>) -> bool {
+    pub fn mapped_control_update(
+        &mut self,
+        control: Pose,
+        delta_t: f64,
+        maps: Vec<Arc<Map2D>>,
+    ) -> bool {
         self.velocity.x += (control.position.x * self.angle.cos()
             + control.position.y * (self.angle - FRAC_PI_2).cos())
             * delta_t;
@@ -639,7 +646,7 @@ impl KinematicState {
         self.position.y += self.velocity.y * delta_t;
         self.angle = (self.angle + self.vel_angle * delta_t) % (2. * PI);
 
-        if let Some(end_point) = map.raycast(init_pose) {
+        if let Some(end_point) = Map2D::raycast_with_maps(init_pose, maps) {
             let max_length = (end_point - init_pose.position).mag();
             if max_length <= (self.position - init_pose.position).mag() {
                 self.position = init_pose.position

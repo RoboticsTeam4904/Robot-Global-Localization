@@ -1,8 +1,8 @@
 use crate::utility::{Point, Point3D, Pose, Pose3D};
-use std::f64::{consts::PI, INFINITY};
+use std::{f64::{consts::PI, INFINITY}, sync::Arc};
 
 // TODO: this file is lazy
-
+#[derive(Clone, Copy)]
 pub enum Object2D {
     Target(Pose3D),
     Line(Point, Point),
@@ -218,6 +218,53 @@ impl Map2D {
                 if closest_intersection == None || closest_intersection_dist > dist {
                     closest_intersection = Some(point2d);
                     closest_intersection_dist = dist;
+                }
+            }
+        }
+        closest_intersection
+    }
+
+    pub fn raycast_with_maps(start: Pose, maps: Vec<Arc<Map2D>>) -> Option<Point> {
+        let ray = Point {
+            x: start.angle.cos(),
+            y: start.angle.sin(),
+        };
+        let mut closest_intersection: Option<Point> = None;
+        let mut closest_intersection_dist = 0.;
+        
+        for map in maps {
+            for line in &map.lines {
+                let v1 = start.position - map.get_vertex(line.0);
+                let v2 = map.get_vertex(line.1) - map.get_vertex(line.0);
+                let v3 = Point {
+                    x: -ray.y,
+                    y: ray.x,
+                };
+                let div = v2.dot(v3);
+                if div == 0. {
+                    continue;
+                }
+                let t1 = v2.cross_mag(v1) / div;
+                let t2 = v1.dot(v3) / div;
+                if t1 >= 0. && t2 >= 0. && t2 <= 1. {
+                    let intersection = start.position + ray * t1;
+                    // let intersection_check = self.get_vertex(line.0) + (self.get_vertex(line.1) - self.get_vertex(line.0)) * t2;
+                    let dist = intersection.dist(start.position);
+                    if closest_intersection == None || closest_intersection_dist > dist {
+                        closest_intersection = Some(intersection);
+                        closest_intersection_dist = dist;
+                    }
+                }
+            }
+            for target in &map.targets {
+                // TODO: tune? fuzzy comparison for slope comparison
+                let point2d = target.position.clone().without_z();
+                if (start.position.angle_to(point2d) - start.angle).abs() < 0.01 {
+                    let dist = point2d.dist(start.position);
+                    if closest_intersection == None || closest_intersection_dist > dist {
+                        closest_intersection = Some(point2d);
+                        closest_intersection_dist = dist;
+                    }
                 }
             }
         }

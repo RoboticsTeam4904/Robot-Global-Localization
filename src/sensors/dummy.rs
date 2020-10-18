@@ -264,6 +264,7 @@ pub struct DummyLidar {
     angle_noise: Normal,
     resolution: usize,
     relative_pose: Pose,
+    scan: Vec<Point>,
 }
 
 impl DummyLidar {
@@ -284,18 +285,14 @@ impl DummyLidar {
             resolution,
             relative_pose,
             range,
+            scan: Vec::new(),
         }
     }
 
     pub fn update_pose(&mut self, new_pose: Pose) {
         self.robot_pose = new_pose;
     }
-}
-
-impl Sensor for DummyLidar {
-    type Output = Vec<Point>;
-
-    fn sense(&self) -> Self::Output {
+    pub fn update(&mut self) {
         let mut rng = thread_rng();
         let mut scan = vec![];
         let increment = 2. * PI / self.resolution as f64;
@@ -324,7 +321,48 @@ impl Sensor for DummyLidar {
                 _ => (),
             }
         }
-        scan
+        self.scan = scan;
+    }
+    pub fn update_with_maps(&mut self, maps: Vec<Arc<Map2D>>) {
+        let mut rng = thread_rng();
+        let mut scan = vec![];
+        let increment = 2. * PI / self.resolution as f64;
+        let mut all_maps = maps;
+        all_maps.push(self.map.clone());
+        for i in 0..self.resolution {
+            match Map2D::raycast_with_maps(
+                self.robot_pose
+                    + Pose {
+                        angle: increment * i as f64,
+                        ..Pose::default()
+                    },
+                all_maps.clone(),
+            ) {
+                Some(scan_point)
+                    if self
+                        .range
+                        .clone()
+                        .unwrap_or(0.0..INFINITY)
+                        .contains(&scan_point.dist(self.robot_pose.position)) =>
+                {
+                    let lidar_dist = scan_point.dist(self.robot_pose.position);
+                    scan.push(Point::polar(
+                        scan_point.angle_to(self.robot_pose.position) - self.robot_pose.angle
+                            + self.angle_noise.sample(&mut rng),
+                        lidar_dist + lidar_dist.powi(2) * self.dist_noise.sample(&mut rng),
+                    ))
+                }
+                _ => (),
+            }
+        }
+        self.scan = scan;
+    }
+}
+impl Sensor for DummyLidar {
+    type Output = Vec<Point>;
+
+    fn sense(&self) -> Self::Output {
+        self.scan.clone()
     }
 
     fn relative_pose(&self) -> Pose {
@@ -389,26 +427,28 @@ pub struct DummyPositionSensor {
     y_noise_distr: Normal,
     prev_robot_state: Pose,
     pub robot_pose: Pose,
-    last_update: Instant,
+    delta_t: f64,
 }
 
 impl DummyPositionSensor {
     /// Noise is Guassian and `noise_margins` are each equal to three standard deviations of the noise distributions
     pub fn new(robot_pose: Pose, noise_margins: Pose) -> Self {
         Self {
-            angle_noise_distr: Normal::new(0., noise_margins.angle / 3.),
-            x_noise_distr: Normal::new(0., noise_margins.position.x / 3.),
-            y_noise_distr: Normal::new(0., noise_margins.position.y / 3.),
+            angle_noise_distr: Normal::new(0., noise_margins.angle),
+            x_noise_distr: Normal::new(0., noise_margins.position.x),
+            y_noise_distr: Normal::new(0., noise_margins.position.y),
             prev_robot_state: robot_pose,
             robot_pose,
-            last_update: Instant::now(),
+            delta_t: 0.10,
         }
     }
 
     pub fn update_pose(&mut self, new_pose: Pose) {
         self.prev_robot_state = self.robot_pose;
         self.robot_pose = new_pose;
-        self.last_update = Instant::now();
+    }
+    pub fn set_delta_t(&mut self, delta_t: f64) {
+        self.delta_t = delta_t;
     }
 }
 
@@ -417,14 +457,13 @@ impl Sensor for DummyPositionSensor {
 
     fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
-        let elapsed = self.last_update.elapsed().as_secs_f64();
         self.robot_pose - self.prev_robot_state
             + Pose {
-                angle: self.angle_noise_distr.sample(&mut rng) * elapsed,
+                angle: self.angle_noise_distr.sample(&mut rng) * self.delta_t,
                 position: Point {
                     x: self.x_noise_distr.sample(&mut rng),
                     y: self.y_noise_distr.sample(&mut rng),
-                } * elapsed,
+                } * self.delta_t,
             }
     }
 }
