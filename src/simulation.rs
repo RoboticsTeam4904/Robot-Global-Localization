@@ -5,7 +5,10 @@ use global_robot_localization::{
         presets,
     },
     map::{Map2D, Object2D},
-    replay::render::{draw_map, isoceles_triangle, point_cloud},
+    replay::{
+        graph,
+        render::{draw_map, isoceles_triangle, point_cloud},
+    },
     sensors::{
         dummy::{DummyLidar, DummyObjectSensor3D, DummyPositionSensor, DummyVelocitySensor},
         Sensor,
@@ -22,7 +25,7 @@ use rand::{
 use std::{
     f64::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_8, PI},
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 const ANGLE_NOISE: f64 = 0.;
@@ -368,7 +371,7 @@ fn main() {
         Normal::new(0., (400 as f64).powi(-2)),
         Normal::new(0., 0.05),
         180,
-        std::time::Duration::from_millis(100),
+        Duration::from_millis(100),
         Pose::default(),
         Some(0.0..800.),
     );
@@ -411,14 +414,22 @@ fn main() {
         .exit_on_esc(true)
         .build()
         .unwrap();
+
     let mut tick: u32 = 0;
+
     let control_noise_angle = Normal::new(0., CONTROL_ANGLE_NOISE);
     let control_noise_x = Normal::new(0., CONTROL_X_NOISE);
     let control_noise_y = Normal::new(0., CONTROL_Y_NOISE);
+
+    let mut dead_reckoning = robot_state.pose();
+    let mut dead_reckoning_error: Pose = Pose::default();
     let mut kalman_error: Pose = Pose::default();
     let mut mcl_error: Pose = Pose::default();
+    let mut all_errors = vec![];
+
     let mut last_time: Instant = Instant::now();
     let mut delta_t;
+
     let start = Instant::now();
     let mut wheel_robot_state = DifferentialDriveState::default()
         .with_wheel_dist(WHEEL_DIST)
@@ -427,7 +438,6 @@ fn main() {
         let mut control: Pose = Pose::default();
         delta_t = last_time.elapsed().as_secs_f64();
         last_time = Instant::now();
-        println!("{}", delta_t);
         if tick > 10000 {
             let elapsed = start.elapsed();
             println!(
@@ -657,7 +667,10 @@ fn main() {
         object_sensor.update_pose(robot_pose);
 
         println!("\tP = {}", mcl.belief.len());
+
         // update localization
+        dead_reckoning += position_sensor.sense();
+
         let mcl_pred = mcl.get_prediction();
 
         mcl.control_update(&position_sensor);
@@ -705,42 +718,69 @@ fn main() {
         );
 
         tick += 1;
-        if tick > 500 {
-            kalman_error += Pose {
-                angle: (filter_prediction.pose().angle - robot_state.pose().angle).powi(2),
-                position: Point {
-                    x: (filter_prediction.pose().position.x - robot_state.pose().position.x)
-                        .powi(2),
-                    y: (filter_prediction.pose().position.y - robot_state.pose().position.y)
-                        .powi(2),
-                },
+        if tick > 0 {
+            let calculate_error = |sum: &mut Pose, pred: Pose| -> Pose {
+                let current_error = pred - robot_state.pose();
+                *sum += Pose {
+                    angle: current_error.angle.powi(2),
+                    position: Point {
+                        x: current_error.position.x.powi(2),
+                        y: current_error.position.y.powi(2),
+                    },
+                };
+                current_error
             };
-            mcl_error += Pose {
-                angle: (mcl_pred.angle - robot_state.pose().angle).powi(2),
-                position: Point {
-                    x: (mcl_pred.position.x - robot_state.pose().position.x).powi(2),
-                    y: (mcl_pred.position.y - robot_state.pose().position.y).powi(2),
-                },
-            };
+
+            let current_kalman_error = calculate_error(&mut kalman_error, filter_prediction.pose());
+            let current_mcl_error = calculate_error(&mut mcl_error, mcl_pred);
+            let current_dead_reck_error =
+                calculate_error(&mut dead_reckoning_error, dead_reckoning);
+
+            all_errors.push((
+                start.elapsed().as_secs_f64(),
+                vec![
+                    current_kalman_error.position.mag(),
+                    current_mcl_error.position.mag(),
+                    current_dead_reck_error.position.mag(),
+                ],
+            ));
         }
     }
     println!(
-        "KALMAN: {:?} \n MCL: {:?}\n\n",
+        "KALMAN: {:?} \nMCL: {:?}\nDEAD RECKONING: {:?}\n",
         Pose {
-            angle: kalman_error.angle.sqrt() / tick as f64,
+            angle: kalman_error.angle.sqrt(),
             position: (
-                kalman_error.position.x.sqrt() / tick as f64,
-                kalman_error.position.y.sqrt() / tick as f64
+                kalman_error.position.x.sqrt(),
+                kalman_error.position.y.sqrt()
             )
                 .into()
-        },
+        } / tick as f64,
         Pose {
-            angle: mcl_error.angle.sqrt() / tick as f64,
+            angle: mcl_error.angle.sqrt(),
+            position: (mcl_error.position.x.sqrt(), mcl_error.position.y.sqrt()).into()
+        } / tick as f64,
+        Pose {
+            angle: dead_reckoning_error.angle.sqrt(),
             position: (
-                mcl_error.position.x.sqrt() / tick as f64,
-                mcl_error.position.y.sqrt() / tick as f64
+                dead_reckoning_error.position.x.sqrt(),
+                dead_reckoning_error.position.y.sqrt(),
             )
                 .into()
-        }
+        } / tick as f64,
     );
+    graph::auto_graph(
+        all_errors.into_iter().skip(20).collect(),
+        "logs/test.png",
+        "Error over time",
+        "Error (cm)",
+        "Time (seconds)",
+        vec![
+            "Kalman Filter",
+            "Monte-Carlo Localization",
+            "Dead Reckoning",
+        ],
+        (2000, 1000),
+    )
+    .unwrap();
 }

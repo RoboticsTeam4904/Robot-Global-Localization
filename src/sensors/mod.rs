@@ -1,5 +1,5 @@
 use crate::utility::Pose;
-use std::{marker::PhantomData, ops::Sub};
+use std::{marker::PhantomData, ops::{AddAssign, Sub}};
 
 // pub mod gpio;
 pub mod dummy;
@@ -604,6 +604,51 @@ where
 
     fn sense(&self) -> Self::Output {
         self.current.clone() - self.last.clone()
+    }
+
+    fn relative_pose(&self) -> Pose {
+        self.absolute_sensor.relative_pose()
+    }
+}
+
+/// A wrapper sensor that senses the total sum in `absolute_sensor`'s outputs.
+/// New data is added to the cumulative sum in `update`.
+pub struct SummativeSensor<S, O, U>
+where
+    S: Sensor<Output = U>,
+    O: AddAssign<U> + Clone,
+{
+    pub absolute_sensor: S,
+    total: O,
+}
+
+impl<S, O, U> SummativeSensor<S, O, U>
+where
+    S: Sensor<Output = U>,
+    O: AddAssign<U> + Clone,
+{
+    pub fn new(absolute_sensor: S, initial_value: O) -> Self {
+        Self {
+            absolute_sensor,
+            total: initial_value,
+        }
+    }
+}
+
+impl<S, O, U> Sensor for SummativeSensor<S, O, U>
+where
+    S: Sensor<Output = U>,
+    O: AddAssign<U> + Clone,
+{
+    type Output = O;
+
+    fn update(&mut self) {
+        self.absolute_sensor.update();
+        self.total += self.absolute_sensor.sense();
+    }
+
+    fn sense(&self) -> Self::Output {
+        self.total.clone()
     }
 
     fn relative_pose(&self) -> Pose {

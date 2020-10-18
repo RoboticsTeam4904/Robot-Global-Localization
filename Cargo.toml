@@ -7,7 +7,7 @@ edition = "2018"
 [[bin]]
 name = "simulation"
 path = "src/simulation.rs"
-required-features = ["render"]
+required-features = ["render", "graph"]
 
 [[bin]]
 name = "tegra"
@@ -20,11 +20,13 @@ default_features = [ "asyncio", "render" ]
 network = ["nt", "tokio"]
 rplidar = ["rplidar_drv", "serialport"]
 render = ["piston_window"]
+graph = ["plotters"]
 asyncio = ["core-futures-io", "futures", "async-std"]
 
 [dependencies]
 rand = "0.6.5"
 nalgebra = "0.18.0"
+plotters = { version = "0.3.0", optional = true }
 piston_window = { version = "0.105.0", optional = true }
 rplidar_drv = { git = "https://github.com/RoboticsTeam4904/rplidar.rs", optional = true }
 serialport = { version = "3.3.0", default-features = false, features = [], optional = true }
