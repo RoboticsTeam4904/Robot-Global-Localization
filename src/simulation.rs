@@ -403,7 +403,7 @@ fn main() {
         VISION_MAX_DIST,
     );
     let mut mcl = {
-        let particle_count = 300;
+        let particle_count = 500;
         let weight_sum_threshold = 200.;
         let death_threshold = DeathCondition {
             particle_count_threshold: 4_000,
