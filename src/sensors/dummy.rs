@@ -11,7 +11,7 @@ use std::{
     f64::{consts::PI, INFINITY},
     ops::Range,
     sync::Arc,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 /// A general dummy sensor which simply echoes whatever data is pushed to it.
@@ -263,17 +263,29 @@ pub struct DummyLidar {
     dist_noise: Normal,
     angle_noise: Normal,
     resolution: usize,
+    period: Duration,
     relative_pose: Pose,
     scan: Vec<Point>,
+    scan_timestamp: Instant,
 }
 
 impl DummyLidar {
+    /// Creates a new dummy lidar
+    /// `map` is the map it scans on
+    /// `robot_pose` is the starting pose of the robot
+    /// `dist_noise` is the noise that's added to the distance of each point scanned
+    /// `angle_noise` is the noise that's added to the angle of each point scanned
+    /// `resolution` is the number of points per scan
+    /// `period` is the number of seconds in between scans
+    /// `relative_pose` is the pose of the lidar relative to the robot
+    /// `range` this is the range of the lidar, defaults to infinite
     pub fn new(
         map: Arc<Map2D>,
         robot_pose: Pose,
         dist_noise: Normal,
         angle_noise: Normal,
         resolution: usize,
+        period: Duration,
         relative_pose: Pose,
         range: Option<Range<f64>>,
     ) -> Self {
@@ -283,45 +295,16 @@ impl DummyLidar {
             dist_noise,
             angle_noise,
             resolution,
+            period,
             relative_pose,
             range,
-            scan: Vec::new(),
+            scan: vec![],
+            scan_timestamp: Instant::now(),
         }
     }
 
     pub fn update_pose(&mut self, new_pose: Pose) {
         self.robot_pose = new_pose;
-    }
-    pub fn update(&mut self) {
-        let mut rng = thread_rng();
-        let mut scan = vec![];
-        let increment = 2. * PI / self.resolution as f64;
-        for i in 0..self.resolution {
-            match self.map.raycast(
-                self.robot_pose
-                    + Pose {
-                        angle: increment * i as f64,
-                        ..Pose::default()
-                    },
-            ) {
-                Some(scan_point)
-                    if self
-                        .range
-                        .clone()
-                        .unwrap_or(0.0..INFINITY)
-                        .contains(&scan_point.dist(self.robot_pose.position)) =>
-                {
-                    let lidar_dist = scan_point.dist(self.robot_pose.position);
-                    scan.push(Point::polar(
-                        scan_point.angle_to(self.robot_pose.position) - self.robot_pose.angle
-                            + self.angle_noise.sample(&mut rng),
-                        lidar_dist + lidar_dist.powi(2) * self.dist_noise.sample(&mut rng),
-                    ))
-                }
-                _ => (),
-            }
-        }
-        self.scan = scan;
     }
     pub fn update_with_maps(&mut self, maps: Vec<Arc<Map2D>>) {
         let mut rng = thread_rng();
@@ -360,6 +343,45 @@ impl DummyLidar {
 }
 impl Sensor for DummyLidar {
     type Output = Vec<Point>;
+
+    fn update(&mut self) {
+        let elapsed = self.scan_timestamp.elapsed();
+        if elapsed < self.period {
+            return;
+        } else {
+            self.scan_timestamp += self.period;
+        }
+
+        let mut rng = thread_rng();
+        let mut scan = vec![];
+        let increment = 2. * PI / self.resolution as f64;
+        for i in 0..self.resolution {
+            match self.map.raycast(
+                self.robot_pose
+                    + Pose {
+                        angle: increment * i as f64,
+                        ..Pose::default()
+                    },
+            ) {
+                Some(scan_point)
+                    if self
+                        .range
+                        .clone()
+                        .unwrap_or(0.0..INFINITY)
+                        .contains(&scan_point.dist(self.robot_pose.position)) =>
+                {
+                    let lidar_dist = scan_point.dist(self.robot_pose.position);
+                    scan.push(Point::polar(
+                        scan_point.angle_to(self.robot_pose.position) - self.robot_pose.angle
+                            + self.angle_noise.sample(&mut rng),
+                        lidar_dist + lidar_dist.powi(2) * self.dist_noise.sample(&mut rng),
+                    ))
+                }
+                _ => (),
+            }
+        }
+        self.scan = scan;
+    }
 
     fn sense(&self) -> Self::Output {
         self.scan.clone()
