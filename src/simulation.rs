@@ -10,9 +10,7 @@ use global_robot_localization::{
         dummy::{DummyLidar, DummyObjectSensor3D, DummyPositionSensor, DummyVelocitySensor},
         Sensor,
     },
-    utility::{
-        variance_poses, DifferentialDriveState, KinematicState, Point, Point3D, Pose, Pose3D,
-    },
+    utility::{variance_poses, DifferentialDriveState, KinematicState, Point, Pose, Pose3D},
 };
 use nalgebra::{Matrix6, RowVector6, Vector6};
 use piston_window::*;
@@ -30,10 +28,10 @@ use std::{
 const ANGLE_NOISE: f64 = 0.;
 const X_NOISE: f64 = 3.;
 const Y_NOISE: f64 = 274.;
-const CONTROL_X_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
-const CONTROL_Y_NOISE: f64 = 0.01; // 3 cm / s^2 of noise
+const CONTROL_X_NOISE: f64 = 3.;
+const CONTROL_Y_NOISE: f64 = 3.;
 
-const CONTROL_ANGLE_NOISE: f64 = 0.007; // 2 degrees / s^2 of noise
+const CONTROL_ANGLE_NOISE: f64 = 0.035; // 2 degrees / s^2 of noise
 const VELOCITY_X_SENSOR_NOISE: f64 = 2.;
 const VELOCITY_Y_SENSOR_NOISE: f64 = 2.;
 const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.2;
@@ -100,29 +98,54 @@ fn main() {
                     x: PI,
                     y: -CAMERA_ANGLE,
                 },
-                position: (1598., 239.54, 0. - CAMERA_HEIGHT).into(),
+                position: (1598., 239.54, 41.91 - CAMERA_HEIGHT).into(),
             }),
             Object2D::Target(Pose3D {
                 angle: Point {
                     x: PI,
                     y: -CAMERA_ANGLE,
                 },
-                position: (1598., 566.54, 0. - CAMERA_HEIGHT).into(),
+                position: (1598., 566.54, 249.55 - CAMERA_HEIGHT).into(),
             }),
             Object2D::Target(Pose3D {
                 angle: Point {
                     x: 0.,
                     y: -CAMERA_ANGLE,
                 },
-                position: (0., 581.54, 0. - CAMERA_HEIGHT).into(),
+                position: (0., 581.54, 41.91 - CAMERA_HEIGHT).into(),
             }),
             Object2D::Target(Pose3D {
                 angle: Point {
                     x: 0.,
                     y: -CAMERA_ANGLE,
                 },
-                position: (0., 254.54, 0. - CAMERA_HEIGHT).into(),
+                position: (0., 254.54, 249.55 - CAMERA_HEIGHT).into(),
             }),
+            Object2D::Triangle(
+                (400., 400.).into(),
+                (440., 400.).into(),
+                (420., 440.).into(),
+            ),
+            Object2D::Triangle(
+                (320., 700.).into(),
+                (360., 700.).into(),
+                (340., 660.).into(),
+            ),
+            Object2D::Triangle(
+                (760., 240.).into(),
+                (760., 280.).into(),
+                (720., 260.).into(),
+            ),
+            Object2D::Triangle(
+                (1350., 680.).into(),
+                (1350., 720.).into(),
+                (1390., 700.).into(),
+            ),
+            Object2D::Triangle(
+                (1200., 390.).into(),
+                (1240., 390.).into(),
+                (1220., 350.).into(),
+            ),
         ],
     ));
 
@@ -135,8 +158,6 @@ fn main() {
             Object2D::Line((1533.02, 0.).into(), (1598., 178.54).into()),
             Object2D::Line((1533.02, 821.).into(), (1598., 642.46).into()),
             Object2D::Line((1598., 642.46).into(), (1598., 178.54).into()),
-            Object2D::Line((64.98, 0.).into(), (1533.02, 0.).into()),
-            Object2D::Line((64.98, 821.).into(), (1533.02, 821.).into()),
             // Trench
             Object2D::Rectangle((630.54, 680.).into(), (706.54, 821.).into()),
             Object2D::Rectangle((974.5, 141.).into(), (898.5, 0.).into()),
@@ -263,6 +284,31 @@ fn main() {
                 },
                 position: (0., 254.54, 249.55 - CAMERA_HEIGHT).into(),
             }),
+            Object2D::Triangle(
+                (400., 400.).into(),
+                (440., 400.).into(),
+                (420., 440.).into(),
+            ),
+            Object2D::Triangle(
+                (320., 700.).into(),
+                (360., 700.).into(),
+                (340., 660.).into(),
+            ),
+            Object2D::Triangle(
+                (760., 240.).into(),
+                (760., 280.).into(),
+                (720., 260.).into(),
+            ),
+            Object2D::Triangle(
+                (1350., 680.).into(),
+                (1350., 720.).into(),
+                (1390., 700.).into(),
+            ),
+            Object2D::Triangle(
+                (1200., 390.).into(),
+                (1240., 390.).into(),
+                (1220., 350.).into(),
+            ),
         ],
     ));
     let marker_map = Arc::new(Map2D::with_size(
@@ -339,11 +385,11 @@ fn main() {
     let mut lidar = DummyLidar::new(
         sensor_map.clone(),
         robot_state.pose(),
-        Normal::new(0., (160 as f64).recip()),
-        Normal::new(0., 0.005),
+        Normal::new(0., (400 as f64).powi(-2)),
+        Normal::new(0., 0.05),
         180,
         Pose::default(),
-        None,
+        Some(0.0..800.),
     );
     let mut object_sensor = DummyObjectSensor3D::new(
         CAMERA_FOV,
@@ -352,16 +398,12 @@ fn main() {
         robot_state.pose(),
         Pose3D {
             angle: Point { x: 0.05, y: 0. },
-            position: Point3D {
-                x: 1.,
-                y: 1.,
-                z: 0.5,
-            },
+            position: [(400 as f64).powi(-2); 3].into(),
         },
         VISION_MAX_DIST,
     );
     let mut mcl = {
-        let particle_count = 1_000;
+        let particle_count = 300;
         let weight_sum_threshold = 200.;
         let death_threshold = DeathCondition {
             particle_count_threshold: 4_000,
@@ -375,19 +417,10 @@ fn main() {
             particle_count,
             weight_sum_threshold,
             death_threshold,
-            sensor_map.clone(),
+            perceived_map.clone(),
             presets::exp_weight(1.05),
-            move |&sample: &Pose,
-                  object_detector: &(DummyLidar, DummyObjectSensor3D),
-                  map: &Arc<Map2D>|
-                  -> f64 {
-                presets::lidar_error(1.2, 1.)(&sample, &object_detector.0, map)
-                    + presets::object_3d_detection_error(10., 10., 1.)(
-                        &sample,
-                        &object_detector.1,
-                        map,
-                    )
-            },
+            presets::lidar_error(1.2, 1.),
+            presets::object_3d_detection_error(1.2, 20., 1.),
             presets::uniform_resampler(0.001, 0.7),
         )
     };
@@ -489,8 +522,19 @@ fn main() {
             );
             draw_map(
                 real_map.clone(),
+                [1., 0., 1., 0.5],
+                [1., 0.5, 0., 0.5],
+                5.,
+                1.,
+                MAP_SCALE,
+                map_visual_margins,
+                c.transform,
+                g,
+            );
+            draw_map(
+                perceived_map.clone(),
                 [1., 0., 1., 1.],
-                [1., 0.5, 0., 1.],
+                [1., 1., 0., 1.],
                 5.,
                 1.,
                 MAP_SCALE,
@@ -591,14 +635,14 @@ fn main() {
             robot_state.vel_angle = 0.;
             robot_state.velocity = Point::default();
         };
-        control += control_noise;
+        control += control_noise * delta_t;
 
         // update sensors
+        motion_sensor.set_delta_t(delta_t);
         motion_sensor.update_pose(Pose {
             angle: robot_state.vel_angle,
             position: robot_state.velocity,
         });
-        motion_sensor.set_delta_t(delta_t);
         let robot_pose = robot_state.pose();
         position_sensor.update_pose(robot_pose);
         lidar.update_pose(robot_pose);
@@ -609,7 +653,7 @@ fn main() {
         let mcl_pred = mcl.get_prediction();
 
         mcl.control_update(&position_sensor);
-        mcl.observation_update(&(lidar, object_sensor));
+        mcl.observation_update(&lidar, &object_sensor);
 
         q = delta_t.powi(2)
             * Matrix6::from_diagonal(&Vector6::new(
@@ -653,21 +697,24 @@ fn main() {
         );
 
         tick += 1;
-
-        kalman_error += Pose {
-            angle: (filter_prediction.pose().angle - robot_state.pose().angle).powi(2),
-            position: Point {
-                x: (filter_prediction.pose().position.x - robot_state.pose().position.x).powi(2),
-                y: (filter_prediction.pose().position.y - robot_state.pose().position.y).powi(2),
-            },
-        };
-        mcl_error += Pose {
-            angle: (mcl_pred.angle - robot_state.pose().angle).powi(2),
-            position: Point {
-                x: (mcl_pred.position.x - robot_state.pose().position.x).powi(2),
-                y: (mcl_pred.position.y - robot_state.pose().position.y).powi(2),
-            },
-        };
+        if tick > 500 {
+            kalman_error += Pose {
+                angle: (filter_prediction.pose().angle - robot_state.pose().angle).powi(2),
+                position: Point {
+                    x: (filter_prediction.pose().position.x - robot_state.pose().position.x)
+                        .powi(2),
+                    y: (filter_prediction.pose().position.y - robot_state.pose().position.y)
+                        .powi(2),
+                },
+            };
+            mcl_error += Pose {
+                angle: (mcl_pred.angle - robot_state.pose().angle).powi(2),
+                position: Point {
+                    x: (mcl_pred.position.x - robot_state.pose().position.x).powi(2),
+                    y: (mcl_pred.position.y - robot_state.pose().position.y).powi(2),
+                },
+            };
+        }
     }
     println!(
         "KALMAN: {:?} \n MCL: {:?}\n\n",

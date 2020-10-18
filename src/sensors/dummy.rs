@@ -102,7 +102,7 @@ impl Sensor for DummyObjectSensor {
                     + Point {
                         x: self.x_noise_distr.sample(&mut thread_rng()),
                         y: self.y_noise_distr.sample(&mut thread_rng()),
-                    }
+                    } * o.position.mag().powi(2)
             })
             .collect()
     }
@@ -177,7 +177,7 @@ impl Sensor for DummyObjectSensor3D {
                         x: self.x_noise_distr.sample(&mut thread_rng()),
                         y: self.y_noise_distr.sample(&mut thread_rng()),
                         z: self.z_noise_distr.sample(&mut thread_rng()),
-                    },
+                    } * o.position.mag().powi(2),
                 }
             })
             .collect()
@@ -299,7 +299,6 @@ impl Sensor for DummyLidar {
         let mut rng = thread_rng();
         let mut scan = vec![];
         let increment = 2. * PI / self.resolution as f64;
-        let mut lidar_dist;
         for i in 0..self.resolution {
             match self.map.raycast(
                 self.robot_pose
@@ -315,11 +314,11 @@ impl Sensor for DummyLidar {
                         .unwrap_or(0.0..INFINITY)
                         .contains(&scan_point.dist(self.robot_pose.position)) =>
                 {
-                    lidar_dist = scan_point.dist(self.robot_pose.position);
+                    let lidar_dist = scan_point.dist(self.robot_pose.position);
                     scan.push(Point::polar(
                         scan_point.angle_to(self.robot_pose.position) - self.robot_pose.angle
                             + self.angle_noise.sample(&mut rng),
-                        lidar_dist + lidar_dist * self.dist_noise.sample(&mut rng),
+                        lidar_dist + lidar_dist.powi(2) * self.dist_noise.sample(&mut rng),
                     ))
                 }
                 _ => (),

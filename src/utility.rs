@@ -347,6 +347,15 @@ impl Into<[f64; 3]> for Point3D {
         [self.x, self.y, self.z]
     }
 }
+impl From<[f64; 3]> for Point3D {
+    fn from(arr: [f64; 3]) -> Self {
+        Point3D {
+            x: *arr.get(0).unwrap(),
+            y: *arr.get(1).unwrap(),
+            z: *arr.get(2).unwrap(),
+        }
+    }
+}
 
 impl std::ops::Add for Point3D {
     type Output = Point3D;
