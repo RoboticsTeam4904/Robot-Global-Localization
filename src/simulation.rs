@@ -10,7 +10,7 @@ use global_robot_localization::{
         dummy::{DummyLidar, DummyObjectSensor3D, DummyPositionSensor, DummyVelocitySensor},
         Sensor,
     },
-    utility::{variance_poses, DifferentialDriveState, KinematicState, Point, Pose, Pose3D},
+    utility::{variance_poses, KinematicState, Point, Pose, Pose3D},
 };
 use nalgebra::{Matrix6, RowVector6, Vector6};
 use piston_window::*;
@@ -45,6 +45,65 @@ const CAMERA_FOV: Point = Point {
     y: 0.7557,
 };
 const VISION_MAX_DIST: Option<f64> = Some(800.);
+const FRICTION_COEFFICIENT: f64 = 0.01;
+const GRAVITY: f64 = 9800.;
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub struct DifferentialDriveState {
+    pub wheel_dist: f64,
+    pub velocity: Point,
+    pub robot_velocity: Pose,
+    pub control: Point,
+    friction_coefficient: f64,
+}
+
+impl DifferentialDriveState {
+    /// return velocity for the robot, given wheel velocities
+    pub fn robot_velocity(&self, delta_t: f64, robot_angle: f64) -> Pose {
+        let omega = (self.velocity.x - self.velocity.y) / self.wheel_dist;
+        let d_angle = omega * delta_t;
+        let r = (self.velocity.y + self.velocity.x) / 2.;
+        Pose {
+            angle: omega,
+            position: Point {
+                x: r * d_angle.cos(),
+                y: r * d_angle.sin(),
+            }
+            .rotate(-robot_angle),
+        }
+    }
+    /// Returns the appropriate control update for the given wheel control.
+    pub fn control_update(&mut self, delta_t: f64, robot_angle: f64) -> Pose {
+        self.velocity += self.control * delta_t;
+        self.velocity = Point {
+            x: (self.velocity.x.abs() - GRAVITY * self.friction_coefficient * delta_t).max(0.)
+                * self.velocity.x.signum(),
+            y: (self.velocity.y.abs() - GRAVITY * self.friction_coefficient * delta_t).max(0.)
+                * self.velocity.x.signum(),
+        };
+        let new_velocity = self.robot_velocity(delta_t, robot_angle);
+        let diff_vel = new_velocity - self.robot_velocity;
+        self.robot_velocity = new_velocity;
+
+        Pose {
+            angle: diff_vel.angle / delta_t,
+            position: diff_vel.position.rotate(robot_angle) / delta_t,
+        }
+    }
+    pub fn reset_velocity(&mut self) {
+        self.velocity = Point::default();
+        self.robot_velocity = Pose::default();
+    }
+
+    pub fn with_wheel_dist(mut self, wheel_dist: f64) -> Self {
+        self.wheel_dist = wheel_dist;
+        self
+    }
+
+    pub fn with_friction(mut self, friction_coefficient: f64) -> Self {
+        self.friction_coefficient = friction_coefficient;
+        self
+    }
+}
 #[derive(Clone)]
 struct DummyRobot {
     left_noise_distr: Normal,
@@ -126,7 +185,9 @@ fn main() {
         (20., 20.).into(),
         KinematicState::default(),
         15.,
-        DifferentialDriveState::default().with_wheel_dist(WHEEL_DIST),
+        DifferentialDriveState::default()
+            .with_wheel_dist(WHEEL_DIST)
+            .with_friction(FRICTION_COEFFICIENT),
     );
     let mut dummy_robots: Vec<DummyRobot> = vec![
         dummy_robot.clone().with_robot_state(
@@ -307,6 +368,7 @@ fn main() {
         Normal::new(0., (400 as f64).powi(-2)),
         Normal::new(0., 0.05),
         180,
+        std::time::Duration::from_millis(100),
         Pose::default(),
         Some(0.0..800.),
     );
@@ -358,7 +420,9 @@ fn main() {
     let mut last_time: Instant = Instant::now();
     let mut delta_t;
     let start = Instant::now();
-    let mut wheel_robot_state = DifferentialDriveState::default().with_wheel_dist(WHEEL_DIST);
+    let mut wheel_robot_state = DifferentialDriveState::default()
+        .with_wheel_dist(WHEEL_DIST)
+        .with_friction(FRICTION_COEFFICIENT);
     while let Some(e) = window.next() {
         let mut control: Pose = Pose::default();
         delta_t = last_time.elapsed().as_secs_f64();

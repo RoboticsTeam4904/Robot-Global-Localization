@@ -7,6 +7,7 @@ use std::{
     sync::Arc,
 };
 
+pub const GRAVITY: f64 = 9800.;
 /// Generic 2d point
 #[derive(Default, Debug, PartialEq, Clone, Copy)]
 pub struct Point {
@@ -502,51 +503,6 @@ impl std::ops::SubAssign for Point3D {
             y: self.y - other.y,
             z: self.z - other.z,
         }
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq)]
-pub struct DifferentialDriveState {
-    pub wheel_dist: f64,
-    pub velocity: Point,
-    pub robot_velocity: Pose,
-    pub control: Point,
-}
-
-impl DifferentialDriveState {
-    /// return velocity for the robot, given wheel velocities
-    pub fn robot_velocity(&self, delta_t: f64, robot_angle: f64) -> Pose {
-        let omega = (self.velocity.x - self.velocity.y) / self.wheel_dist;
-        let d_angle = omega * delta_t;
-        let r = (self.velocity.y + self.velocity.x) / 2.;
-        Pose {
-            angle: omega,
-            position: Point {
-                x: r * d_angle.cos(),
-                y: r * d_angle.sin(),
-            }
-            .rotate(-robot_angle),
-        }
-    }
-    /// Returns the appropriate control update for the given wheel control.
-    pub fn control_update(&mut self, delta_t: f64, robot_angle: f64) -> Pose {
-        self.velocity += self.control * delta_t;
-        let new_velocity = self.robot_velocity(delta_t, robot_angle);
-        let diff_vel = new_velocity - self.robot_velocity;
-        self.robot_velocity = new_velocity;
-        Pose {
-            angle: diff_vel.angle / delta_t,
-            position: diff_vel.position.rotate(robot_angle) / delta_t,
-        }
-    }
-    pub fn reset_velocity(&mut self) {
-        self.velocity = Point::default();
-        self.robot_velocity = Pose::default();
-    }
-
-    pub fn with_wheel_dist(mut self, wheel_dist: f64) -> Self {
-        self.wheel_dist = wheel_dist;
-        self
     }
 }
 
