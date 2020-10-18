@@ -78,7 +78,7 @@ impl DifferentialDriveState {
             x: (self.velocity.x.abs() - GRAVITY * self.friction_coefficient * delta_t).max(0.)
                 * self.velocity.x.signum(),
             y: (self.velocity.y.abs() - GRAVITY * self.friction_coefficient * delta_t).max(0.)
-                * self.velocity.x.signum(),
+                * self.velocity.y.signum(),
         };
         let new_velocity = self.robot_velocity(delta_t, robot_angle);
         let diff_vel = new_velocity - self.robot_velocity;
