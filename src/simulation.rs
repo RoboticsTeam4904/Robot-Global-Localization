@@ -32,9 +32,9 @@ const CONTROL_X_NOISE: f64 = 3.;
 const CONTROL_Y_NOISE: f64 = 3.;
 
 const CONTROL_ANGLE_NOISE: f64 = 0.035; // 2 degrees / s^2 of noise
-const VELOCITY_X_SENSOR_NOISE: f64 = 2.;
-const VELOCITY_Y_SENSOR_NOISE: f64 = 2.;
-const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.2;
+const VELOCITY_X_SENSOR_NOISE: f64 = 3.;
+const VELOCITY_Y_SENSOR_NOISE: f64 = 3.;
+const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.035;
 const MAP_SCALE: f64 = 0.6;
 const ROBOT_ACCEL: f64 = 400.;
 const WHEEL_DIST: f64 = 120.;
@@ -123,28 +123,28 @@ fn main() {
             }),
             Object2D::Triangle(
                 (400., 400.).into(),
-                (440., 400.).into(),
-                (420., 440.).into(),
+                (430., 400.).into(),
+                (415., 430.).into(),
             ),
             Object2D::Triangle(
                 (320., 700.).into(),
-                (360., 700.).into(),
-                (340., 660.).into(),
+                (350., 700.).into(),
+                (335., 670.).into(),
             ),
             Object2D::Triangle(
                 (760., 240.).into(),
-                (760., 280.).into(),
-                (720., 260.).into(),
+                (760., 270.).into(),
+                (730., 255.).into(),
             ),
             Object2D::Triangle(
                 (1350., 680.).into(),
-                (1350., 720.).into(),
-                (1390., 700.).into(),
+                (1350., 710.).into(),
+                (1380., 695.).into(),
             ),
             Object2D::Triangle(
                 (1200., 390.).into(),
-                (1240., 390.).into(),
-                (1220., 350.).into(),
+                (1230., 390.).into(),
+                (1215., 360.).into(),
             ),
         ],
     ));
@@ -286,28 +286,28 @@ fn main() {
             }),
             Object2D::Triangle(
                 (400., 400.).into(),
-                (440., 400.).into(),
-                (420., 440.).into(),
+                (430., 400.).into(),
+                (415., 430.).into(),
             ),
             Object2D::Triangle(
                 (320., 700.).into(),
-                (360., 700.).into(),
-                (340., 660.).into(),
+                (350., 700.).into(),
+                (335., 670.).into(),
             ),
             Object2D::Triangle(
                 (760., 240.).into(),
-                (760., 280.).into(),
-                (720., 260.).into(),
+                (760., 270.).into(),
+                (730., 255.).into(),
             ),
             Object2D::Triangle(
                 (1350., 680.).into(),
-                (1350., 720.).into(),
-                (1390., 700.).into(),
+                (1350., 710.).into(),
+                (1380., 695.).into(),
             ),
             Object2D::Triangle(
                 (1200., 390.).into(),
-                (1240., 390.).into(),
-                (1220., 350.).into(),
+                (1230., 390.).into(),
+                (1215., 360.).into(),
             ),
         ],
     ));

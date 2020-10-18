@@ -515,7 +515,7 @@ pub struct DifferentialDriveState {
 impl DifferentialDriveState {
     /// return velocity for the robot, given wheel velocities
     pub fn robot_velocity(&self, delta_t: f64, robot_angle: f64) -> Pose {
-        let omega = (self.velocity.y - self.velocity.x) / self.wheel_dist;
+        let omega = (self.velocity.x - self.velocity.y) / self.wheel_dist;
         let d_angle = omega * delta_t;
         let r = (self.velocity.y + self.velocity.x) / 2.;
         Pose {
