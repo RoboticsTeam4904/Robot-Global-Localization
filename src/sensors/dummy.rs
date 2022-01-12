@@ -3,17 +3,15 @@ use crate::{
     sensors::{LimitedSensor, Sensor, SensorSink},
     utility::{Point, Point3D, Pose, Pose3D},
 };
-use rand::{
-    distributions::{Distribution, Normal},
-    thread_rng,
-};
+use rand::{distributions::Distribution, thread_rng};
+use rand_distr::Normal;
 use std::{
     f64::{consts::PI, INFINITY},
     ops::Range,
     sync::Arc,
     time::{Duration, Instant},
 };
-
+// TODO: More thorough documentation
 /// A general dummy sensor which simply echoes whatever data is pushed to it.
 pub struct DummySensor<T> {
     latest_data: T,
@@ -49,8 +47,8 @@ pub struct DummyObjectSensor {
     pub robot_pose: Pose,
     fov: f64,
     max_dist: Option<f64>,
-    x_noise_distr: Normal,
-    y_noise_distr: Normal,
+    x_noise_distr: Normal<f64>,
+    y_noise_distr: Normal<f64>,
 }
 
 impl DummyObjectSensor {
@@ -68,8 +66,8 @@ impl DummyObjectSensor {
             relative_pose,
             robot_pose,
             max_dist,
-            x_noise_distr: Normal::new(0., noise_margins.x / 3.),
-            y_noise_distr: Normal::new(0., noise_margins.y / 3.),
+            x_noise_distr: Normal::new(0., noise_margins.x / 3.).unwrap(),
+            y_noise_distr: Normal::new(0., noise_margins.y / 3.).unwrap(),
         }
     }
 
@@ -121,10 +119,10 @@ pub struct DummyObjectSensor3D {
     /// x fov is azimuth angle fov, y fov is inclination angle fov
     fov: Point,
     max_dist: Option<f64>,
-    x_noise_distr: Normal,
-    y_noise_distr: Normal,
-    z_noise_distr: Normal,
-    azimuth_noise_distr: Normal,
+    x_noise_distr: Normal<f64>,
+    y_noise_distr: Normal<f64>,
+    z_noise_distr: Normal<f64>,
+    azimuth_noise_distr: Normal<f64>,
 }
 
 impl DummyObjectSensor3D {
@@ -142,10 +140,10 @@ impl DummyObjectSensor3D {
             map,
             relative_pose,
             robot_pose,
-            x_noise_distr: Normal::new(0., noise_margins.position.x),
-            y_noise_distr: Normal::new(0., noise_margins.position.y),
-            z_noise_distr: Normal::new(0., noise_margins.position.z),
-            azimuth_noise_distr: Normal::new(0., noise_margins.angle.x),
+            x_noise_distr: Normal::new(0., noise_margins.position.x).unwrap(),
+            y_noise_distr: Normal::new(0., noise_margins.position.y).unwrap(),
+            z_noise_distr: Normal::new(0., noise_margins.position.z).unwrap(),
+            azimuth_noise_distr: Normal::new(0., noise_margins.angle.x).unwrap(),
             max_dist,
         }
     }
@@ -191,9 +189,9 @@ impl LimitedSensor<(Point, f64)> for DummyObjectSensor3D {
 
 #[derive(Clone)]
 pub struct DummyDistanceSensor {
-    noise_distr: Normal,
+    noise_distr: Normal<f64>,
     relative_pose: Pose,
-    tester: Normal,
+    tester: Normal<f64>,
     pub map: Arc<Map2D>,
     pub robot_pose: Pose,
     pub max_dist: Option<f64>,
@@ -210,8 +208,8 @@ impl DummyDistanceSensor {
         max_dist: Option<f64>,
     ) -> Self {
         Self {
-            tester: Normal::new(0., 0.1),
-            noise_distr: Normal::new(0., noise_margin),
+            tester: Normal::new(0., 0.1).unwrap(),
+            noise_distr: Normal::new(0., noise_margin).unwrap(),
             relative_pose,
             map,
             robot_pose,
@@ -260,8 +258,8 @@ pub struct DummyLidar {
     pub map: Arc<Map2D>,
     pub robot_pose: Pose,
     pub range: Option<Range<f64>>,
-    dist_noise: Normal,
-    angle_noise: Normal,
+    dist_noise: Normal<f64>,
+    angle_noise: Normal<f64>,
     resolution: usize,
     period: Duration,
     relative_pose: Pose,
@@ -282,8 +280,8 @@ impl DummyLidar {
     pub fn new(
         map: Arc<Map2D>,
         robot_pose: Pose,
-        dist_noise: Normal,
-        angle_noise: Normal,
+        dist_noise: Normal<f64>,
+        angle_noise: Normal<f64>,
         resolution: usize,
         period: Duration,
         relative_pose: Pose,
@@ -430,9 +428,9 @@ impl Sensor for DummyVelocitySensor {
 
     fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
-        let x_noise_distr = Normal::new(0., self.noise_margins.position.x * self.delta_t);
-        let y_noise_distr = Normal::new(0., self.noise_margins.position.y * self.delta_t);
-        let angle_noise_distr = Normal::new(0., self.noise_margins.angle * self.delta_t);
+        let x_noise_distr = Normal::new(0., self.noise_margins.position.x * self.delta_t).unwrap();
+        let y_noise_distr = Normal::new(0., self.noise_margins.position.y * self.delta_t).unwrap();
+        let angle_noise_distr = Normal::new(0., self.noise_margins.angle * self.delta_t).unwrap();
         Pose {
             angle: self.real_velocity.angle + angle_noise_distr.sample(&mut rng),
             position: Point {
@@ -444,9 +442,9 @@ impl Sensor for DummyVelocitySensor {
 }
 
 pub struct DummyPositionSensor {
-    angle_noise_distr: Normal,
-    x_noise_distr: Normal,
-    y_noise_distr: Normal,
+    angle_noise_distr: Normal<f64>,
+    x_noise_distr: Normal<f64>,
+    y_noise_distr: Normal<f64>,
     prev_robot_state: Pose,
     pub robot_pose: Pose,
     delta_t: f64,
@@ -456,9 +454,9 @@ impl DummyPositionSensor {
     /// Noise is Guassian and `noise_margins` are each equal to three standard deviations of the noise distributions
     pub fn new(robot_pose: Pose, noise_margins: Pose) -> Self {
         Self {
-            angle_noise_distr: Normal::new(0., noise_margins.angle),
-            x_noise_distr: Normal::new(0., noise_margins.position.x),
-            y_noise_distr: Normal::new(0., noise_margins.position.y),
+            angle_noise_distr: Normal::new(0., noise_margins.angle).unwrap(),
+            x_noise_distr: Normal::new(0., noise_margins.position.x).unwrap(),
+            y_noise_distr: Normal::new(0., noise_margins.position.y).unwrap(),
             prev_robot_state: robot_pose,
             robot_pose,
             delta_t: 0.10,
@@ -506,8 +504,8 @@ impl Sensor for DummyMotionSensor {
 
     fn sense(&self) -> Self::Output {
         let mut rng = thread_rng();
-        let x_noise_distr = Normal::new(0., self.x_noise * self.delta_t);
-        let y_noise_distr = Normal::new(0., self.y_noise * self.delta_t);
+        let x_noise_distr = Normal::new(0., self.x_noise * self.delta_t).unwrap();
+        let y_noise_distr = Normal::new(0., self.y_noise * self.delta_t).unwrap();
         (self.robot_vel - self.prev_robot_vel)
             / self
                 .prev_measurement_timestep

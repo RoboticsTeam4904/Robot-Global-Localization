@@ -526,15 +526,15 @@ impl KinematicState {
     ) -> KinematicState {
         let mut rng = thread_rng();
         KinematicState {
-            angle: rng.gen_range(angle_range.start, angle_range.end),
+            angle: rng.gen_range(angle_range),
             position: Point {
-                x: rng.gen_range(x_range.start, x_range.end),
-                y: rng.gen_range(y_range.start, y_range.end),
+                x: rng.gen_range(x_range),
+                y: rng.gen_range(y_range),
             },
-            vel_angle: rng.gen_range(angle_vel_range.start, angle_vel_range.end),
+            vel_angle: rng.gen_range(angle_vel_range),
             velocity: Point {
-                x: rng.gen_range(x_vel_range.start, x_vel_range.end),
-                y: rng.gen_range(y_vel_range.start, y_vel_range.end),
+                x: rng.gen_range(x_vel_range),
+                y: rng.gen_range(y_vel_range),
             },
         }
     }
@@ -674,14 +674,14 @@ impl From<RowVector6<f64>> for KinematicState {
 
 impl Into<RowVector6<f64>> for KinematicState {
     fn into(self) -> RowVector6<f64> {
-        RowVector6::new(
+        RowVector6::from_iterator(vec![
             self.angle,
             self.position.x,
             self.position.y,
             self.vel_angle,
             self.velocity.x,
             self.velocity.y,
-        )
+        ])
     }
 }
 
@@ -762,10 +762,10 @@ impl Pose {
     pub fn random(angle_range: Range<f64>, x_range: Range<f64>, y_range: Range<f64>) -> Pose {
         let mut rng = thread_rng();
         Pose {
-            angle: rng.gen_range(angle_range.start, angle_range.end),
+            angle: rng.gen_range(angle_range),
             position: Point {
-                x: rng.gen_range(x_range.start, x_range.end),
-                y: rng.gen_range(y_range.start, y_range.end),
+                x: rng.gen_range(x_range),
+                y: rng.gen_range(y_range),
             },
         }
     }
@@ -951,13 +951,13 @@ impl Pose3D {
         let mut rng = thread_rng();
         Pose3D {
             angle: Point {
-                x: rng.gen_range(azimuth_range.start, azimuth_range.end),
-                y: rng.gen_range(inclination_range.start, inclination_range.end),
+                x: rng.gen_range(azimuth_range),
+                y: rng.gen_range(inclination_range),
             },
             position: Point3D {
-                x: rng.gen_range(x_range.start, x_range.end),
-                y: rng.gen_range(y_range.start, y_range.end),
-                z: rng.gen_range(z_range.start, z_range.end),
+                x: rng.gen_range(x_range),
+                y: rng.gen_range(y_range),
+                z: rng.gen_range(z_range),
             },
         }
     }

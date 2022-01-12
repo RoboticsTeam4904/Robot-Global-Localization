@@ -4,7 +4,8 @@ use crate::{
     sensors::{LimitedSensor, Sensor},
     utility::{Point, Pose, Pose3D},
 };
-use rand::{distributions::Normal, prelude::*};
+use rand::prelude::*;
+use rand_distr::Normal;
 use rayon::prelude::*;
 use std::{
     f64::{consts::PI, INFINITY},
@@ -24,8 +25,8 @@ pub fn uniform_resampler(angle_margin: f64, position_margin: f64) -> impl Resamp
 
 /// Creates a `ResmapleNoiseCalculator` which produces noise normally distributed with the standard deviations provided
 pub fn normal_resampler(angle_dev: f64, position_dev: f64) -> impl ResampleNoiseCalculator {
-    let angle_dist = Normal::new(0., angle_dev);
-    let pos_dist = Normal::new(0., position_dev);
+    let angle_dist = Normal::new(0., angle_dev).unwrap();
+    let pos_dist = Normal::new(0., position_dev).unwrap();
     move |_| {
         let mut rng = thread_rng();
         Pose {

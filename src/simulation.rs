@@ -18,10 +18,11 @@ use global_robot_localization::{
 use nalgebra::{Matrix6, RowVector6, Vector6};
 use piston_window::*;
 use rand::{
-    distributions::{uniform::Uniform, Distribution, Normal},
+    distributions::{uniform::Uniform, Distribution},
     seq::IteratorRandom,
     thread_rng,
 };
+use rand_distr::Normal;
 use std::{
     f64::consts::{FRAC_PI_2, FRAC_PI_3, FRAC_PI_8, PI},
     sync::Arc,
@@ -29,27 +30,54 @@ use std::{
 };
 
 const ANGLE_NOISE: f64 = 0.;
+
 const X_NOISE: f64 = 3.;
+
 const Y_NOISE: f64 = 274.;
+
 const CONTROL_X_NOISE: f64 = 3.;
+
 const CONTROL_Y_NOISE: f64 = 3.;
 
 const CONTROL_ANGLE_NOISE: f64 = 0.035; // 2 degrees / s^2 of noise
+
 const VELOCITY_X_SENSOR_NOISE: f64 = 3.;
+
 const VELOCITY_Y_SENSOR_NOISE: f64 = 3.;
+
 const ROTATIONAL_VELOCITY_SENSOR_NOISE: f64 = 0.035;
+
+/// Scale of map for visualization
 const MAP_SCALE: f64 = 0.6;
+
+/// Robot acceleration on keypress
 const ROBOT_ACCEL: f64 = 400.;
+
+/// Distance between the wheels for differential drive
 const WHEEL_DIST: f64 = 120.;
+
+/// Height of the camera on the robot.
 const CAMERA_HEIGHT: f64 = 0.;
+
+/// Relative angle of the camera line of sight and robot line of sight.
 const CAMERA_ANGLE: f64 = 0.;
+
+/// FOV of vision camera (horizontally and vertically, respectively).
 const CAMERA_FOV: Point = Point {
     x: 1.229,
     y: 0.7557,
 };
+
+/// The maximum range of the camera.
 const VISION_MAX_DIST: Option<f64> = Some(800.);
+
+/// Dynamic friction of the robot with respect to the field (μ).
 const FRICTION_COEFFICIENT: f64 = 0.01;
+
+/// Gravity (cm/s^2)
 const GRAVITY: f64 = 9800.;
+
+/// Differential drive state for the robot
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct DifferentialDriveState {
     pub wheel_dist: f64,
@@ -75,6 +103,7 @@ impl DifferentialDriveState {
         }
     }
     /// Returns the appropriate control update for the given wheel control.
+    /// Incorporates wheel friction to acceleration.
     pub fn control_update(&mut self, delta_t: f64, robot_angle: f64) -> Pose {
         self.velocity += self.control * delta_t;
         self.velocity = Point {
@@ -92,26 +121,31 @@ impl DifferentialDriveState {
             position: diff_vel.position.rotate(robot_angle) / delta_t,
         }
     }
+
     pub fn reset_velocity(&mut self) {
         self.velocity = Point::default();
         self.robot_velocity = Pose::default();
     }
 
+    /// Change the wheel distance of the differential drive
     pub fn with_wheel_dist(mut self, wheel_dist: f64) -> Self {
         self.wheel_dist = wheel_dist;
         self
     }
 
+    /// Change the wheel friction in the differential drive
     pub fn with_friction(mut self, friction_coefficient: f64) -> Self {
         self.friction_coefficient = friction_coefficient;
         self
     }
 }
+
+/// Dummy robots on the field that follow semi-random motion.
+/// Simulates LIDAR and vision noise caused by uncertainty.
 #[derive(Clone)]
 struct DummyRobot {
-    left_noise_distr: Normal,
-    right_noise_distr: Normal,
-    control: Pose,
+    left_noise_distr: Normal<f64>,
+    right_noise_distr: Normal<f64>,
     robot_state: KinematicState,
     wheel_state: DifferentialDriveState,
     radius: f64,
@@ -125,9 +159,8 @@ impl DummyRobot {
         wheel_state: DifferentialDriveState,
     ) -> Self {
         DummyRobot {
-            left_noise_distr: Normal::new(0., noise_margins.x),
-            right_noise_distr: Normal::new(0., noise_margins.y),
-            control: Pose::default(),
+            left_noise_distr: Normal::new(0., noise_margins.x).unwrap(),
+            right_noise_distr: Normal::new(0., noise_margins.y).unwrap(),
             robot_state,
             wheel_state,
             radius,
@@ -138,7 +171,7 @@ impl DummyRobot {
         self.robot_state = robot_state;
         self
     }
-    // pub fn
+
     pub fn shape(&self) -> Object2D {
         let forward_point = Point {
             x: self.radius,
@@ -171,19 +204,37 @@ impl DummyRobot {
 fn main() {
     let mut rng = thread_rng();
 
+    // Kalman filter error matrices for control and sensor data, respectively.
     let mut q: Matrix6<f64>;
-
     let mut r: Matrix6<f64>;
 
-    let noise_x = Normal::new(410.5, X_NOISE);
-    let noise_angle = Normal::new(0., ANGLE_NOISE);
-    let noise_y = Normal::new(8., Y_NOISE);
+    let noise_x = Normal::new(410.5, X_NOISE).unwrap();
+    let noise_angle = Normal::new(0., ANGLE_NOISE).unwrap();
+    let noise_y = Normal::new(8., Y_NOISE).unwrap();
+
+    let initial_positions = vec![
+        Point {
+            x: 10.,
+            y: 821. / 3.,
+        },
+        Point {
+            x: 10.,
+            y: 821. / 3.,
+        },
+        Point {
+            x: 10.,
+            y: 821. / 3.,
+        },
+    ];
+    // Correct robot state, initializated
     let mut robot_state = KinematicState {
         angle: 0.,
         position: Point { x: 10., y: 410.5 },
         vel_angle: 0.,
         velocity: Point { x: 0., y: 0. },
     };
+
+    // Initialize dummy robots placed around the field.
     let dummy_robot = DummyRobot::new(
         (20., 20.).into(),
         KinematicState::default(),
@@ -219,6 +270,8 @@ fn main() {
                 .with_angle(-FRAC_PI_2),
         ),
     ];
+
+    // The objects that are known by both the LIDAR and are present in the real world
     let universal_objects = vec![
         Object2D::Line((64.98, 0.).into(), (0., 178.54).into()),
         Object2D::Line((64.98, 821.).into(), (0., 642.46).into()),
@@ -299,6 +352,8 @@ fn main() {
         Object2D::Line((64.98, 821.).into(), (1533.02, 821.).into()),
     ]);
     let real_map = Arc::new(Map2D::with_size((1598., 821.).into(), real_objects));
+
+    // Purely asthetic markers on the field
     let marker_map = Arc::new(Map2D::with_size(
         (1598., 821.).into(),
         vec![
@@ -320,6 +375,8 @@ fn main() {
             ),
         ],
     ));
+
+    //
     let init_state = KinematicState {
         angle: noise_angle.sample(&mut rng),
         position: Point {
@@ -331,14 +388,14 @@ fn main() {
     };
 
     let mut filter = LocalizationFilter::new(
-        Matrix6::from_diagonal(&Vector6::new(
+        Matrix6::from_diagonal(&Vector6::from_iterator(vec![
             ANGLE_NOISE.powi(2),
             X_NOISE.powi(2),
             Y_NOISE.powi(2),
             0.,
             0.,
             0.,
-        )),
+        ])),
         init_state.into(),
         Config::default(),
     );
@@ -368,8 +425,8 @@ fn main() {
     let mut lidar = DummyLidar::new(
         sensor_map.clone(),
         robot_state.pose(),
-        Normal::new(0., (400 as f64).powi(-2)),
-        Normal::new(0., 0.05),
+        Normal::new(0., (400 as f64).powi(-2)).unwrap(),
+        Normal::new(0., 0.05).unwrap(),
         180,
         Duration::from_millis(100),
         Pose::default(),
@@ -417,9 +474,9 @@ fn main() {
 
     let mut tick: u32 = 0;
 
-    let control_noise_angle = Normal::new(0., CONTROL_ANGLE_NOISE);
-    let control_noise_x = Normal::new(0., CONTROL_X_NOISE);
-    let control_noise_y = Normal::new(0., CONTROL_Y_NOISE);
+    let control_noise_angle = Normal::new(0., CONTROL_ANGLE_NOISE).unwrap();
+    let control_noise_x = Normal::new(0., CONTROL_X_NOISE).unwrap();
+    let control_noise_y = Normal::new(0., CONTROL_Y_NOISE).unwrap();
 
     let mut dead_reckoning = robot_state.pose();
     let mut dead_reckoning_error: Pose = Pose::default();
@@ -677,14 +734,14 @@ fn main() {
         mcl.observation_update(&lidar, &object_sensor);
 
         q = delta_t.powi(2)
-            * Matrix6::from_diagonal(&Vector6::new(
+            * Matrix6::from_diagonal(&Vector6::from_iterator(vec![
                 0.00000,
                 0.00000,
                 0.00000,
                 CONTROL_ANGLE_NOISE.powi(2),
                 CONTROL_X_NOISE.powi(2),
                 CONTROL_Y_NOISE.powi(2),
-            ));
+            ]));
         filter.prediction_update(delta_t, control.into(), q);
 
         let motion_measurements = motion_sensor.sense();
