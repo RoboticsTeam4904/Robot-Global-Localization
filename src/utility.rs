@@ -589,10 +589,13 @@ impl KinematicState {
         self.velocity.x += (control.position.x * self.angle.cos()
             + control.position.y * (self.angle - FRAC_PI_2).cos())
             * delta_t;
+
         self.velocity.y += (control.position.x * self.angle.sin()
             + control.position.y * (self.angle - FRAC_PI_2).sin())
             * delta_t;
+
         self.vel_angle += control.angle * delta_t;
+
         let init_pose = Pose {
             angle: (self.velocity.y).atan2(self.velocity.x),
             position: self.position,

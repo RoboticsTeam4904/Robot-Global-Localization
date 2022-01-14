@@ -141,7 +141,7 @@ impl DifferentialDriveState {
 }
 
 /// Dummy robots on the field that follow semi-random motion.
-/// Simulates LIDAR and vision noise caused by uncertainty.
+/// Simulates LIDAR and vision noise caused by map uncertainty.
 #[derive(Clone)]
 struct DummyRobot {
     left_noise_distr: Normal<f64>,
@@ -208,9 +208,9 @@ fn main() {
     let mut q: Matrix6<f64>;
     let mut r: Matrix6<f64>;
 
-    let noise_x = Normal::new(410.5, X_NOISE).unwrap();
+    let noise_x = Normal::new(8., X_NOISE).unwrap();
     let noise_angle = Normal::new(0., ANGLE_NOISE).unwrap();
-    let noise_y = Normal::new(8., Y_NOISE).unwrap();
+    let noise_y = Normal::new(410.5, Y_NOISE).unwrap();
 
     let initial_positions = vec![
         Point {
@@ -346,6 +346,8 @@ fn main() {
         (1598., 821.).into(),
         universal_objects.clone(),
     ));
+
+    // Objects that are found in the real world but are not observed by the lidar.
     let mut real_objects = universal_objects.clone();
     real_objects.extend(vec![
         Object2D::Line((64.98, 0.).into(), (1533.02, 0.).into()),
@@ -478,7 +480,10 @@ fn main() {
     let control_noise_x = Normal::new(0., CONTROL_X_NOISE).unwrap();
     let control_noise_y = Normal::new(0., CONTROL_Y_NOISE).unwrap();
 
+    // The robot pose created by simply following the control updates,
+    //  with noise, every time step.
     let mut dead_reckoning = robot_state.pose();
+
     let mut dead_reckoning_error: Pose = Pose::default();
     let mut kalman_error: Pose = Pose::default();
     let mut mcl_error: Pose = Pose::default();
@@ -488,9 +493,15 @@ fn main() {
     let mut delta_t;
 
     let start = Instant::now();
+
+    // Create a differential drive state which takes keypress inputs for acceleration
+    // As this state is updated, the velocity of the differential drive state
+    // will imply an acceleration for the normal control state. This state,
+    // robot_state, is rendered as well as predicted by the Kalman Filter.
     let mut wheel_robot_state = DifferentialDriveState::default()
         .with_wheel_dist(WHEEL_DIST)
         .with_friction(FRICTION_COEFFICIENT);
+
     while let Some(e) = window.next() {
         let mut control: Pose = Pose::default();
         delta_t = last_time.elapsed().as_secs_f64();
@@ -506,8 +517,8 @@ fn main() {
             break;
         }
         println!("T = {}", tick);
-        // User input
-
+        // User input - based on keyboard inputs, the differential drive state
+        // accelerates each wheel
         if let Some(Button::Keyboard(key)) = e.press_args() {
             match key {
                 keyboard::Key::W => {
@@ -518,6 +529,7 @@ fn main() {
                 }
                 keyboard::Key::Up => wheel_robot_state.control.y = ROBOT_ACCEL,
                 keyboard::Key::Down => wheel_robot_state.control.y = -ROBOT_ACCEL,
+                // Pressing space zeros the velocity and rotational velocity.
                 keyboard::Key::Space => {
                     wheel_robot_state.control = Point::default();
                     control += Pose {
@@ -553,7 +565,11 @@ fn main() {
                 _ => (),
             }
         }
+
+        // Kalman filter predicted state
         let filter_prediction: KinematicState = filter.known_state.into();
+
+        // The map with all of the dummy robots, for the sake of testing.
         let dummy_map = Arc::new(Map2D::with_size(
             (1598., 821.).into(),
             dummy_robots
@@ -562,6 +578,7 @@ fn main() {
                 .collect::<Vec<Object2D>>(),
         ));
         lidar.update_with_maps(vec![dummy_map.clone()]);
+
         // Rendering
         window.draw_2d(&e, |c, g, _device| {
             clear([1.0; 4], g);
@@ -674,6 +691,7 @@ fn main() {
                 g,
             );
         });
+        // Noise added to observed odometry control data
         let control_noise = Pose {
             angle: control_noise_angle.sample(&mut rng),
             position: (
@@ -682,45 +700,74 @@ fn main() {
             )
                 .into(),
         };
+
+        // Adding control data to the differential drive state without noise to the state.
         control += wheel_robot_state.control_update(delta_t, robot_state.angle);
 
+        // If the robot passes through the map, set velocity to zero (and the robot
+        // control update to make the velocity zero in the next time step).
         if robot_state.mapped_control_update(
             control,
             delta_t,
             vec![real_map.clone(), dummy_map.clone()],
         ) {
             wheel_robot_state.reset_velocity();
+
+            // Set the rotational acceleration to zero the rotational velocity
+            // in the next time step
             control.angle = -robot_state.vel_angle / delta_t + control.angle;
+
+            // Set the acceleration to zero the velocity in the next time step.
             control.position = Point {
                 x: Point { x: 1., y: 0. }
                     .rotate(robot_state.angle)
                     .dot(robot_state.velocity)
                     / delta_t
                     + control.position.x,
+
                 y: Point { x: 1., y: 0. }
                     .rotate(robot_state.angle - FRAC_PI_2)
                     .dot(robot_state.velocity)
                     / delta_t
                     + control.position.y,
             };
+
+            // The velocity of the real robot gets zeroed. The control acceleration
+            // is fed into the localization
             robot_state.vel_angle = 0.;
             robot_state.velocity = Point::default();
         };
+
+        // Add noise to the control data for an odometry sensor input.
         control += control_noise * delta_t;
 
-        // update sensors
+        // Update sensors
+
+        // Motion sensor that returns a velocity with some error - necessary
+        // for Kalman Filter.
         motion_sensor.set_delta_t(delta_t);
         motion_sensor.update_pose(Pose {
             angle: robot_state.vel_angle,
             position: robot_state.velocity,
         });
+
+        // Control updates for the dummy robots.
         let robot_pose = robot_state.pose();
         for dummy_robot in &mut dummy_robots {
             dummy_robot.control_update(delta_t, &real_map);
         }
+
+        // Position sensor that, when sensed, returns the change
+        // in position from the previous state to the current state
+        // (with error).
         position_sensor.set_delta_t(delta_t);
         position_sensor.update_pose(robot_pose);
+
+        // Lidar sensor that returns distance measurements in all directions,
+        // with noise.
         lidar.update_pose(robot_pose);
+
+        // Object sensor that detects the vision tapes, with some noise.
         object_sensor.update_pose(robot_pose);
 
         println!("\tP = {}", mcl.belief.len());
@@ -730,9 +777,15 @@ fn main() {
 
         let mcl_pred = mcl.get_prediction();
 
+        // Control update with noisy changes in positions
         mcl.control_update(&position_sensor);
+
+        // Using sensor data in the observation update to compensate
+        // for noisy odometry data
         mcl.observation_update(&lidar, &object_sensor);
 
+        // Creating control data covariance matrix with the
+        // sensor errors along the diagonals (and no correlation coefficients)
         q = delta_t.powi(2)
             * Matrix6::from_diagonal(&Vector6::from_iterator(vec![
                 0.00000,
@@ -742,17 +795,26 @@ fn main() {
                 CONTROL_X_NOISE.powi(2),
                 CONTROL_Y_NOISE.powi(2),
             ]));
+
+        // Prediction update using the noisy control data and covariance matrix.
         filter.prediction_update(delta_t, control.into(), q);
 
+        // Take measurements from the velocity data to feed into the Kalman Filter
         let motion_measurements = motion_sensor.sense();
+
+        // Get MCL prediction
         let mcl_prediction = mcl.get_prediction();
 
+        // Get MCL uncertainty to feed into the Kalman Filter
         let mcl_uncertainty = variance_poses(
             &mcl.belief
                 .clone()
                 .into_iter()
                 .choose_multiple(&mut rng, 500),
         );
+
+        // Create a sensor covariance matrix with MCL uncertainty as well as
+        // Velocity sensor noise uncertainty.
         r = Matrix6::from_diagonal(&Vector6::from_vec(vec![
             mcl_uncertainty.angle,
             mcl_uncertainty.position.x,
@@ -762,6 +824,7 @@ fn main() {
             delta_t.powi(2) * VELOCITY_Y_SENSOR_NOISE.powi(2),
         ]));
 
+        // Measurement update with sensor data
         filter.measurement_update(
             RowVector6::from_vec(vec![
                 mcl_prediction.angle,
@@ -774,6 +837,8 @@ fn main() {
             r,
         );
 
+        // Calculate the squared error of each of the prediction mechanisms over time,
+        // in angle and position.
         tick += 1;
         if tick > 0 {
             let calculate_error = |sum: &mut Pose, pred: Pose| -> Pose {
@@ -803,6 +868,9 @@ fn main() {
             ));
         }
     }
+
+    // Print the cumulative error of the Kalman Filter, MCL, and Dead Reckoning
+    // over time.
     println!(
         "KALMAN: {:?} \nMCL: {:?}\nDEAD RECKONING: {:?}\n",
         Pose {

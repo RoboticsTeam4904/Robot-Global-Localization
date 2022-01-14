@@ -256,7 +256,7 @@ where
 ///
 /// Math and source for KLD-Sampling implementation found here: https://papers.nips.cc/paper/1998-kld-sampling-adaptive-particle-filters.pdf (Praise Dieter Fox)
 ///
-/// `map` is the map on which the filter is localization
+/// `map` is the map on which the filter is localizing
 ///
 /// `belief` is the set of particles
 ///
