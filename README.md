@@ -1,5 +1,11 @@
 # Global Robot Localization
 The goal of this project is to implement generalized global localization algorithms for FRC (although it could be used in other applications).
+
+## Usage
+```sh
+cargo run --bin simulation --features "render graph"
+```
+
 ## General Assumptions
 All algorithms assume the following:
 * Sensors that both measure the robot's movement (e.g. imu) and field data are being used
