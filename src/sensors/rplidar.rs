@@ -10,7 +10,7 @@ use std::{
     time::Duration,
 };
 
-const DEFAULT_BUAD_RATE: u32 = 115200;
+const DEFAULT_BAUD_RATE: u32 = 115200;
 const DEFAULT_RANGE: Option<Range<f64>> = Some(150.0..8000.);
 
 /// An Rplidar wrapper.
@@ -38,7 +38,7 @@ impl RplidarSensor {
         baud_rate: Option<u32>,
     ) -> RplidarSensor {
         let s = SerialPortSettings {
-            baud_rate: baud_rate.unwrap_or(DEFAULT_BUAD_RATE),
+            baud_rate: baud_rate.unwrap_or(DEFAULT_BAUD_RATE),
             data_bits: DataBits::Eight,
             flow_control: FlowControl::None,
             parity: Parity::None,
