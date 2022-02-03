@@ -14,6 +14,24 @@ name = "tegra"
 path = "src/tegra.rs"
 required-features = ["network", "rplidar", "render"]
 
+[[bin]]
+name = "nano_2022"
+path = "src/nano_2022.rs"
+required-features = ["rplidar"]
+
+[[bin]]
+name = "graphing_2022"
+path = "src/graphing_2022.rs"
+required-features = ["render"]
+
+[[bin]]
+name = "first"
+path = "src/first.rs"
+
+[[bin]]
+name = "second"
+path = "src/second.rs"
+
 [features]
 all = ["network", "rplidar", "render", "asyncio"]
 default_features = [ "asyncio", "render" ]
@@ -42,4 +60,6 @@ generic-array = "0.14.4"
 core-futures-io = { git = "https://github.com/noocene/core-futures-io", features = ["futures"], optional = true }
 futures = { version = "0.3.4", features = ["thread-pool"], optional = true }
 async-std = { version = "1.5.0", optional = true }
+serde = "1.0.136"
+rmp-serde = "1.0.0"
 
