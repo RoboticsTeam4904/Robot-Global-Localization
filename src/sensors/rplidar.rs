@@ -20,15 +20,45 @@ pub struct RplidarSensor {
     pub latest_scan: Vec<Point>,
     pub relative_pose: Pose,
     pub sense_range: Option<Range<f64>>,
+    pub angle_range: Vec<Range<f64>>,
 }
 
 unsafe impl Send for RplidarSensor {}
 unsafe impl Sync for RplidarSensor {}
 
 impl RplidarSensor {
-    pub fn new(serial_port: &str, relative_pose: Pose, baud_rate: Option<u32>) -> RplidarSensor {
-        Self::with_range(serial_port, relative_pose, DEFAULT_RANGE, baud_rate)
+    pub fn new(
+        serial_port: &str,
+        relative_pose: Pose,
+        baud_rate: Option<u32>,
+        angle_range: Vec<Range<f64>>,
+    ) -> RplidarSensor {
+        Self::with_range(
+            serial_port,
+            relative_pose,
+            DEFAULT_RANGE,
+            baud_rate,
+            angle_range,
+        )
         // TODO: automatically grab range from lidar instead of using DEFAULT_RANGE (sdk's implementation of getting range from firmware doesn't always work)
+    }
+
+    /// Check to see if a given angle is going to be sensed by the lidar.
+    pub fn filter_angle(&self, angle: f64) -> bool {
+        for range in &self.angle_range {
+            if range.contains(&angle) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Check to see if a given angle is going to be sensed by the lidar.
+    pub fn filter_dist(&self, dist: f64) -> bool {
+        if self.sense_range.is_some() {
+            return self.sense_range.as_ref().unwrap().contains(&dist);
+        }
+        self.sense_range.is_none()
     }
 
     pub fn with_range(
@@ -36,6 +66,7 @@ impl RplidarSensor {
         relative_pose: Pose,
         sense_range: Option<Range<f64>>,
         baud_rate: Option<u32>,
+        angle_range: Vec<Range<f64>>,
     ) -> RplidarSensor {
         let s = SerialPortSettings {
             baud_rate: baud_rate.unwrap_or(DEFAULT_BAUD_RATE),
@@ -57,6 +88,7 @@ impl RplidarSensor {
             latest_scan: vec![],
             relative_pose,
             sense_range,
+            angle_range,
         }
     }
 }
@@ -69,11 +101,14 @@ impl Sensor for RplidarSensor {
             Ok(scan) => {
                 self.latest_scan = scan
                     .iter()
-                    .map(|rp_point| {
-                        Point::polar(
-                            rp_point.raw_angle().to_radians() as f64,
-                            rp_point.raw_distance() as f64,
-                        )
+                    .filter_map(|rp_point| {
+                        let angle = rp_point.raw_angle().to_radians() as f64;
+                        let distance = rp_point.raw_angle().to_radians() as f64;
+                        if self.filter_angle(angle) && self.filter_dist(distance) {
+                            Some(Point::polar(angle, distance))
+                        } else {
+                            None
+                        }
                     })
                     .collect()
             }

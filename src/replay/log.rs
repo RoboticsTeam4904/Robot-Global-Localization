@@ -42,6 +42,8 @@ where
     type Output = T;
 
     fn update(&mut self) {
+        self.internal_sensor.update();
+
         self.latest_data = self.internal_sensor.sense();
         self.output
             .write_all((self.to_string)(self.latest_data.clone()).as_bytes())

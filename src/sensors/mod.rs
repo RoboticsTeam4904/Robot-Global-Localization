@@ -1,5 +1,8 @@
 use crate::utility::Pose;
-use std::{marker::PhantomData, ops::{AddAssign, Sub}};
+use std::{
+    marker::PhantomData,
+    ops::{AddAssign, Sub},
+};
 
 // pub mod gpio;
 pub mod dummy;
@@ -8,6 +11,7 @@ pub mod io;
 pub mod network;
 #[cfg(feature = "rplidar")]
 pub mod rplidar;
+pub mod udp;
 
 /// The generic trait for any sensor.
 /// Only `sense` is required, but relative pose is highly recommended.

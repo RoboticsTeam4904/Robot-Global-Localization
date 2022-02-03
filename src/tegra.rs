@@ -88,17 +88,17 @@ async fn main() -> Result<(), ()> {
         .unwrap();
     // Start event loop
     while let Some(e) = window.next() {
-        // Update sensors
-        lidar.update();
-        nt_imu.update();
+        // // Update sensors
+        // lidar.update();
+        // nt_imu.update();
 
-        // Update mcl
-        mcl.control_update(&nt_imu);
-        mcl.observation_update(&lidar);
+        // // Update mcl
+        // mcl.control_update(&nt_imu);
+        // mcl.observation_update(&lidar);
 
-        // Push prediction to the network
-        let prediction = mcl.get_prediction();
-        localization_output.push(prediction);
+        // // Push prediction to the network
+        // let prediction = mcl.get_prediction();
+        // localization_output.push(prediction);
 
         // Render frame
         window.draw_2d(&e, |c, g, _device| {
@@ -107,7 +107,7 @@ async fn main() -> Result<(), ()> {
                 draw_map(
                     map.clone(),
                     BLACK,
-                    1.,
+                    [0., 0.5, 0., 1.],
                     1.,
                     MAP_SCALE,
                     MAP_OFFSET,
