@@ -12,6 +12,7 @@ use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
 pub struct UDPSensor<T: DeserializeOwned> {
     pub socket: UdpSocket,
     pub latest_data: T,
+    pub timestamp: f64,
 }
 
 impl<T: DeserializeOwned> UDPSensor<T> {
@@ -28,15 +29,17 @@ impl<T: DeserializeOwned> UDPSensor<T> {
         socket.set_nonblocking(false)?;
 
         let mut buf = [0; 512];
-        socket.recv(&mut buf)?;
+        let received = socket.recv(&mut buf)?;
 
         socket.set_nonblocking(true)?;
-        let deserialized: Result<T, rmp_serde::decode::Error> = rmp_serde::from_slice(&buf);
+        let deserialized: Result<(T, f64), rmp_serde::decode::Error> =
+            rmp_serde::from_slice(&buf[..received]);
 
         match deserialized {
             Ok(deserial) => Ok(UDPSensor {
                 socket,
-                latest_data: deserial,
+                latest_data: deserial.0,
+                timestamp: deserial.1,
             }),
             _ => {
                 bail!(deserialized.unwrap_err())
@@ -45,19 +48,22 @@ impl<T: DeserializeOwned> UDPSensor<T> {
     }
 }
 
-impl<T: DeserializeOwned + Copy> Sensor for UDPSensor<T> {
+impl<T: DeserializeOwned + Clone> Sensor for UDPSensor<T> {
     type Output = T;
 
     fn update(&mut self) {
+        let mut buf = [0; 512];
         loop {
-            let mut buf = [0; 512];
             let received = self.socket.recv(&mut buf);
             match received {
-                Ok(_) => {
-                    let deserialized: Result<T, rmp_serde::decode::Error> =
-                        rmp_serde::from_slice(&buf);
-                    if deserialized.is_ok() {
-                        self.latest_data = deserialized.unwrap();
+                Ok(received) => {
+                    let deserialized: Result<(T, f64), rmp_serde::decode::Error> =
+                        rmp_serde::from_slice(&buf[..received]);
+                    if let Ok(de) = deserialized {
+                        if de.1 > self.timestamp {
+                            self.latest_data = de.0;
+                            self.timestamp = de.1;
+                        }
                     }
                 }
                 _ => {
@@ -68,7 +74,7 @@ impl<T: DeserializeOwned + Copy> Sensor for UDPSensor<T> {
     }
 
     fn sense(&self) -> Self::Output {
-        self.latest_data
+        self.latest_data.clone()
     }
 }
 
@@ -104,10 +110,12 @@ impl<T: Serialize + Copy> SensorSink for UDPSensorSink<T> {
 
     fn update_sink(&mut self) {
         let mut send_buf = Vec::new();
-        let _ = self
-            .latest_data
-            .serialize(&mut Serializer::new(&mut send_buf));
-        let _ = self.socket.send(&send_buf);
+        self.latest_data
+            .serialize(&mut Serializer::new(&mut send_buf))
+            .expect("Serialization of sensor data failed.");
+        self.socket
+            .send(&send_buf)
+            .expect("Sending sensor data failed.");
     }
 
     fn push(&mut self, input: Self::Input) {

@@ -1,6 +1,8 @@
 use crate::map::Map2D;
 use nalgebra::RowVector6;
 use rand::prelude::*;
+use serde::{de::DeserializeOwned, Serialize};
+use serde_derive::{Deserialize, Serialize};
 use std::{
     f64::consts::{FRAC_PI_2, PI},
     ops::Range,
@@ -9,7 +11,7 @@ use std::{
 
 pub const GRAVITY: f64 = 9800.;
 /// Generic 2d point
-#[derive(Default, Debug, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub struct Point {
     pub x: f64,
     pub y: f64,
@@ -220,7 +222,7 @@ impl std::ops::SubAssign for Point {
 }
 
 /// Generic 2d point
-#[derive(Default, Debug, PartialEq, Clone, Copy)]
+#[derive(Default, Debug, PartialEq, Clone, Copy, Serialize, Deserialize)]
 pub struct Point3D {
     pub x: f64,
     pub y: f64,
@@ -539,6 +541,15 @@ impl KinematicState {
         }
     }
 
+    pub fn from_pose(pose: Pose) -> Self {
+        Self {
+            angle: pose.angle,
+            position: pose.position,
+            vel_angle: 0.,
+            velocity: Point::default(),
+        }
+    }
+
     pub fn random_from_range(range: KinematicState) -> KinematicState {
         KinematicState::random(
             -range.angle..range.angle,
@@ -754,7 +765,7 @@ impl std::ops::AddAssign for KinematicState {
         }
     }
 }
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Pose {
     pub angle: f64,
     pub position: Point,
@@ -935,7 +946,7 @@ where
     .into()
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub struct Pose3D {
     /// x coordinate is azimuth angle, y coordinate is inclination angle
     pub angle: Point,

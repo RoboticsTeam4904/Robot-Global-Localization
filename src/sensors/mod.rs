@@ -7,6 +7,7 @@ use std::{
 // pub mod gpio;
 pub mod dummy;
 pub mod io;
+pub mod log;
 #[cfg(feature = "network")]
 pub mod network;
 #[cfg(feature = "rplidar")]
@@ -612,6 +613,18 @@ where
 
     fn relative_pose(&self) -> Pose {
         self.absolute_sensor.relative_pose()
+    }
+}
+
+impl<S, O, U> SensorSink for DeltaSensor<S, O>
+where
+    S: SensorSink + Sensor<Output = O>,
+    O: Sub<Output = U> + Clone,
+{
+    type Input = S::Input;
+
+    fn push(&mut self, inp: Self::Input) {
+        self.absolute_sensor.push(inp);
     }
 }
 
