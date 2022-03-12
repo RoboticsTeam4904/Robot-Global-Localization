@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# This is pretty useless, TBH.
-
 rustc -V &> /dev/null
 if [ "$?" != "0" ]
 then
