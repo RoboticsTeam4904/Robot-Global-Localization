@@ -1,0 +1,13 @@
+[Unit]
+Description=FRC-4904 Localization Script
+After=network-online.target
+
+[Service]
+Environment=LD_LIBRARY_PATH=/usr/local/lib
+WorkingDirectory=FOLDER_PATH
+ExecStart=FOLDER_PATH/target/release/main
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+WantedBy=dev-video0.device

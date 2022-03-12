@@ -26,3 +26,12 @@ Kalman filters offer a unique opportunity to integrate sensor data, odometry dat
 In every time step, the algorithm has two main steps:
 1. Prediction Update: In this update, the algorithm moves forward one time step—it first updates the state vector ignoring outside influence, and then uses a control vector (which might contain odometry data) to update the state further.
 2. Measurement Update: After moving forward one time step, the algorithm now incorporates sensor data into its calculations, and finally returns the resulting predicted Gaussian blob.
+
+## Installation
+
+If you're on a Jetson Nano, there's a convenient install script located in `install/install.sh` .
+It builds the program, copies the service file into the relevant directory, and starts the service. This is how we get the localization/vision code to run when connected to power.
+
+If you rebuild the project, running `systemctl restart 4904_localization` should be enough to add the changes to the final build.
+
+If you're not sure how to connect to the Jetson Nanos remotely, refer to the WYNTKTRTR document in the Google Drive.
