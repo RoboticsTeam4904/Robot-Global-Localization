@@ -20,7 +20,7 @@ then
 
     if [[ "$confirmation" =~ ^y|Y$ ]]
     then
-        cargo build --release
+        cargo build --release --bin nano_2022
     fi
 
     read -p "Install service? Only do this on the actual Jetson nano. (Y/N)" confirmation

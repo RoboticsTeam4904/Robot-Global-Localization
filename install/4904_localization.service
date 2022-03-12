@@ -3,9 +3,8 @@ Description=FRC-4904 Localization Script
 After=network-online.target
 
 [Service]
-Environment=LD_LIBRARY_PATH=/usr/local/lib
 WorkingDirectory=FOLDER_PATH
-ExecStart=FOLDER_PATH/target/release/main
+ExecStart=FOLDER_PATH/target/release/nano_2022
 Restart=always
 
 [Install]
