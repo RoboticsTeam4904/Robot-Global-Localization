@@ -2,7 +2,7 @@ use crate::map::Map2D;
 use nalgebra::RowVector6;
 use rand::prelude::*;
 use serde::{de::DeserializeOwned, Serialize};
-use serde_derive::{Deserialize, Serialize};
+use serde_derive::Deserialize;
 use std::{
     f64::consts::{FRAC_PI_2, PI},
     ops::Range,

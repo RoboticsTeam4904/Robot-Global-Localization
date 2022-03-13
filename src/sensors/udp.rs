@@ -1,5 +1,8 @@
 use crate::{
-    sensors::{Sensor, SensorSink},
+    sensors::{
+        log::{LogSensor, LogSensorSink},
+        Sensor, SensorSink,
+    },
     utility::{Point, Pose},
 };
 use failure::bail;
@@ -82,6 +85,7 @@ impl<T: DeserializeOwned + Clone> Sensor for UDPSensor<T> {
 pub struct UDPSensorSink<T: Serialize> {
     pub socket: UdpSocket,
     pub latest_data: T,
+    pub sending: bool,
 }
 
 impl<T: Serialize> UDPSensorSink<T> {
@@ -101,6 +105,7 @@ impl<T: Serialize> UDPSensorSink<T> {
         Ok(UDPSensorSink {
             socket,
             latest_data: T::default(),
+            sending: true,
         })
     }
 }
@@ -113,9 +118,7 @@ impl<T: Serialize + Copy> SensorSink for UDPSensorSink<T> {
         self.latest_data
             .serialize(&mut Serializer::new(&mut send_buf))
             .expect("Serialization of sensor data failed.");
-        self.socket
-            .send(&send_buf)
-            .expect("Sending sensor data failed.");
+        self.sending = self.socket.send(&send_buf).is_ok();
     }
 
     fn push(&mut self, input: Self::Input) {

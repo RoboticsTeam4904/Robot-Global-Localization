@@ -72,10 +72,10 @@ const CAMERA_FOV: Point = Point {
 const VISION_MAX_DIST: Option<f64> = Some(800.);
 
 /// Dynamic friction of the robot with respect to the field (μ).
-const FRICTION_COEFFICIENT: f64 = 0.01;
+const FRICTION_COEFFICIENT: f64 = 0.1;
 
 /// Gravity (cm/s^2)
-const GRAVITY: f64 = 9800.;
+const GRAVITY: f64 = 980.;
 
 /// Differential drive state for the robot
 #[derive(Debug, Default, Clone, Copy, PartialEq)]

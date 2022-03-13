@@ -40,6 +40,43 @@ impl<T> SensorSink for DummySensor<T> {
         self.latest_data = input
     }
 }
+
+pub struct DummyLimitedSensor<T, S> {
+    latest_data: T,
+    range: Option<S>,
+}
+
+impl<T, S> DummyLimitedSensor<T, S> {
+    pub fn new(starting_data: T, range: Option<S>) -> DummyLimitedSensor<T, S> {
+        Self {
+            latest_data: starting_data,
+            range,
+        }
+    }
+}
+
+impl<T: Clone, S> Sensor for DummyLimitedSensor<T, S> {
+    type Output = T;
+
+    fn sense(&self) -> Self::Output {
+        self.latest_data.clone()
+    }
+}
+
+impl<T: Clone, S: Clone> LimitedSensor<S> for DummyLimitedSensor<T, S> {
+    fn range(&self) -> Option<S> {
+        self.range.clone()
+    }
+}
+
+impl<T, S> SensorSink for DummyLimitedSensor<T, S> {
+    type Input = T;
+
+    fn push(&mut self, input: Self::Input) {
+        self.latest_data = input
+    }
+}
+
 /// A sensor which senses all objects' relative positions within a certain fov
 pub struct DummyObjectSensor {
     pub map: Arc<Map2D>,

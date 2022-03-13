@@ -112,7 +112,7 @@ impl Sensor for RplidarSensor {
                     })
                     .collect()
             }
-            Err(e) => println!("{:?}", e),
+            Err(_) => {}
         };
     }
 

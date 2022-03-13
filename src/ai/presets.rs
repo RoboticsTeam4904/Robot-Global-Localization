@@ -137,6 +137,44 @@ where
     }
 }
 
+// pub fn point_3d_detection_error<S>(
+//     discrepancy_factor: f64,
+//     angle_factor: f64,
+//     error_scale: f64,
+// ) -> impl ErrorCalculator<S>
+// where
+//     S: Sensor<Output = Vec<Point>> + LimitedSensor<(Point, f64)>,
+// {
+//     move |&sample: &Pose, object_detector: &S, map: &Arc<Map2D>| {
+//         let fov: Point;
+//         let max_dist: Option<f64>;
+//         if let Some((sensor_fov, sensor_max_dist)) = object_detector.range() {
+//             fov = sensor_fov;
+//             max_dist = Some(sensor_max_dist);
+//         } else {
+//             fov = (2. * PI, 2. * PI).into();
+//             max_dist = None;
+//         }
+
+//         let mut sum_error = 0.;
+//         let mut pred_observation: Vec<Pose3D> = map
+//             .cull_points(sample + object_detector.relative_pose(), fov, max_dist)
+//             .iter()
+//             .map(|elem| elem.clone())
+//             .collect();
+//         let mut observation = object_detector.sense();
+//         observation.sort_by(|a, b| a.mag().partial_cmp(&b.mag()).unwrap());
+//         pred_observation.sort_by(|a, b| a.position.mag().partial_cmp(&b.position.mag()).unwrap());
+//         // TODO: This method of calculating error is not entirely sound
+//         for (&real, &pred) in observation.iter().zip(pred_observation.iter()) {
+//             sum_error += (real - pred.position).mag();
+//         }
+//         sum_error +=
+//             discrepancy_factor * (observation.len() as f64 - pred_observation.len() as f64).abs();
+//         sum_error * error_scale
+//     }
+// }
+
 pub fn object_3d_detection_error<S>(
     discrepancy_factor: f64,
     angle_factor: f64,
