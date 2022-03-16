@@ -10,6 +10,7 @@ use rmp_serde::{self, Serializer};
 use serde::{de::DeserializeOwned, Serialize};
 use std::fmt::Debug;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket};
+use std::thread;
 
 /// General UDP Sensor has as output some Deserializable type
 pub struct UDPSensor<T: DeserializeOwned> {
@@ -19,14 +20,11 @@ pub struct UDPSensor<T: DeserializeOwned> {
 }
 
 impl<T: DeserializeOwned> UDPSensor<T> {
-    pub fn new(port: u16, dst: SocketAddr) -> Result<Self, failure::Error>
+    pub fn new(port: u16, dst: String) -> Result<Self, failure::Error>
     where
         T: Debug,
     {
-        let socket = UdpSocket::bind(SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port,
-        ))?;
+        let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port))?;
         socket.connect(&dst)?;
         socket.set_read_timeout(None)?;
         socket.set_nonblocking(false)?;
@@ -55,7 +53,7 @@ impl<T: DeserializeOwned + Clone> Sensor for UDPSensor<T> {
     type Output = T;
 
     fn update(&mut self) {
-        let mut buf = [0; 512];
+        let mut buf = [0; 1024];
         loop {
             let received = self.socket.recv(&mut buf);
             match received {
@@ -89,14 +87,11 @@ pub struct UDPSensorSink<T: Serialize> {
 }
 
 impl<T: Serialize> UDPSensorSink<T> {
-    pub fn new(port: u16, dst: SocketAddr) -> Result<Self, failure::Error>
+    pub fn new(port: u16, dst: String) -> Result<Self, failure::Error>
     where
         T: Debug + Default,
     {
-        let socket = UdpSocket::bind(SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port,
-        ))?;
+        let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port))?;
         socket.connect(&dst)?;
         socket.set_read_timeout(None)?;
 

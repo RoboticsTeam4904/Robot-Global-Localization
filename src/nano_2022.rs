@@ -28,17 +28,13 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use stdvis_core::types::{CameraConfig, VisionTarget};
 
-const VISION_PORT: u16 = 4826;
-const VISION_IP: &str = "nano4904-3";
-
+const VISION_ADDR: &str = "nano3-4904-frc:4826";
 const VISION_LOCAL_PORT: u16 = 3925;
 
-const ROBORIO_PORT: u16 = 7654;
-const ROBORIO_IP: &str = "zach"; // IP: 10.49.4.2
-const ROBORIO_LOCAL_PORT: u16 = 1234;
+const ROBORIO_LOCAL_PORT: u16 = 7654;
+const ROBORIO_ADDR: &str = "zach:1234";
 
-const DRIVER_STATION_PORT: u16 = 6857;
-const DRIVER_STATION_IP: &str = "driver";
+const DRIVER_STATION_ADDR: &str = "driver:6857";
 const DRIVER_STATION_LOCAL_PORT: u16 = 1846;
 
 const LIDAR_PORT: &'static str = "/dev/ttyUSB0";
@@ -85,16 +81,9 @@ fn main() {
     // This blocks for when the game starts, since the initial send is blocking. Once
     // the roborio sends the first packet (when it's enabled or whenever) localization
     // will start running (note that this includes logging a significant amount of data).
-    let mut roborio_sensor = UDPSensor::<(Pose, Pose, f64)>::new(
-        ROBORIO_LOCAL_PORT,
-        SocketAddr::new(
-            ROBORIO_IP
-                .parse::<IpAddr>()
-                .expect("RoboRIO hostname invalid. "),
-            ROBORIO_PORT,
-        ),
-    )
-    .expect("RoboRIO sensor failed to initialize.");
+    let mut roborio_sensor =
+        UDPSensor::<(Pose, Pose, f64)>::new(ROBORIO_LOCAL_PORT, ROBORIO_ADDR.to_string())
+            .expect("RoboRIO sensor failed to initialize.");
 
     let mut roborio_logger = LogSensorSink::new_from_file(&format!("logs/roborio_{}.txt", now));
     roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
@@ -123,16 +112,9 @@ fn main() {
     let mut imu_sensor = DummySensor::new(roborio_sensor.latest_data.1);
     let mut turret_sensor = DummySensor::new(roborio_sensor.latest_data.2);
 
-    let mut vision_sensor = UDPSensor::<Vec<VisionTarget>>::new(
-        VISION_LOCAL_PORT,
-        SocketAddr::new(
-            VISION_IP
-                .parse::<IpAddr>()
-                .expect("Nano hostname invalid. "),
-            VISION_PORT,
-        ),
-    )
-    .expect("Vision sensor failed to initialize.");
+    let mut vision_sensor =
+        UDPSensor::<Vec<VisionTarget>>::new(VISION_LOCAL_PORT, VISION_ADDR.to_string())
+            .expect("Vision sensor failed to initialize.");
     let center_sensor: DummyLimitedSensor<Vec<Point>, (Point, f64)> = DummyLimitedSensor::new(
         vision_sensor
             .sense()
