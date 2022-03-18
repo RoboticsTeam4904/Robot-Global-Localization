@@ -6,13 +6,13 @@ use global_robot_localization::{
     map::{Map2D, Object2D},
     replay::render::*,
     sensors::{
-        network::{networktables, MultiNTSensor, PoseNTSensor},
+        //network::{networktables, MultiNTSensor, PoseNTSensor},
         rplidar::RplidarSensor,
         DeltaSensor, Sensor, SensorSink, WrappableSensor,
     },
     utility::{Point, Pose},
 };
-use nt::NetworkTables;
+//use nt::NetworkTables;
 use piston_window::*;
 use std::sync::{Arc, Mutex};
 const LIDAR_PORT: &'static str = "/dev/ttyUSB0";
@@ -31,30 +31,8 @@ async fn main() -> Result<(), ()> {
         (0., 0.).into(),
         (7000., 2000.).into(),
     )]));
-    // Initialize networktable entries for output
-    let inst = Arc::new(Mutex::new(
-        NetworkTables::connect(networktables::DEFAULT_ROBORIO_IP, "nano")
-            .await
-            .expect("Failed to start networktables"),
-    ));
     // Initialize sensors
     let mut lidar = RplidarSensor::with_range(LIDAR_PORT, Pose::default(), Some(0.0..8000.), None);
-    let mut nt_imu = DeltaSensor::new(
-        MultiNTSensor::from_inst(
-            Pose::default(),
-            inst,
-            vec![
-                "navx/yaw".to_owned(),
-                "encoders/netDisplacementAngle".to_owned(),
-                "encoders/netDisplacement".to_owned(),
-            ],
-        )
-        .await
-        .map(|pose: Vec<f64>| Pose {
-            angle: pose[0],
-            position: Point::polar(pose[1], pose[2]) * 1000.,
-        }),
-    );
     // Initialize window
     let mut window: PistonWindow = WindowSettings::new("😎", WINDOW_SIZE)
         .exit_on_esc(true)
@@ -64,7 +42,6 @@ async fn main() -> Result<(), ()> {
     while let Some(e) = window.next() {
         // Update sensors
         lidar.update();
-        nt_imu.update();
 
         // Render frame
         window.draw_2d(&e, |c, g, _device| {
