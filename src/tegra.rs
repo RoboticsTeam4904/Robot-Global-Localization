@@ -46,7 +46,8 @@ async fn main() -> Result<(), ()> {
     )
     .await;
     // Initialize sensors
-    let mut lidar = RplidarSensor::with_range(LIDAR_PORT, Pose::default(), Some(0.0..8000.), None);
+    let mut lidar = RplidarSensor::with_range(LIDAR_PORT, Pose::default(), Some(0.0..8000.), None).unwrap();
+
     let mut nt_imu = DeltaSensor::new(
         MultiNTSensor::from_inst(
             Pose::default(),
