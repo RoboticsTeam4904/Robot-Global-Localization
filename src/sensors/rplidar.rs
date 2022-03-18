@@ -26,7 +26,7 @@ unsafe impl Send for RplidarSensor {}
 unsafe impl Sync for RplidarSensor {}
 
 impl RplidarSensor {
-    pub fn new(serial_port: &str, relative_pose: Pose, baud_rate: Option<u32>) -> RplidarSensor {
+    pub fn new(serial_port: &str, relative_pose: Pose, baud_rate: Option<u32>) -> Result<RplidarSensor, &str> {
         Self::with_range(serial_port, relative_pose, DEFAULT_RANGE, baud_rate)
         // TODO: automatically grab range from lidar instead of using DEFAULT_RANGE (sdk's implementation of getting range from firmware doesn't always work)
     }
@@ -36,7 +36,7 @@ impl RplidarSensor {
         relative_pose: Pose,
         sense_range: Option<Range<f64>>,
         baud_rate: Option<u32>,
-    ) -> RplidarSensor {
+    ) -> Result<RplidarSensor, &str> {
         let s = SerialPortSettings {
             baud_rate: baud_rate.unwrap_or(DEFAULT_BUAD_RATE),
             data_bits: DataBits::Eight,
@@ -46,18 +46,20 @@ impl RplidarSensor {
             timeout: Duration::from_millis(1),
         };
         let mut serial_port =
-            serialport::open_with_settings(serial_port, &s).expect("failed to open serial port");
+            serialport::open_with_settings(serial_port, &s)
+                .map_err(|_| "failed to open lidar serial port")?;
         serial_port
             .write_data_terminal_ready(false)
-            .expect("failed to clear DTR");
+            .map_err(|_| "serial port failed to clear DTR")?;
         let mut device = RplidarDevice::with_stream(serial_port);
-        device.start_scan().expect("Failed to start scan");
-        RplidarSensor {
+        device.start_scan().map_err(|_| "Failed to start scan");
+
+        Ok(RplidarSensor {
             device: Arc::new(Mutex::new(device)),
             latest_scan: vec![],
             relative_pose,
             sense_range,
-        }
+        })
     }
 }
 
