@@ -33,14 +33,14 @@ async fn main() -> Result<(), ()> {
         (7000., 2000.).into(),
     )]));
     // Initialize sensors
-    let lidar = match RplidarSensor::with_range(
+    let mut lidar = match RplidarSensor::with_range(
             LIDAR_PORT,
             Pose::default(),
             Some(0.0..8000.),
             None
         ) {
-        Ok(lidar) => Some(lidar),
-        Err(msg) => { println!("{msg}"); None  }
+        Ok(lidar) => lidar,
+        Err(msg) => panic!("{}", msg)
     };
     // Initialize window
     let mut window: PistonWindow = WindowSettings::new("😎", WINDOW_SIZE)
@@ -50,7 +50,7 @@ async fn main() -> Result<(), ()> {
     // Start event loop
     while let Some(e) = window.next() {
         // Update sensors
-        if let Some(mut lidar) = &lidar { lidar.update(); }  // OPTM: how to avoid branch condition
+        lidar.update();
 
         // Render frame
         window.draw_2d(&e, |c, g, _device| {
@@ -68,7 +68,7 @@ async fn main() -> Result<(), ()> {
                     g,
                 )
             }
-            if RENDER_SCAN && let Some(lidar) = lidar {
+            if RENDER_SCAN {
                 point_cloud(
                     &lidar.sense(),
                     RED,
