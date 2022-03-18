@@ -289,7 +289,7 @@ impl Map2D {
                 if dist_range.contains(&sensed_position.mag()){
                 sensed_objects.push(Pose3D{
                     angle: Point{x: object.angle.x - start.angle, y: -object_angle.y},
-                    position: Point::polar(start.angle, sensed_position.mag())
+                    position: sensed_position
                     });}
             }
         }

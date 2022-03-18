@@ -28,8 +28,8 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 use stdvis_core::types::{CameraConfig, VisionTarget};
 
-const VISION_ADDR: &str = "nano3-4904-frc:4826";
-const VISION_LOCAL_PORT: u16 = 3925;
+const VISION_ADDR: &str = "nano3-4904-frc:7698";
+const VISION_LOCAL_PORT: u16 = 2746;
 
 const ROBORIO_LOCAL_PORT: u16 = 7654;
 const ROBORIO_ADDR: &str = "zach:1234";
@@ -81,17 +81,18 @@ fn main() {
     // This blocks for when the game starts, since the initial send is blocking. Once
     // the roborio sends the first packet (when it's enabled or whenever) localization
     // will start running (note that this includes logging a significant amount of data).
-    let mut roborio_sensor =
-        UDPSensor::<(Pose, Pose, f64)>::new(ROBORIO_LOCAL_PORT, ROBORIO_ADDR.to_string())
-            .expect("RoboRIO sensor failed to initialize.");
 
-    let mut roborio_logger = LogSensorSink::new_from_file(&format!("logs/roborio_{}.txt", now));
-    roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
-    roborio_logger.update_sink();
+    // let mut roborio_sensor =
+    //     UDPSensor::<(Pose, Pose, f64)>::new(ROBORIO_LOCAL_PORT, ROBORIO_ADDR.to_string())
+    //         .expect("RoboRIO sensor failed to initialize.");
+
+    // let mut roborio_logger = LogSensorSink::new_from_file(&format!("logs/roborio_{}.txt", now));
+    // roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
+    // roborio_logger.update_sink();
 
     // The position sensor is a sensor for the first element received
     // from the roborio, the position in each time step
-    let position_sensor = DummySensor::new(roborio_sensor.latest_data.0);
+    // let position_sensor = DummySensor::new(roborio_sensor.latest_data.0);
 
     // let init_state = position_sensor.sense();
     // let init_state_range = (
@@ -104,39 +105,42 @@ fn main() {
 
     // The motion sensor takes the position sensor data over time and
     // returns the differences, allowing both MCL and
-    let mut motion_sensor = DeltaSensor::<DummySensor<Pose>, Pose>::new(position_sensor);
+    // let mut motion_sensor = DeltaSensor::<DummySensor<Pose>, Pose>::new(position_sensor);
 
-    let odometry_time_sensor = DummySensor::new(roborio_sensor.timestamp);
-    let mut odometry_dt_sensor = DeltaSensor::<DummySensor<f64>, f64>::new(odometry_time_sensor);
+    // let odometry_time_sensor = DummySensor::new(roborio_sensor.timestamp);
+    // let mut odometry_dt_sensor = DeltaSensor::<DummySensor<f64>, f64>::new(odometry_time_sensor);
 
-    let mut imu_sensor = DummySensor::new(roborio_sensor.latest_data.1);
-    let mut turret_sensor = DummySensor::new(roborio_sensor.latest_data.2);
+    // let mut imu_sensor = DummySensor::new(roborio_sensor.latest_data.1);
+    // let mut turret_sensor = DummySensor::new(roborio_sensor.latest_data.2);
 
+    println!("Initializing vision sensor.");
     let mut vision_sensor =
         UDPSensor::<Vec<VisionTarget>>::new(VISION_LOCAL_PORT, VISION_ADDR.to_string())
             .expect("Vision sensor failed to initialize.");
-    let center_sensor: DummyLimitedSensor<Vec<Point>, (Point, f64)> = DummyLimitedSensor::new(
-        vision_sensor
-            .sense()
-            .iter()
-            .map(|vision_target| Point {
-                x: (vision_target.theta + turret_sensor.sense()).sin() * vision_target.dist,
-                y: (vision_target.theta + turret_sensor.sense()).cos() * vision_target.dist,
-            })
-            .collect(),
-        Some((FOV, CAMERA_DIST_MAX)),
-    );
+    println!("Vision sensor initialized.");
+
+    // let center_sensor: DummyLimitedSensor<Vec<Point>, (Point, f64)> = DummyLimitedSensor::new(
+    //     vision_sensor
+    //         .sense()
+    //         .iter()
+    //         .map(|vision_target| Point {
+    //             x: (vision_target.theta + turret_sensor.sense()).sin() * vision_target.dist,
+    //             y: (vision_target.theta + turret_sensor.sense()).cos() * vision_target.dist,
+    //         })
+    //         .collect(),
+    //     Some((FOV, CAMERA_DIST_MAX)),
+    // );
 
     let mut vision_logger = LogSensorSink::new_from_file(&format!("logs/vision_{}.txt", now));
 
-    let mut lidar_sensor = RplidarSensor::with_range(
-        LIDAR_PORT,
-        Pose::default(),
-        LIDAR_DIST_RANGE,
-        None,
-        LIDAR_ANGLE_RANGE.into(),
-    );
-    let mut lidar_logger = LogSensorSink::new_from_file(&format!("logs/lidar_{}.txt", now));
+    // let mut lidar_sensor = RplidarSensor::with_range(
+    //     LIDAR_PORT,
+    //     Pose::default(),
+    //     LIDAR_DIST_RANGE,
+    //     None,
+    //     LIDAR_ANGLE_RANGE.into(),
+    // );
+    // let mut lidar_logger = LogSensorSink::new_from_file(&format!("logs/lidar_{}.txt", now));
 
     // Initialize mcl
     // let mut mcl = {
@@ -176,16 +180,16 @@ fn main() {
     // Start event loop
     loop {
         // Update sensors
-        let old_lidar_data: &[Point] = &lidar_sensor.sense()[..10];
-        lidar_sensor.update();
-        if old_lidar_data != &lidar_sensor.sense()[..10] {
-            lidar_logger.push(lidar_sensor.sense());
-            lidar_logger.update_sink();
-        }
+        // let old_lidar_data: &[Point] = &lidar_sensor.sense()[..10];
+        // lidar_sensor.update();
+        // if old_lidar_data != &lidar_sensor.sense()[..10] {
+        //     lidar_logger.push(lidar_sensor.sense());
+        //     lidar_logger.update_sink();
+        // }
 
-        roborio_sensor.update();
-        roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
-        roborio_logger.update_sink();
+        // roborio_sensor.update();
+        // roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
+        // roborio_logger.update_sink();
 
         // odometry_dt_sensor.push(roborio_sensor.timestamp);
         // motion_sensor.push(roborio_sensor.sense().0);
