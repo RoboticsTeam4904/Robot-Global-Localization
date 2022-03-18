@@ -1,3 +1,4 @@
+#![feature(let_chains)]
 use global_robot_localization::{
     ai::{
         localization::{DeathCondition, PoseMCL},
@@ -32,7 +33,15 @@ async fn main() -> Result<(), ()> {
         (7000., 2000.).into(),
     )]));
     // Initialize sensors
-    let mut lidar = RplidarSensor::with_range(LIDAR_PORT, Pose::default(), Some(0.0..8000.), None);
+    let lidar = match RplidarSensor::with_range(
+            LIDAR_PORT,
+            Pose::default(),
+            Some(0.0..8000.),
+            None
+        ) {
+        Ok(lidar) => Some(lidar),
+        Err(msg) => { println!("{msg}"); None  }
+    };
     // Initialize window
     let mut window: PistonWindow = WindowSettings::new("😎", WINDOW_SIZE)
         .exit_on_esc(true)
@@ -41,7 +50,7 @@ async fn main() -> Result<(), ()> {
     // Start event loop
     while let Some(e) = window.next() {
         // Update sensors
-        lidar.update();
+        if let Some(mut lidar) = &lidar { lidar.update(); }  // OPTM: how to avoid branch condition
 
         // Render frame
         window.draw_2d(&e, |c, g, _device| {
@@ -59,7 +68,7 @@ async fn main() -> Result<(), ()> {
                     g,
                 )
             }
-            if RENDER_SCAN {
+            if RENDER_SCAN && let Some(lidar) = lidar {
                 point_cloud(
                     &lidar.sense(),
                     RED,
