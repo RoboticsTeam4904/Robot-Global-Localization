@@ -14,6 +14,11 @@ name = "tegra"
 path = "src/tegra.rs"
 required-features = ["network", "rplidar", "render"]
 
+[[bin]]
+name = "lidar_test"
+path = "src/lidar_test.rs"
+required-features = ["network", "rplidar", "render"]
+
 [features]
 all = ["network", "rplidar", "render", "asyncio"]
 default_features = [ "asyncio", "render" ]
