@@ -273,111 +273,38 @@ fn main() {
 
     // The objects that are known by both the LIDAR and are present in the real world
     let universal_objects = vec![
-        Object2D::Line((64.98, 0.).into(), (0., 178.54).into()),
-        Object2D::Line((64.98, 821.).into(), (0., 642.46).into()),
-        Object2D::Line((0., 642.46).into(), (0., 178.54).into()),
-        Object2D::Line((1533.02, 0.).into(), (1598., 178.54).into()),
-        Object2D::Line((1533.02, 821.).into(), (1598., 642.46).into()),
-        Object2D::Line((1598., 642.46).into(), (1598., 178.54).into()),
-        // Trench
-        Object2D::Rectangle((630.54, 680.).into(), (706.54, 821.).into()),
-        Object2D::Rectangle((974.5, 141.).into(), (898.5, 0.).into()),
-        // Shield Generator
+        // Terminals
+        Object2D::Line((1480., 0.).into(), (1646., 166.25).into()),
+        Object2D::Line((1660, 8229).into(), (0, 6568.5).into()),
+        // Hangar Posts
+        Object2D::Rectangle((20.3, 264.1).into(), (50.78, 294.58).into()),
+        Object2D::Rectangle((296.8, 264.1).into(), (327.28, 294.58).into()),
+        Object2D::Rectangle((20.3, 20.0).into(), (50.78, 50.48).into()),
+        Object2D::Rectangle((296.8, 20.0).into(), (327.28, 50.48).into()),
+        Object2D::Rectangle((1349.5, 802.6).into(), (1379.98, 833.08).into()),
+        Object2D::Rectangle((1626.0, 802.6).into(), (1656.48, 833.08).into()),
+        Object2D::Rectangle((1349.5, 558.5).into(), (1379.98, 588.98).into()),
+        Object2D::Rectangle((1626.0, 558.5).into(), (1656.48, 588.98).into()),
+        // Hub
         Object2D::RectangleFour(
-            (1065.17, 531.03).into(),
-            (1072.22, 533.59).into(),
-            (1074.78, 526.54).into(),
-            (1067.73, 523.98).into(),
+            (6911, 4489).into(),
+            (7066, 4836).into(),
+            (9551, 3730).into(),
+            (9396, 3383).into(),
         ),
         Object2D::RectangleFour(
-            (928.50, 141.).into(),
-            (935.55, 143.57).into(),
-            (932.98, 150.61).into(),
-            (925.93, 148.05).into(),
+            (8610, 5429).into(),
+            (8958, 5275).into(),
+            (7851, 2790).into(),
+            (7504, 2944).into(),
         ),
         Object2D::RectangleFour(
-            (665.02, 670.39).into(),
-            (662.46, 677.44).into(),
-            (669.5, 680.).into(),
-            (672.07, 672.95).into(),
+            (7129, 4601).into(),
+            (8718, 5211).into(),
+            (9326, 3622).into(),
+            (7739, 3012).into(),
         ),
-        Object2D::RectangleFour(
-            (523.2, 294.46).into(),
-            (525.78, 287.41).into(),
-            (532.83, 289.97).into(),
-            (530.27, 297.02).into(),
-        ),
-        Object2D::Target(Pose3D {
-            angle: Point {
-                x: PI,
-                y: -CAMERA_ANGLE,
-            },
-            position: (1598., 239.54, 41.91 - CAMERA_HEIGHT).into(),
-        }),
-        Object2D::Target(Pose3D {
-            angle: Point {
-                x: PI,
-                y: -CAMERA_ANGLE,
-            },
-            position: (1598., 566.54, 249.55 - CAMERA_HEIGHT).into(),
-        }),
-        Object2D::Target(Pose3D {
-            angle: Point {
-                x: 0.,
-                y: -CAMERA_ANGLE,
-            },
-            position: (0., 581.54, 41.91 - CAMERA_HEIGHT).into(),
-        }),
-        Object2D::Target(Pose3D {
-            angle: Point {
-                x: 0.,
-                y: -CAMERA_ANGLE,
-            },
-            position: (0., 254.54, 249.55 - CAMERA_HEIGHT).into(),
-        }),
     ];
-    let sensor_objects = universal_objects.clone();
-    let sensor_map = Arc::new(Map2D::with_size(
-        (1598., 821.).into(),
-        sensor_objects.clone(),
-    ));
-
-    let perceived_map = Arc::new(Map2D::with_size(
-        (1598., 821.).into(),
-        universal_objects.clone(),
-    ));
-
-    // Objects that are found in the real world but are not observed by the lidar.
-    let mut real_objects = universal_objects.clone();
-    real_objects.extend(vec![
-        Object2D::Line((64.98, 0.).into(), (1533.02, 0.).into()),
-        Object2D::Line((64.98, 821.).into(), (1533.02, 821.).into()),
-    ]);
-    let real_map = Arc::new(Map2D::with_size((1598., 821.).into(), real_objects));
-
-    // Purely asthetic markers on the field
-    let marker_map = Arc::new(Map2D::with_size(
-        (1598., 821.).into(),
-        vec![
-            Object2D::Line((305., 0.).into(), (305., 821.).into()),
-            Object2D::Line((1293., 0.).into(), (1293., 821.).into()),
-            Object2D::Line((1073.5, 0.).into(), (1073.5, 141.).into()),
-            Object2D::Line((524.5, 0.).into(), (524.5, 141.).into()),
-            Object2D::Line((524.5, 141.).into(), (898.5, 141.).into()),
-            Object2D::Line((974.5, 141.).into(), (1073.5, 141.).into()),
-            Object2D::Line((1073.5, 821.).into(), (1073.5, 680.).into()),
-            Object2D::Line((524.5, 821.).into(), (524.5, 680.).into()),
-            Object2D::Line((524.5, 680.).into(), (630.54, 680.).into()),
-            Object2D::Line((706.54, 680.).into(), (1073.5, 680.).into()),
-            Object2D::RectangleFour(
-                (1069.98, 528.785).into(),
-                (930.74, 145.81).into(),
-                (528.77, 292.22).into(),
-                (667.26, 675.20).into(),
-            ),
-        ],
-    ));
-
     //
     let init_state = KinematicState {
         angle: noise_angle.sample(&mut rng),
