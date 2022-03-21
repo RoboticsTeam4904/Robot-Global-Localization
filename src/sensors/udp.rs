@@ -16,24 +16,22 @@ use std::thread;
 pub struct UDPSensor<T: DeserializeOwned> {
     pub socket: UdpSocket,
     pub latest_data: T,
-    pub timestamp: f64,
+    pub timestamp: u64,
 }
 
 impl<T: DeserializeOwned> UDPSensor<T> {
-    pub fn new(port: u16, dst: String) -> Result<Self, failure::Error>
+    pub fn new(socket: UdpSocket) -> Result<Self, failure::Error>
     where
         T: Debug,
     {
-        let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port))?;
-        socket.connect(&dst)?;
         socket.set_read_timeout(None)?;
         socket.set_nonblocking(false)?;
 
-        let mut buf = [0; 512];
+        let mut buf = [0; 1024];
         let received = socket.recv(&mut buf)?;
 
         socket.set_nonblocking(true)?;
-        let deserialized: Result<(T, f64), rmp_serde::decode::Error> =
+        let deserialized: Result<(T, u64), rmp_serde::decode::Error> =
             rmp_serde::from_slice(&buf[..received]);
 
         match deserialized {
@@ -47,6 +45,14 @@ impl<T: DeserializeOwned> UDPSensor<T> {
             }
         }
     }
+
+    pub fn new_with_port(port: u16) -> Result<Self, failure::Error>
+    where
+        T: Debug + Default,
+    {
+        let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port))?;
+        Self::new(socket)
+    }
 }
 
 impl<T: DeserializeOwned + Clone> Sensor for UDPSensor<T> {
@@ -58,7 +64,7 @@ impl<T: DeserializeOwned + Clone> Sensor for UDPSensor<T> {
             let received = self.socket.recv(&mut buf);
             match received {
                 Ok(received) => {
-                    let deserialized: Result<(T, f64), rmp_serde::decode::Error> =
+                    let deserialized: Result<(T, u64), rmp_serde::decode::Error> =
                         rmp_serde::from_slice(&buf[..received]);
                     if let Ok(de) = deserialized {
                         if de.1 > self.timestamp {
@@ -82,26 +88,34 @@ impl<T: DeserializeOwned + Clone> Sensor for UDPSensor<T> {
 /// General UDP sensor sink for some serializable type
 pub struct UDPSensorSink<T: Serialize> {
     pub socket: UdpSocket,
+    pub dst: String,
     pub latest_data: T,
     pub sending: bool,
 }
 
 impl<T: Serialize> UDPSensorSink<T> {
-    pub fn new(port: u16, dst: String) -> Result<Self, failure::Error>
+    pub fn new(socket: UdpSocket, dst: String) -> Result<Self, failure::Error>
     where
         T: Debug + Default,
     {
-        let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port))?;
-        socket.connect(&dst)?;
         socket.set_read_timeout(None)?;
 
         socket.set_nonblocking(true)?;
 
         Ok(UDPSensorSink {
             socket,
+            dst,
             latest_data: T::default(),
             sending: true,
         })
+    }
+
+    pub fn new_with_port(port: u16, dst: String) -> Result<Self, failure::Error>
+    where
+        T: Debug + Default,
+    {
+        let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port))?;
+        Self::new(socket, dst)
     }
 }
 
@@ -113,7 +127,7 @@ impl<T: Serialize + Copy> SensorSink for UDPSensorSink<T> {
         self.latest_data
             .serialize(&mut Serializer::new(&mut send_buf))
             .expect("Serialization of sensor data failed.");
-        self.sending = self.socket.send(&send_buf).is_ok();
+        self.sending = self.socket.send_to(&send_buf, self.dst.clone()).is_ok();
     }
 
     fn push(&mut self, input: Self::Input) {

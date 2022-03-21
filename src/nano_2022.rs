@@ -31,8 +31,8 @@ use stdvis_core::types::{CameraConfig, VisionTarget};
 const VISION_ADDR: &str = "nano3-4904-frc:7698";
 const VISION_LOCAL_PORT: u16 = 2746;
 
-const ROBORIO_LOCAL_PORT: u16 = 7654;
-const ROBORIO_ADDR: &str = "zach:1234";
+const ROBORIO_LOCAL_PORT: u16 = 4321;
+const ROBORIO_ADDR: &str = "roboRIO-4904-FRC.local:3375";
 
 const DRIVER_STATION_ADDR: &str = "driver:6857";
 const DRIVER_STATION_LOCAL_PORT: u16 = 1846;
@@ -82,13 +82,24 @@ fn main() {
     // the roborio sends the first packet (when it's enabled or whenever) localization
     // will start running (note that this includes logging a significant amount of data).
 
-    // let mut roborio_sensor =
-    //     UDPSensor::<(Pose, Pose, f64)>::new(ROBORIO_LOCAL_PORT, ROBORIO_ADDR.to_string())
-    //         .expect("RoboRIO sensor failed to initialize.");
+    let roborio_socket =
+        UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], ROBORIO_LOCAL_PORT))).unwrap();
 
-    // let mut roborio_logger = LogSensorSink::new_from_file(&format!("logs/roborio_{}.txt", now));
-    // roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
-    // roborio_logger.update_sink();
+    let mut roborio_sensor =
+        UDPSensor::<(Pose, Pose, f64)>::new(roborio_socket.try_clone().unwrap())
+            .expect("RoboRIO sensor failed to initialize.");
+
+    let mut roborio_sink = UDPSensorSink::<(f64, f64)>::new(
+        roborio_socket.try_clone().unwrap(),
+        ROBORIO_ADDR.to_string(),
+    )
+    .expect("RoboRIO sensor sink failed to initialize.");
+
+    println!("Success: {:?}", roborio_sensor.sense());
+
+    let mut roborio_logger = LogSensorSink::new_from_file(&format!("logs/roborio_{}.txt", now));
+    roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
+    roborio_logger.update_sink();
 
     // The position sensor is a sensor for the first element received
     // from the roborio, the position in each time step
@@ -114,9 +125,8 @@ fn main() {
     // let mut turret_sensor = DummySensor::new(roborio_sensor.latest_data.2);
 
     println!("Initializing vision sensor.");
-    let mut vision_sensor =
-        UDPSensor::<Vec<VisionTarget>>::new(VISION_LOCAL_PORT, VISION_ADDR.to_string())
-            .expect("Vision sensor failed to initialize.");
+    let mut vision_sensor = UDPSensor::<Vec<VisionTarget>>::new_with_port(VISION_LOCAL_PORT)
+        .expect("Vision sensor failed to initialize.");
     println!("Vision sensor initialized.");
 
     // let center_sensor: DummyLimitedSensor<Vec<Point>, (Point, f64)> = DummyLimitedSensor::new(
@@ -187,9 +197,9 @@ fn main() {
         //     lidar_logger.update_sink();
         // }
 
-        // roborio_sensor.update();
-        // roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
-        // roborio_logger.update_sink();
+        roborio_sensor.update();
+        roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
+        roborio_logger.update_sink();
 
         // odometry_dt_sensor.push(roborio_sensor.timestamp);
         // motion_sensor.push(roborio_sensor.sense().0);
@@ -199,6 +209,14 @@ fn main() {
         vision_sensor.update();
         vision_logger.push((vision_sensor.sense(), vision_sensor.timestamp));
         vision_logger.update_sink();
+
+        if vision_sensor.sense().len() == 1 {
+            roborio_sink.push((
+                vision_sensor.sense()[0].dist,
+                vision_sensor.sense()[0].theta,
+            ));
+            roborio_sink.update_sink();
+        }
         // center_sensor.push(
         //     vision_sensor
         //         .sense()
