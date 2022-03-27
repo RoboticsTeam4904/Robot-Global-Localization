@@ -17,7 +17,6 @@ required-features = ["network", "rplidar", "render"]
 [[bin]]
 name = "nano_2022"
 path = "src/nano_2022.rs"
-required-features = ["rplidar"]
 
 [[bin]]
 name = "graphing_2022"

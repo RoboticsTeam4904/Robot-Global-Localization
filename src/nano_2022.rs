@@ -41,7 +41,7 @@ const CAMERA_TURRET_RADIUS: f64 = -0.1696;
 
 const ITER_DELAY: f64 = 0.01;
 
-const LIDAR_PORT: &'static str = "/dev/ttyUSB0";
+const LIDAR_PORT: &'static str = "/dev/tty.usbserial-0001";
 const LIDAR_DIST_RANGE: Option<Range<f64>> = Some(0.0..8000.);
 const LIDAR_ANGLE_RANGE: &[Range<f64>] = &[(0.)..2. * PI];
 // Make sensors and sensor sinks for lidar, vision, odometry data, localization hypothesis
@@ -55,7 +55,7 @@ fn main() {
     let mut file_read = OpenOptions::new()
         .read(true)
         .open("logs/counter")
-        .expect("file could not be opened.");
+        .expect("counter file could not be opened in read mode.");
 
     let mut now = BufReader::new(&mut file_read)
         .lines()
@@ -67,8 +67,10 @@ fn main() {
     let mut file_write = OpenOptions::new()
         .write(true)
         .open("logs/counter")
-        .expect("file could not be opened");
-    file_write.write_all(counter_num.to_string().as_bytes());
+        .expect("counter file could not be opened in write mode");
+    file_write
+        .write_all(counter_num.to_string().as_bytes())
+        .unwrap_or_else(|_| println!("unable to write to counter file."));
 
     // Cartograph the map
     // THE MAP IS IN MILLIMETERS
@@ -83,68 +85,68 @@ fn main() {
     // the roborio sends the first packet (when it's enabled or whenever) localization
     // will start running (note that this includes logging a significant amount of data).
 
-    let roborio_sink_socket =
-        UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], ROBORIO_LOCAL_PORT))).unwrap();
+    // let roborio_sink_socket =
+    //     UdpSocket::bind(SocketAddr::from(([0, 0, 0, 0], ROBORIO_LOCAL_PORT))).unwrap();
 
-    let roborio_sensor_socket = roborio_sink_socket.try_clone().unwrap();
-    let sensor_now = now.clone();
+    // let roborio_sensor_socket = roborio_sink_socket.try_clone().unwrap();
+    // let sensor_now = now.clone();
 
-    thread::spawn(move || {
-        let mut roborio_sensor = UDPSensor::<(Pose, Pose, f64)>::new(roborio_sensor_socket)
-            .expect("RoboRIO sensor failed to initialize.");
-        let mut roborio_logger =
-            LogSensorSink::new_from_file(&format!("logs/roborio_{}.txt", sensor_now));
-        roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
-        roborio_logger.update_sink();
-        loop {
-            roborio_sensor.update();
-            roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
-            roborio_logger.update_sink();
-            thread::sleep(Duration::from_secs_f64(ITER_DELAY));
-        }
-    });
+    // thread::spawn(move || {
+    //     let mut roborio_sensor = UDPSensor::<(Pose, Pose, f64)>::new(roborio_sensor_socket)
+    //         .expect("RoboRIO sensor failed to initialize.");
+    //     let mut roborio_logger =
+    //         LogSensorSink::new_from_file(&format!("logs/roborio_{}.txt", sensor_now));
+    //     roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
+    //     roborio_logger.update_sink();
+    //     loop {
+    //         roborio_sensor.update();
+    //         roborio_logger.push((roborio_sensor.sense(), roborio_sensor.timestamp));
+    //         roborio_logger.update_sink();
+    //         thread::sleep(Duration::from_secs_f64(ITER_DELAY));
+    //     }
+    // });
 
-    let mut roborio_sink =
-        UDPSensorSink::<(f64, f64)>::new(roborio_sink_socket, ROBORIO_ADDR.to_string())
-            .expect("RoboRIO sensor sink failed to initialize.");
+    // let mut roborio_sink =
+    //     UDPSensorSink::<(f64, f64)>::new(roborio_sink_socket, ROBORIO_ADDR.to_string())
+    //         .expect("RoboRIO sensor sink failed to initialize.");
 
-    // println!("Success: {:?}", roborio_sensor.sense());
+    // // println!("Success: {:?}", roborio_sensor.sense());
 
-    println!("Initializing vision sensor.");
-    let mut vision_sensor = UDPSensor::<Vec<VisionTarget>>::new_with_port(VISION_LOCAL_PORT)
-        .expect("Vision sensor failed to initialize.");
-    println!("Vision sensor initialized.");
+    // println!("Initializing vision sensor.");
+    // let mut vision_sensor = UDPSensor::<Vec<VisionTarget>>::new_with_port(VISION_LOCAL_PORT)
+    //     .expect("Vision sensor failed to initialize.");
+    // println!("Vision sensor initialized.");
 
-    let mut vision_logger = LogSensorSink::new_from_file(&format!("logs/vision_{}.txt", now));
+    // let mut vision_logger = LogSensorSink::new_from_file(&format!("logs/vision_{}.txt", now));
 
-    // let mut lidar_sensor = RplidarSensor::with_range(
-    //     LIDAR_PORT,
-    //     Pose::default(),
-    //     LIDAR_DIST_RANGE,
-    //     None,
-    //     LIDAR_ANGLE_RANGE.into(),
-    // );
-    // let mut lidar_logger = LogSensorSink::new_from_file(&format!("logs/lidar_{}.txt", now));
+    let mut lidar_sensor = RplidarSensor::with_range(
+        LIDAR_PORT,
+        Pose::default(),
+        LIDAR_DIST_RANGE,
+        None,
+        LIDAR_ANGLE_RANGE.into(),
+    );
+    let mut lidar_logger = LogSensorSink::new_from_file(&format!("logs/lidar_{}.txt", now));
 
     // Start event loop
     loop {
-        // lidar_sensor.update();
-        // lidar_logger.push((vision_sensor.sense(), vision_sensor.timestamp));
-        // lidar_logger.update_sink();
+        lidar_sensor.update();
+        lidar_logger.push(lidar_sensor.sense());
+        lidar_logger.update_sink();
 
-        vision_sensor.update();
-        vision_logger.push((vision_sensor.sense(), vision_sensor.timestamp));
-        vision_logger.update_sink();
+        // vision_sensor.update();
+        // vision_logger.push((vision_sensor.sense(), vision_sensor.timestamp));
+        // vision_logger.update_sink();
 
-        for target in &vision_sensor.sense() {
-            roborio_sink.push((target.dist - CAMERA_TURRET_RADIUS, target.theta));
-            roborio_sink.update_sink();
-        }
+        // for target in &vision_sensor.sense() {
+        //     roborio_sink.push((target.dist - CAMERA_TURRET_RADIUS, target.theta));
+        //     roborio_sink.update_sink();
+        // }
 
-        if vision_sensor.sense().len() == 0 {
-            roborio_sink.push((4., 0.));
-            roborio_sink.update_sink();
-        }
+        // if vision_sensor.sense().len() == 0 {
+        //     roborio_sink.push((4., 0.));
+        //     roborio_sink.update_sink();
+        // }
 
         // Render frame
         thread::sleep(Duration::from_secs_f64(ITER_DELAY));
