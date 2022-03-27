@@ -2,6 +2,7 @@ use super::{Sensor, SensorSink};
 use rmp_serde::{self, Serializer};
 use serde::{de::DeserializeOwned, Serialize};
 use std::cmp::PartialEq;
+use std::fmt::Debug;
 use std::fs::File;
 use std::io::{BufRead, Read, Write};
 
@@ -54,6 +55,7 @@ pub struct LogSensorSink<T: Serialize, W: Write> {
     pub latest_data: T,
     pub past_data: T,
     pub counter: usize,
+    pub write: bool,
 }
 
 impl<T: Serialize + Default + PartialEq, W: Write> LogSensorSink<T, W> {
@@ -63,6 +65,7 @@ impl<T: Serialize + Default + PartialEq, W: Write> LogSensorSink<T, W> {
             latest_data: T::default(),
             past_data: T::default(),
             counter: 0,
+            write: false,
         }
     }
 }
@@ -75,25 +78,30 @@ impl<T: Serialize + Default + PartialEq> LogSensorSink<T, File> {
     }
 }
 
-impl<T: Serialize + Clone + PartialEq, W: Write> SensorSink for LogSensorSink<T, W> {
+impl<T: Serialize + Clone + PartialEq + Debug, W: Write> SensorSink for LogSensorSink<T, W> {
     type Input = T;
     fn update_sink(&mut self) {
-        let mut send_buf = Vec::new();
-        (self.past_data.clone(), self.counter + 1)
-            .serialize(&mut Serializer::new(&mut send_buf))
-            .expect("Serialization of sensor data failed.");
-        self.writer
-            .write(&send_buf)
-            .expect("Writing to file failed.");
-        self.counter = 0;
+        if self.write {
+            let mut send_buf = Vec::new();
+            (self.past_data.clone(), self.counter + 1)
+                .serialize(&mut Serializer::new(&mut send_buf))
+                .expect("Serialization of sensor data failed.");
+            self.writer
+                .write(&send_buf)
+                .expect("Writing to file failed.");
+            self.counter = 0;
+            self.write = false;
+        }
     }
 
     fn push(&mut self, input: Self::Input) {
         if self.latest_data == input {
             self.counter += 1;
         } else {
+            println!("New data: {:?}!", self.latest_data);
             self.past_data = self.latest_data.clone();
             self.latest_data = input;
+            self.write = true;
         }
     }
 }
