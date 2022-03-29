@@ -74,7 +74,7 @@ impl RplidarSensor {
             flow_control: FlowControl::None,
             parity: Parity::None,
             stop_bits: StopBits::One,
-            timeout: Duration::from_millis(20000),
+            timeout: Duration::from_millis(1000),
         };
         let mut serial_port =
             serialport::open_with_settings(serial_port, &s).expect("failed to open serial port");

@@ -50,7 +50,10 @@ impl<T: DeserializeOwned> UDPSensor<T> {
     where
         T: Debug + Default,
     {
-        let socket = UdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port))?;
+        let socket = UdpSocket::bind(SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(10, 49, 4, 9)),
+            port,
+        ))?;
         Self::new(socket)
     }
 }

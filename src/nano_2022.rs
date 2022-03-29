@@ -55,7 +55,7 @@ fn main() {
     let mut file_read = OpenOptions::new()
         .read(true)
         .open("logs/counter")
-        .expect("counter file could not be opened in read mode.");
+        .expect("file could not be opened.");
 
     let mut now = BufReader::new(&mut file_read)
         .lines()
@@ -67,10 +67,15 @@ fn main() {
     let mut file_write = OpenOptions::new()
         .write(true)
         .open("logs/counter")
-        .expect("counter file could not be opened in write mode");
-    file_write
-        .write_all(counter_num.to_string().as_bytes())
-        .unwrap_or_else(|_| println!("unable to write to counter file."));
+        .expect("file could not be opened");
+    file_write.write_all(counter_num.to_string().as_bytes());
+
+    // Cartograph the map
+    // THE MAP IS IN MILLIMETERS
+    // let map = Arc::new(Map2D::new(vec![Object2D::Rectangle(
+    //     (0., 0.).into(),
+    //     (7000., 2000.).into(),
+    // )]));
 
     // Initialize sensors
     // roborio sensor returns a position each time step and IMU acceleration data.
@@ -112,20 +117,20 @@ fn main() {
 
     let mut vision_logger = LogSensorSink::new_from_file(&format!("logs/vision_{}.txt", now));
 
-    let mut lidar_sensor = RplidarSensor::with_range(
-        LIDAR_PORT,
-        Pose::default(),
-        LIDAR_DIST_RANGE,
-        None,
-        LIDAR_ANGLE_RANGE.into(),
-    );
-    let mut lidar_logger = LogSensorSink::new_from_file(&format!("logs/lidar_{}.txt", now));
+    // let mut lidar_sensor = RplidarSensor::with_range(
+    //     LIDAR_PORT,
+    //     Pose::default(),
+    //     LIDAR_DIST_RANGE,
+    //     None,
+    //     LIDAR_ANGLE_RANGE.into(),
+    // );
+    // let mut lidar_logger = LogSensorSink::new_from_file(&format!("logs/lidar_{}.txt", now));
 
     // Start event loop
     loop {
-        lidar_sensor.update();
-        lidar_logger.push(lidar_sensor.sense());
-        lidar_logger.update_sink();
+        // lidar_sensor.update();
+        // lidar_logger.push((vision_sensor.sense(), vision_sensor.timestamp));
+        // lidar_logger.update_sink();
 
         vision_sensor.update();
         vision_logger.push((vision_sensor.sense(), vision_sensor.timestamp));
@@ -136,10 +141,10 @@ fn main() {
             roborio_sink.update_sink();
         }
 
-        if vision_sensor.sense().len() == 0 {
-            roborio_sink.push((4., 0.));
-            roborio_sink.update_sink();
-        }
+        // if vision_sensor.sense().len() == 0 {
+        //     roborio_sink.push((4., 0.));
+        //     roborio_sink.update_sink();
+        // }
 
         // Render frame
         thread::sleep(Duration::from_secs_f64(ITER_DELAY));
